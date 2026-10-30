@@ -22,10 +22,6 @@ jobs:
         run: |
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)
-          if [ -z "$SDKMANAGER" ]; then
-            echo "sdkmanager non trovato"
-            exit 1
-          fi
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
@@ -35,6 +31,22 @@ jobs:
 
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
+
+      - name: Set Java compatibility to 17
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("extracted/RotaryIsolator/app/build.gradle")
+          if not p.exists():
+              p = Path("extracted/RotaryIsolator/app/build.gradle.kts")
+          s = p.read_text()
+          if p.name.endswith(".kts"):
+              block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
+          else:
+              block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
+          s = s.replace("android {", "android {\n" + block, 1)
+          p.write_text(s)
+          PY
 
       - name: Build APK
         run: |
