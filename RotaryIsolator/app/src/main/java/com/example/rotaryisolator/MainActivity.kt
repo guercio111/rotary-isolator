@@ -109,7 +109,7 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
-    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 78; h<820f -> 84; else -> 90 }) }
+    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 88; h<820f -> 94; else -> 98 }) }
 
     // Recalculate after both the window and the complete mixer have been measured.
     // Do not scale the whole mixer: it clips text and controls. Scroll the center instead.
@@ -217,6 +217,7 @@ class MainActivity : Activity() {
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             controlHeader.addView(vLabel,LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 28),1f))
             col.addView(controlHeader,LinearLayout.LayoutParams(-1,dp(24)))
+            val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
                     max=(range.endInclusive-range.start).roundToInt()*10
@@ -228,23 +229,24 @@ class MainActivity : Activity() {
                         override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
                 }
-                col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
+                controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
                 val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]})
                 knob.isEnabled=active[i]
-                col.addView(knob,LinearLayout.LayoutParams(-1,dialHeight()))
+                controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
             }
-            val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(dp(2),0,dp(2),0) }
-            bandActions.addView(circleAction("↶",30) {
+            val bandActions=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(2),0,dp(2),0) }
+            bandActions.addView(circleAction("↶",28) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(34),dp(34)).apply{rightMargin=dp(14)})
-            bandActions.addView(circleAction("F",54) {
+            },LinearLayout.LayoutParams(dp(30),dp(30)).apply{bottomMargin=dp(4)})
+            bandActions.addView(circleAction("F",50) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(54),dp(54)))
-            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(56)))
+            },LinearLayout.LayoutParams(dp(50),dp(50)))
+            controlRow.addView(bandActions,LinearLayout.LayoutParams(dp(56),dp(84)))
+            col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
@@ -283,6 +285,7 @@ class MainActivity : Activity() {
                 filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
             })
             col.addView(filterHeader,LinearLayout.LayoutParams(-1,dp(24)))
+            val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
@@ -292,7 +295,7 @@ class MainActivity : Activity() {
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
                 }
-                col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
+                controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             }else{
                 val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->
                     if(i==2)resonance=v else filters[i]=v
@@ -300,20 +303,21 @@ class MainActivity : Activity() {
                     scheduleUpdate()
                 },{((if(i==2)resonance else filters[i])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==2)resonance else filters[i]})
                 knob.isEnabled=controlEnabled
-                col.addView(knob,LinearLayout.LayoutParams(-1,dialHeight()))
+                controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
             }
-            val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterActions.addView(circleAction("↶",30){
+            val filterActions=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            filterActions.addView(circleAction("↶",28){
                 val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=old else filters[i]=old
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(34),dp(34)).apply{rightMargin=dp(14)})
-            filterActions.addView(circleAction("F",54){
+            },LinearLayout.LayoutParams(dp(30),dp(30)).apply{bottomMargin=dp(4)})
+            filterActions.addView(circleAction("F",50){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(54),dp(54)))
-            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(56)))
+            },LinearLayout.LayoutParams(dp(50),dp(50)))
+            controlRow.addView(filterActions,LinearLayout.LayoutParams(dp(56),dp(84)))
+            col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row);content.addView(box);sections["FILTERS"]=box
