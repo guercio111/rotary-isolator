@@ -191,14 +191,14 @@ class MainActivity : Activity() {
                     progress=((values[i]-range.start)*10).roundToInt().coerceIn(0,max)
                     isEnabled=active[i]
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i];values[i]=range.start+p/10f;vLabel.text="${names[i]}  ${fmt(values[i])} dB";scheduleUpdate()}}
-                        override fun onStartTrackingTouch(s:SeekBar?){}
+                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){values[i]=range.start+p/10f;vLabel.text="${names[i]}  ${fmt(values[i])} dB";scheduleUpdate()}}
+                        override fun onStartTrackingTouch(s:SeekBar?){if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]}
                         override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
                 }
                 col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             } else {
-                val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i];values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"})
+                val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]})
                 knob.isEnabled=active[i]
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
@@ -238,19 +238,18 @@ class MainActivity : Activity() {
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){previousFilters[i]=if(i==2)resonance else filters[i];if(i==2)resonance=p/100f else filters[i]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
-                        override fun onStartTrackingTouch(b:SeekBar?){}
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==2)resonance=p/100f else filters[i]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
+                        override fun onStartTrackingTouch(b:SeekBar?){previousFilters[i]=if(i==2)resonance else filters[i]}
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
                 }
                 col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             }else{
                 val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->
-                    previousFilters[i]=if(i==2)resonance else filters[i]
                     if(i==2)resonance=v else filters[i]=v
                     l.text=names[i]+"  "+(v*100).roundToInt()+"%"
                     scheduleUpdate()
-                },{((if(i==2)resonance else filters[i])*100).roundToInt().toString()+"%"})
+                },{((if(i==2)resonance else filters[i])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==2)resonance else filters[i]})
                 knob.isEnabled=controlEnabled
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
@@ -402,7 +401,9 @@ private class RotaryControl(
     private val maxV:Float,
     private val accent:Int,
     private val changed:(Float)->Unit,
-    private val valueText:()->String
+    private val valueText:()->String,
+    private val onStart:()->Unit = {},
+    private val onEnd:()->Unit = {}
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -458,6 +459,7 @@ private class RotaryControl(
     override fun onTouchEvent(e:MotionEvent):Boolean{
         when(e.action){
             MotionEvent.ACTION_DOWN->{
+                onStart()
                 downY=e.y;downV=v;dragged=false
                 parent?.requestDisallowInterceptTouchEvent(true)
                 return true
@@ -468,15 +470,16 @@ private class RotaryControl(
                 if(dragged){val sensitivity=(maxV-minV)*2.2f/height.coerceAtLeast(1);v=(downV+delta*sensitivity).coerceIn(minV,maxV);changed(v);invalidate()}
                 return true
             }
-            MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);performClick();return true}
-            MotionEvent.ACTION_CANCEL->{return true}
+            MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);onEnd();performClick();return true}
+            MotionEvent.ACTION_CANCEL->{onEnd();return true}
         }
         return true
     }
     override fun onGenericMotionEvent(e:MotionEvent):Boolean{
         if(e.action==MotionEvent.ACTION_SCROLL){
+            onStart()
             v=(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f).coerceIn(minV,maxV)
-            changed(v);invalidate();return true
+            changed(v);invalidate();onEnd();return true
         }
         return super.onGenericMotionEvent(e)
     }
