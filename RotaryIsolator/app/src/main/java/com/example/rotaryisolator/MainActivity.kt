@@ -109,7 +109,7 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
-    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 66; h<820f -> 74; else -> 82 }) }
+    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 78; h<820f -> 84; else -> 90 }) }
 
     // Recalculate after both the window and the complete mixer have been measured.
     // Do not scale the whole mixer: it clips text and controls. Scroll the center instead.
@@ -126,9 +126,13 @@ class MainActivity : Activity() {
     }
     private fun button(t:String, action:()->Unit)=Button(this).apply { text=t; setOnClickListener { action() } }
     private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
-    private fun phoneActionButton(textValue:String, action:()->Unit):View = TextView(this).apply{
-        text=textValue;textSize=9f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;isAllCaps=true
-        background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(6).toFloat();setColor(Color.rgb(190,28,38));setStroke(dp(1),Color.rgb(245,90,90))}
+    private fun circleAction(symbol:String, diameter:Int, action:()->Unit):View = TextView(this).apply {
+        text=symbol; textSize=if(diameter>=48)16f else 11f; setTextColor(Color.WHITE)
+        gravity=Gravity.CENTER; contentDescription=if(symbol=="F")"Flat" else "Return"
+        background=android.graphics.drawable.GradientDrawable().apply {
+            shape=android.graphics.drawable.GradientDrawable.OVAL
+            setColor(Color.rgb(195,30,40)); setStroke(dp(1),Color.rgb(245,90,90))
+        }
         setOnClickListener{action()}
     }
 
@@ -231,37 +235,39 @@ class MainActivity : Activity() {
                 col.addView(knob,LinearLayout.LayoutParams(-1,dialHeight()))
             }
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(dp(2),0,dp(2),0) }
-            bandActions.addView(phoneActionButton("RETURN") { val old=if(key=="EQ")previousEq[i] else previousIso[i]; if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]; values[i]=old; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(0,dp(32),1f).apply{rightMargin=dp(3)})
-            bandActions.addView(phoneActionButton("FLAT") { if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]; values[i]=0f; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(0,dp(32),1f))
-            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(34)))
+            bandActions.addView(circleAction("↶",30) {
+                val old=if(key=="EQ")previousEq[i] else previousIso[i]
+                if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
+                values[i]=old; save(); refreshUi(); scheduleUpdate()
+            },LinearLayout.LayoutParams(dp(34),dp(34)).apply{rightMargin=dp(14)})
+            bandActions.addView(circleAction("F",54) {
+                if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
+                values[i]=0f; save(); refreshUi(); scheduleUpdate()
+            },LinearLayout.LayoutParams(dp(54),dp(54)))
+            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(56)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
-        val sectionActions=LinearLayout(this).apply{
-                orientation=LinearLayout.HORIZONTAL
-                gravity=Gravity.CENTER
-                setPadding(dp(3),dp(3),dp(3),dp(2))
-            }
-            val sectionReturnButton=phoneActionButton("RETURN", {
-                val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
-                for(i in 0..2)values[i]=previous[i]
-                save();refreshUi();scheduleUpdate()
-            })
-            val sectionFlatButton=phoneActionButton("FLAT", {
-                val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
-                for(i in 0..2){previous[i]=values[i];values[i]=0f}
-                save();refreshUi();scheduleUpdate()
-            })
-            sectionActions.addView(sectionReturnButton,LinearLayout.LayoutParams(0,dp(32),1f).apply{rightMargin=dp(6)})
-            sectionActions.addView(sectionFlatButton,LinearLayout.LayoutParams(0,dp(32),1f))
-        box.addView(sectionActions,LinearLayout.LayoutParams(-1,dp(34)))
+        header.addView(circleAction("↶",26) {
+            val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
+            for(i in 0..2)values[i]=previous[i]
+            save();refreshUi();scheduleUpdate()
+        },LinearLayout.LayoutParams(dp(28),dp(28)).apply{rightMargin=dp(8)})
+        header.addView(circleAction("F",38) {
+            val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
+            for(i in 0..2){previous[i]=values[i];values[i]=0f}
+            save();refreshUi();scheduleUpdate()
+        },LinearLayout.LayoutParams(dp(38),dp(38)))
         content.addView(box);sections[key]=box
     }
 
     private fun addFilterSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(20),1f))
+        filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(28),1f))
+        filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
+            filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
+        })
         box.addView(filterTitle)
         val useVerticalRows=false
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
@@ -297,9 +303,17 @@ class MainActivity : Activity() {
                 col.addView(knob,LinearLayout.LayoutParams(-1,dialHeight()))
             }
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterActions.addView(phoneActionButton("RETURN"){ val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]; if(i==2)resonance=old else filters[i]=old; save();refreshUi();scheduleUpdate() },LinearLayout.LayoutParams(0,dp(32),1f).apply{rightMargin=dp(3)})
-            filterActions.addView(phoneActionButton("FLAT"){ previousFilters[i]=if(i==2)resonance else filters[i]; if(i==2)resonance=0f else filters[i]=0f; save();refreshUi();scheduleUpdate() },LinearLayout.LayoutParams(0,dp(32),1f))
-            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(34)))
+            filterActions.addView(circleAction("↶",30){
+                val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
+                if(i==2)resonance=old else filters[i]=old
+                save();refreshUi();scheduleUpdate()
+            },LinearLayout.LayoutParams(dp(34),dp(34)).apply{rightMargin=dp(14)})
+            filterActions.addView(circleAction("F",54){
+                previousFilters[i]=if(i==2)resonance else filters[i]
+                if(i==2)resonance=0f else filters[i]=0f
+                save();refreshUi();scheduleUpdate()
+            },LinearLayout.LayoutParams(dp(54),dp(54)))
+            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(56)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row);content.addView(box);sections["FILTERS"]=box
