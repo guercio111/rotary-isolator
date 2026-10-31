@@ -88,9 +88,17 @@ class MainActivity : Activity() {
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
-        val filterMasterDefaultApplied = prefs.getBoolean("filter_master_default_v2", false)
-        filtersOn = if(filterMasterDefaultApplied) prefs.getBoolean("filters_on", true) else true
-        if(!filterMasterDefaultApplied) prefs.edit().putBoolean("filters_on", true).putBoolean("filter_master_default_v2", true).apply()
+        // Keep the filter section enabled at every app start, regardless of
+        // an OFF value saved by an older build/session.
+        filtersOn = true
+        filterControlOn[0] = true
+        filterControlOn[1] = true
+        prefs.edit()
+            .putBoolean("filters_on", true)
+            .putBoolean("filter_control_0", true)
+            .putBoolean("filter_control_1", true)
+            .putBoolean("filter_master_default_v3", true)
+            .apply()
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
         filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
