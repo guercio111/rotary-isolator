@@ -1,6 +1,8 @@
 package com.example.rotaryisolator
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
 import android.app.AlertDialog
 import android.graphics.Canvas
 import android.graphics.Color
@@ -371,10 +373,21 @@ class MainActivity : Activity() {
 
     private fun startCaptureRequest(){
         if(Build.VERSION.SDK_INT<29){fxStatus="Richiede Android 10 o superiore";fxStatusView?.text=fxStatus;return}
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),7302);return
+        }
         try{
             projectionManager=getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             startActivityForResult(projectionManager!!.createScreenCaptureIntent(),7301)
         }catch(t:Throwable){fxStatus="Impossibile avviare la richiesta di cattura";fxStatusView?.text=fxStatus}
+    }
+
+    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults)
+        if(requestCode==7302){
+            if(grantResults.isNotEmpty()&&grantResults[0]==PackageManager.PERMISSION_GRANTED)startCaptureRequest()
+            else{fxStatus="Permesso microfono negato: cattura non avviata";fxStatusView?.text=fxStatus}
+        }
     }
 
     @Deprecated("Deprecated by Android API; retained for compatibility with the current Activity")
@@ -427,9 +440,11 @@ class MainActivity : Activity() {
                 val n=try{record.read(samples,0,samples.size,AudioRecord.READ_BLOCKING)}catch(_:Throwable){-1}
                 if(n<=0)continue
                 var i=0
+                var blockPeak=0f
                 while(i+1<n){
                     val inL=samples[i].toFloat()/32768f
                     val inR=samples[i+1].toFloat()/32768f
+                    blockPeak=max(blockPeak,max(abs(inL),abs(inR)))
                     val dFrames=(sampleRate*0.42f).roundToInt().coerceIn(1,sampleRate-1)
                     val rFrames=(sampleRate*0.037f).roundToInt()
                     val dIndex=(cursor-dFrames+sampleRate)%sampleRate
@@ -449,8 +464,9 @@ class MainActivity : Activity() {
                     cursor=(cursor+1)%sampleRate;i+=2;framesSeen++
                 }
                 try{track.write(samples,0,n,AudioTrack.WRITE_BLOCKING)}catch(_:Throwable){}
-                if(framesSeen>sampleRate/2&&fxStatus!="Cattura attiva • audio copiato e rielaborato"){
-                    runOnUiThread{fxStatus="Cattura attiva • audio copiato e rielaborato";fxStatusView?.text=fxStatus}
+                if(framesSeen>sampleRate/2){
+                    val message=if(blockPeak>0.002f)"Audio ricevuto • Reverb / Dub Delay in elaborazione" else "Cattura attiva ma nessun audio ricevuto (app potrebbe bloccarla)"
+                    if(fxStatus!=message)runOnUiThread{fxStatus=message;fxStatusView?.text=fxStatus}
                 }
             }
         },"IsolatorAudioCapture").apply{start()}
