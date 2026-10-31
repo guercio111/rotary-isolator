@@ -492,7 +492,7 @@ private class RotaryControl(
     private val density get()=resources.displayMetrics.density
     private fun dp(x:Float)=x*density
     private val rect get()={
-        val side=min(width,(height-dp(28f)).coerceAtLeast(1))* .82f
+        val side=min(width.toFloat(),(height.toFloat()-dp(28f)).coerceAtLeast(1f))* .82f
         val cy=(height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
