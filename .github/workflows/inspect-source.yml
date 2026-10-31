@@ -1,0 +1,13 @@
+name: Inspect Isolator source
+on:
+  push:
+    branches: [codex-compressor-work]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source package
+        run: |
+          unzip RotaryIsolator-build-package.zip -d extracted
+          sed -n '1,260p' extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
