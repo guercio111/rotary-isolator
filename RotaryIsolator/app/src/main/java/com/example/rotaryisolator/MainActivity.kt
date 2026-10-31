@@ -258,11 +258,11 @@ class MainActivity : Activity() {
             val freqs=floatArrayOf(250f,4000f,20000f)
             for(ch in 0..1)for(i in 0..2){
                 var eqGain=if(eqOn && eqControlOn[i])eq[i].coerceIn(-12f,12f) else 0f
-                if(filtersOn && filterControlOn[0] && i==0) eqGain -= filters[0]*24f
-                if(filtersOn && filterControlOn[1] && i==2) eqGain -= filters[1]*24f
-                if(filtersOn && filterControlOn[2] && i!=1) eqGain -= filters[2]*24f
+                if(filtersOn && filterControlOn[0] && i==0) eqGain -= filters[0]*36f
+                if(filtersOn && filterControlOn[1] && i==2) eqGain -= filters[1]*36f
+                if(filtersOn && filterControlOn[2] && i!=1) eqGain -= filters[2]*36f
                 if(filtersOn && resonance>0f){
-                    if(filterControlOn[0] && filters[0]>.01f && i==0) eqGain += resonance*6f
+                    if(filterControlOn[0] && filters[0]>.01f && i==0) eqGain += resonance*12f
                     if(filterControlOn[1] && filters[1]>.01f && i==2) eqGain += resonance*6f
                     if(filterControlOn[2] && filters[2]>.01f && i==1) eqGain += resonance*6f
                 }
@@ -403,7 +403,7 @@ private class RotaryControl(
             MotionEvent.ACTION_MOVE->{
                 val delta=downY-e.y
                 if(abs(delta)>dp(4f)) dragged=true
-                if(dragged){val sensitivity=(maxV-minV)*1.5f/height.coerceAtLeast(1);v=(downV+delta*sensitivity).coerceIn(minV,maxV);changed(v);invalidate()}
+                if(dragged){val sensitivity=(maxV-minV)*2.2f/height.coerceAtLeast(1);v=(downV+delta*sensitivity).coerceIn(minV,maxV);changed(v);invalidate()}
                 return true
             }
             MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);performClick();return true}
