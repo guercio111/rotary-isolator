@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private var previousLoudness = 0f
     private val sectionPreviousEq = FloatArray(3)
     private val sectionPreviousIso = FloatArray(3)
+    private val sectionPreviousFilters = FloatArray(3)
     private val previousEq = FloatArray(3)
     private val previousIso = FloatArray(3)
     private val previousFilters = FloatArray(3)
@@ -84,6 +85,7 @@ class MainActivity : Activity() {
         filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
         for(i in 0..2){previousEq[i]=eq[i];previousIso[i]=iso[i];sectionPreviousEq[i]=eq[i];sectionPreviousIso[i]=iso[i]}
         previousFilters[0]=filters[0];previousFilters[1]=filters[1];previousFilters[2]=resonance
+        sectionPreviousFilters[0]=filters[0];sectionPreviousFilters[1]=filters[1];sectionPreviousFilters[2]=resonance
         resonance = prefs.getFloat("resonance",0f).coerceIn(0f,1f)
         for (i in 0..2) {
             eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
@@ -227,7 +229,18 @@ class MainActivity : Activity() {
 
     private fun addFilterSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(3),dp(4),dp(2))}
-        box.addView(label("FILTERS  •  HPF / LPF",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
+        val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        filterTitle.addView(label("FILTERS  •  HPF / LPF",10f,gold),LinearLayout.LayoutParams(0,dp(26),1f))
+        filterTitle.addView(roundAction("↶","RETURN",true){
+            filters[0]=sectionPreviousFilters[0];filters[1]=sectionPreviousFilters[1];resonance=sectionPreviousFilters[2]
+            save();refreshUi();scheduleUpdate()
+        })
+        filterTitle.addView(roundAction("F","FLAT",true){
+            sectionPreviousFilters[0]=filters[0];sectionPreviousFilters[1]=filters[1];sectionPreviousFilters[2]=resonance
+            filters[0]=0f;filters[1]=0f;resonance=0f
+            save();refreshUi();scheduleUpdate()
+        })
+        box.addView(filterTitle)
         val row=LinearLayout(this).apply{orientation=if(verticalLayout)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(verticalLayout)0f else 3f}
         val names=listOf("HPF","LPF","RESONANCE")
         for(i in 0..2){
