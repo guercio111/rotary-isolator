@@ -32,6 +32,10 @@ class MainActivity : Activity() {
     private var filtersOn = false
     private var gain = 0f
     private var resonance = 0f
+    private var verticalLayout = false
+    private var masterMode = 0
+    private var bassBoost = 0f
+    private var loudness = 0f
     private val eq = FloatArray(3)
     private val iso = floatArrayOf(0f, 0f, 0f)
     // HPF, LPF intensity (0..100%)
@@ -54,6 +58,10 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         compact = prefs.getBoolean("mini", false)
+        verticalLayout = prefs.getBoolean("vertical_layout", false)
+        masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
+        bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
+        loudness = prefs.getFloat("loudness", 0f).coerceIn(0f,100f)
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         limiterOn = prefs.getBoolean("limiter", false)
@@ -100,7 +108,7 @@ class MainActivity : Activity() {
         }
     }
     private fun save() {
-        prefs.edit().putBoolean("mini",compact).putInt("skin",skin).putBoolean("limiter",limiterOn)
+        prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
@@ -123,6 +131,7 @@ class MainActivity : Activity() {
         addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..24f, {isoOn}) { scheduleUpdate() }
         addFilterSection()
         addGainSection()
+        addMasterToneSection()
         val bar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         bar.addView(button(if(eqOn)"EQ ON" else "EQ OFF"){eqOn=!eqOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button(if(isoOn)"ISO ON" else "ISO OFF"){isoOn=!isoOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
@@ -139,7 +148,7 @@ class MainActivity : Activity() {
     private fun scheduleUpdate() {
         // Update DSP at display cadence; persist settings off the hot interaction path.
         handler.removeCallbacks(dspUpdate)
-        handler.postDelayed(dspUpdate, 12L)
+        handler.post(dspUpdate)
         handler.removeCallbacks(saveUpdate)
         handler.postDelayed(saveUpdate, 220L)
     }
@@ -151,7 +160,7 @@ class MainActivity : Activity() {
         header.addView(label(title,10f,gold),LinearLayout.LayoutParams(0,dp(26),1f))
         header.addView(roundAction("F","FLAT",true){ for(i in 0..2) values[i]=0f; save(); refreshUi(); scheduleUpdate() })
         box.addView(header)
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
+        val row=LinearLayout(this).apply{orientation=if(verticalLayout)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(verticalLayout)0f else 3f}
         val names=listOf("LOW","MID","HIGH")
         for(i in 0..2){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
@@ -187,7 +196,7 @@ class MainActivity : Activity() {
     private fun addFilterSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(3),dp(4),dp(2))}
         box.addView(label("FILTERS  •  HPF / LPF",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
+        val row=LinearLayout(this).apply{orientation=if(verticalLayout)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(verticalLayout)0f else 3f}
         val names=listOf("HPF","LPF","RESONANCE")
         for(i in 0..2){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
@@ -241,6 +250,21 @@ class MainActivity : Activity() {
         content.addView(box);sections["GAIN"]=box
     }
 
+    private fun addMasterToneSection(){
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(5),dp(4),dp(5))}
+        box.addView(label("MASTER TONE",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
+        val modeRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        modeRow.addView(button("BASS BOOST"){masterMode=0;save();refreshUi();scheduleUpdate()},LinearLayout.LayoutParams(0,dp(38),1f))
+        modeRow.addView(button("LOUDNESS"){masterMode=1;save();refreshUi();scheduleUpdate()},LinearLayout.LayoutParams(0,dp(38),1f))
+        box.addView(modeRow)
+        val value=if(masterMode==0)bassBoost else loudness
+        box.addView(RotaryControl(this,if(masterMode==0)"BASS BOOST" else "LOUDNESS",value,0f,100f,gold,{v->
+            if(masterMode==0)bassBoost=v else loudness=v
+            scheduleUpdate()
+        },{"${(if(masterMode==0)bassBoost else loudness).roundToInt()}%"}),LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
+        content.addView(box);sections["MASTER_TONE"]=box
+    }
+
     private fun refreshUi(){ buildUi() }
 
     private fun connectAudio(){
@@ -272,19 +296,29 @@ class MainActivity : Activity() {
                 val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
                 fx.setPostEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,freqs[i],isoGain))
             }
+            val masterLow=if(masterMode==0)bassBoost/100f*12f else loudness/100f*9f
+            val masterHigh=if(masterMode==1)loudness/100f*6f else 0f
+            for(ch in 0..1){
+                val low=if(isoOn && isoControlOn[0])iso[0].coerceIn(-24f,24f) else 0f
+                val mid=if(isoOn && isoControlOn[1])iso[1].coerceIn(-24f,24f) else 0f
+                val high=if(isoOn && isoControlOn[2])iso[2].coerceIn(-24f,24f) else 0f
+                fx.setPostEqBandByChannelIndex(ch,0,DynamicsProcessing.EqBand(true,250f,low+masterLow))
+                fx.setPostEqBandByChannelIndex(ch,1,DynamicsProcessing.EqBand(true,4000f,mid))
+                fx.setPostEqBandByChannelIndex(ch,2,DynamicsProcessing.EqBand(true,20000f,high+masterHigh))
+            }
             fx.setInputGainAllChannelsTo(gain.coerceIn(-12f,12f))
             if(limiterOn){
                 val lim=DynamicsProcessing.Limiter(true,true,0,5f,80f,20f,-1f,0f)
                 fx.setLimiterAllChannelsTo(lim)
             }
-            fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn
+            fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoost>.01f||loudness>.01f
             status.text=if(fx.enabled)"Processing ON • EQ / ISO / Gain" else "BYPASS"
         }catch(t:Throwable){status.text="Audio DSP non supportato dal driver del dispositivo"}
     }
 
     private fun showOptions(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
-        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Pioneer V10","Tema Xone","Tema Rotativo classico")
+        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Pioneer V10","Tema Xone","Tema Rotativo classico","Disposizione orizzontale / verticale")
         names.forEachIndexed{index,name->
             val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
                 when(index){
@@ -295,6 +329,7 @@ class MainActivity : Activity() {
                     }
                     4->{compact=!compact;save();refreshUi();applyDsp()}
                     in 5..7->{skin=index-5;save();refreshUi();applyDsp()}
+                    8->{verticalLayout=!verticalLayout;save();refreshUi();applyDsp()}
                 }
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
