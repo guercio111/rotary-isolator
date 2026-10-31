@@ -10,4 +10,4 @@ jobs:
       - name: Extract source package
         run: |
           unzip RotaryIsolator-build-package.zip -d extracted
-          sed -n '1,260p' extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
+          sed -n '261,620p' extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
