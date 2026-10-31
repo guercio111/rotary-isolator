@@ -187,13 +187,13 @@ class MainActivity : Activity() {
         if(modes["GAIN"]==true){
             val l=label("GAIN  ${fmt(gain)} dB",12f,Color.WHITE)
             val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;l.text="GAIN  ${fmt(gain)} dB";save();applyDsp()}}
+                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;l.text="GAIN  ${fmt(gain)} dB";scheduleUpdate()}}
                 override fun onStartTrackingTouch(b:SeekBar?){}
                 override fun onStopTrackingTouch(b:SeekBar?){}
             })}
             box.addView(l);box.addView(s)
         }else{
-            box.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;save();applyDsp()}){"${fmt(gain)} dB"},LinearLayout.LayoutParams(-1,dp(92)))
+            box.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()}){"${fmt(gain)} dB"},LinearLayout.LayoutParams(-1,dp(92)))
         }
         content.addView(box);sections["GAIN"]=box
     }
