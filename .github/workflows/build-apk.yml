@@ -135,6 +135,27 @@ jobs:
         run: |
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
 
+      - name: Keep experimental APK separate from stable app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("extracted/RotaryIsolator/app/build.gradle")
+          if not p.exists():
+              p = Path("extracted/RotaryIsolator/app/build.gradle.kts")
+          s = p.read_text()
+          if p.name.endswith(".kts"):
+              line = '        applicationIdSuffix = ".capturetest"'
+          else:
+              line = '        applicationIdSuffix ".capturetest"'
+          if "applicationIdSuffix" not in s:
+              start = s.find("defaultConfig {")
+              if start < 0:
+                  raise SystemExit("defaultConfig block not found")
+              insert = s.find("\n", start) + 1
+              s = s[:insert] + line + "\n" + s[insert:]
+          p.write_text(s)
+          PY
+
       - name: Set Java compatibility to 17
         run: |
           python3 - <<'PY'
