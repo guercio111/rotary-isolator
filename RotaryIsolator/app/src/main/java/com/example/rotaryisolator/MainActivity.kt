@@ -11,6 +11,8 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.*
 import kotlin.math.*
@@ -28,7 +30,14 @@ class MainActivity : Activity() {
     private var gain = 0f
     private val eq = FloatArray(3)
     private val iso = floatArrayOf(0f, 0f, 0f)
-    private val filters = floatArrayOf(0f, 0f)
+    // HPF, LPF, MID PASS intensity (0..100%)
+    private val filters = floatArrayOf(0f, 0f, 0f)
+    private val eqControlOn = BooleanArray(3) { true }
+    private val isoControlOn = BooleanArray(3) { true }
+    private val filterControlOn = BooleanArray(3) { true }
+    private val handler = Handler(Looper.getMainLooper())
+    private val dspUpdate = Runnable { applyDspNow() }
+    private val saveUpdate = Runnable { save() }
     private val modes = mutableMapOf("EQ" to false, "ISOLATOR" to false, "FILTERS" to true, "GAIN" to false)
     private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
@@ -46,7 +55,12 @@ class MainActivity : Activity() {
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true); filtersOn = prefs.getBoolean("filters_on", false)
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
-        filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
+        filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f); filters[2] = prefs.getFloat("midpass",0f)
+        for (i in 0..2) {
+            eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
+            isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
+            filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
+        }
         for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", key=="FILTERS")
         buildUi()
         connectAudio()
@@ -62,7 +76,8 @@ class MainActivity : Activity() {
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
-                putFloat("hpf",filters[0]);putFloat("lpf",filters[1])
+                putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("midpass",filters[2])
+                for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i]);putBoolean("filter_control_$i",filterControlOn[i])}
                 modes.forEach{(k,v)->putBoolean("mode_$k",v)}
             }.apply()
     }
@@ -75,8 +90,8 @@ class MainActivity : Activity() {
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         scroll.addView(content);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
-        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq, -12f..12f, {eqOn}) { applyDsp() }
-        addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..0f, {isoOn}) { applyDsp() }
+        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq, -12f..12f, {eqOn}) { scheduleUpdate() }
+        addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..24f, {isoOn}) { scheduleUpdate() }
         addFilterSection()
         addGainSection()
         val bar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
@@ -90,30 +105,46 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
+    private fun scheduleUpdate() {
+        // Update DSP at display cadence; persist settings off the hot interaction path.
+        handler.removeCallbacks(dspUpdate)
+        handler.postDelayed(dspUpdate, 12L)
+        handler.removeCallbacks(saveUpdate)
+        handler.postDelayed(saveUpdate, 220L)
+    }
+
     private fun addSection(key:String,title:String,values:FloatArray,range:ClosedFloatingPointRange<Float>,enabled:()->Boolean,onChange:()->Unit) {
-        if(compact && key=="ISOLATOR" && !isoOn) return
+        val active = if(key=="EQ") eqControlOn else isoControlOn
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(4),dp(4),dp(2))}
-        box.addView(label(title,10f,gold),LinearLayout.LayoutParams(-1,dp(22)))
+        val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        header.addView(label(title,10f,gold),LinearLayout.LayoutParams(0,dp(26),1f))
+        header.addView(button("FLAT"){ for(i in 0..2) values[i]=0f; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(dp(66),dp(30)))
+        box.addView(header)
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
+        val names=listOf("LOW","MID","HIGH")
         for(i in 0..2){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-            val names=listOf("LOW","MID","HIGH")
+            val vLabel=label("${names[i]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
             if(modes[key]==true) {
-                val vLabel=label("${names[i]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
                 val seek=SeekBar(this).apply{
                     max=(range.endInclusive-range.start).roundToInt()*10
                     progress=((values[i]-range.start)*10).roundToInt().coerceIn(0,max)
+                    isEnabled=active[i]
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){values[i]=range.start+p/10f;vLabel.text="${names[i]}  ${fmt(values[i])} dB";save();onChange()}}
+                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){values[i]=range.start+p/10f;vLabel.text="${names[i]}  ${fmt(values[i])} dB";scheduleUpdate()}}
                         override fun onStartTrackingTouch(s:SeekBar?){}
-                        override fun onStopTrackingTouch(s:SeekBar?){}
+                        override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
                 }
                 col.addView(vLabel);col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             } else {
-                val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;save();onChange()}){fmt(values[i])+" dB"}
-                col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)82 else 116)))
+                val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"})
+                knob.isEnabled=active[i]
+                col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
+            val bypass=button(if(active[i])"BYP" else "BYP OFF"){active[i]=!active[i];save();refreshUi();scheduleUpdate()}
+            bypass.textSize=9f
+            col.addView(bypass,LinearLayout.LayoutParams(dp(62),dp(28)).apply{gravity=Gravity.END})
             row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
         }
         box.addView(row);content.addView(box);sections[key]=box
@@ -121,22 +152,31 @@ class MainActivity : Activity() {
 
     private fun addFilterSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(3),dp(4),dp(2))}
-        box.addView(label("FILTERS  •  HPF / LPF",10f,gold))
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        listOf("HPF","LPF").forEachIndexed{i,n->
+        box.addView(label("FILTERS  •  HPF / MID PASS / LPF",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
+        val names=listOf("HPF","MID PASS","LPF")
+        for(i in 0..2){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val l=label("${names[i]}  ${(filters[i]*100).roundToInt()}%",10f,Color.WHITE)
             if(modes["FILTERS"]==true){
-                val l=label("$n  ${(filters[i]*100).roundToInt()}%",11f,Color.WHITE)
-                val s=SeekBar(this).apply{max=100;progress=(filters[i]*100).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                    override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){filters[i]=p/100f;l.text="$n  $p%";save();applyDsp()}}
-                    override fun onStartTrackingTouch(b:SeekBar?){}
-                    override fun onStopTrackingTouch(b:SeekBar?){}
-                })}
-                col.addView(l);col.addView(s)
+                val seek=SeekBar(this).apply{
+                    max=100;progress=(filters[i]*100).roundToInt();isEnabled=filterControlOn[i]
+                    setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){filters[i]=p/100f;l.text="${names[i]}  $p%";scheduleUpdate()}}
+                        override fun onStartTrackingTouch(b:SeekBar?){}
+                        override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
+                    })
+                }
+                col.addView(l);col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             }else{
-                col.addView(RotaryControl(this,n,filters[i],0f,1f,gold,{v->filters[i]=v;save();applyDsp()}){"${(filters[i]*100).roundToInt()}%"},LinearLayout.LayoutParams(0,dp(88),1f))
+                val knob=RotaryControl(this,names[i],filters[i],0f,1f,gold,{v->filters[i]=v;l.text="${names[i]}  ${(v*100).roundToInt()}%";scheduleUpdate()},{"${(filters[i]*100).roundToInt()}%"})
+                knob.isEnabled=filterControlOn[i]
+                col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
-            row.addView(col,LinearLayout.LayoutParams(0,dp(82),1f))
+            val bypass=button(if(filterControlOn[i])"BYP" else "BYP OFF"){filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()}
+            bypass.textSize=9f
+            col.addView(bypass,LinearLayout.LayoutParams(dp(62),dp(28)).apply{gravity=Gravity.END})
+            row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
         }
         box.addView(row);content.addView(box);sections["FILTERS"]=box
     }
@@ -169,24 +209,22 @@ class MainActivity : Activity() {
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
     }
 
-    private fun applyDsp(){
-        save()
+    private fun applyDsp(){ scheduleUpdate() }
+
+    private fun applyDspNow(){
         val fx=dpEffect?:return
         if(Build.VERSION.SDK_INT<28)return
         try{
             val freqs=floatArrayOf(250f,4000f,20000f)
             for(ch in 0..1)for(i in 0..2){
-                val eqBand=DynamicsProcessing.EqBand(true,freqs[i],if(eqOn)eq[i].coerceIn(-12f,12f) else 0f)
+                var eqGain=if(eqOn && eqControlOn[i])eq[i].coerceIn(-12f,12f) else 0f
+                if(filtersOn && filterControlOn[0] && i==0) eqGain -= filters[0]*24f
+                if(filtersOn && filterControlOn[1] && i==2) eqGain -= filters[1]*24f
+                if(filtersOn && filterControlOn[2] && i!=1) eqGain -= filters[2]*24f
+                val eqBand=DynamicsProcessing.EqBand(true,freqs[i],eqGain.coerceIn(-36f,12f))
                 fx.setPreEqBandByChannelIndex(ch,i,eqBand)
-                val isoGain=if(isoOn)iso[i].coerceIn(-24f,0f) else 0f
+                val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
                 fx.setPostEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,freqs[i],isoGain))
-            }
-            // HPF/LPF are gentle edge-band cuts in this first DSP pass; no fake standalone filter claim.
-            if(filtersOn){
-                for(ch in 0..1){
-                    if(filters[0]>0f)fx.setPreEqBandByChannelIndex(ch,0,DynamicsProcessing.EqBand(true,250f,(-24f*filters[0]).coerceIn(-24f,0f)))
-                    if(filters[1]>0f)fx.setPostEqBandByChannelIndex(ch,2,DynamicsProcessing.EqBand(true,20000f,(-24f*filters[1]).coerceIn(-24f,0f)))
-                }
             }
             fx.setInputGainAllChannelsTo(gain.coerceIn(-12f,12f))
             if(limiterOn){
