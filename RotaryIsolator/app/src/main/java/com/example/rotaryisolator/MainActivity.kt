@@ -230,8 +230,9 @@ class MainActivity : Activity() {
 
     private fun scheduleUpdate() {
         // Update DSP at display cadence; persist settings off the hot interaction path.
+        // Give audio parameter changes priority over UI work and persistence.
         handler.removeCallbacks(dspUpdate)
-        handler.post(dspUpdate)
+        handler.postAtFrontOfQueue(dspUpdate)
         handler.removeCallbacks(saveUpdate)
         handler.postDelayed(saveUpdate, 220L)
     }
@@ -278,7 +279,7 @@ class MainActivity : Activity() {
             },LinearLayout.LayoutParams(dp(42),dp(42)).apply{rightMargin=dp(8)})
             bandActions.addView(circleAction("F",56) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
-                values[i]=0f; save(); refreshUi(); scheduleUpdate()
+                values[i]=0f; scheduleUpdate(); refreshUi()
             },LinearLayout.LayoutParams(dp(56),dp(56)))
             col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
@@ -292,7 +293,7 @@ class MainActivity : Activity() {
         header.addView(circleAction("F",38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..2){previous[i]=values[i];values[i]=0f}
-            save();refreshUi();scheduleUpdate()
+            scheduleUpdate();refreshUi()
         },LinearLayout.LayoutParams(dp(38),dp(38)))
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
     }
@@ -349,7 +350,7 @@ class MainActivity : Activity() {
             filterActions.addView(circleAction("F",56){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
-                save();refreshUi();scheduleUpdate()
+                scheduleUpdate();refreshUi()
             },LinearLayout.LayoutParams(dp(56),dp(56)))
             col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
