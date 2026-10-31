@@ -92,6 +92,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         compact = prefs.getBoolean("mini", false)
+        reverbAmount = prefs.getFloat("fx_reverb", 0f).coerceIn(0f,100f)
+        dubDelay = prefs.getFloat("fx_dub_delay", 0f).coerceIn(0f,100f)
         verticalLayout = prefs.getBoolean("vertical_layout", false)
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
         bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
@@ -149,7 +151,7 @@ class MainActivity : Activity() {
         }
     }
     private fun save() {
-        prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
+        prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putFloat("fx_reverb",reverbAmount).putFloat("fx_dub_delay",dubDelay).putInt("skin",skin).putBoolean("limiter",limiterOn)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
@@ -359,7 +361,7 @@ class MainActivity : Activity() {
     private fun addCaptureFxSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(5),dp(8),dp(5),dp(5))}
         box.addView(label("MASTER FX  •  AUDIO CAPTURE TEST",10f,gold),LinearLayout.LayoutParams(-1,dp(26)))
-        box.addView(label("PROVA TECNICA: cattura una copia dell'audio consentito da Android",9f,Color.LTGRAY),LinearLayout.LayoutParams(-1,dp(24)))
+        box.addView(label("SEND / RETURN • sempre attivo • controlli wet in tempo reale",9f,Color.LTGRAY),LinearLayout.LayoutParams(-1,dp(24)))
         val buttons=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         buttons.addView(button("START CAPTURE"){startCaptureRequest()},LinearLayout.LayoutParams(0,dp(42),1f))
         buttons.addView(button("STOP"){stopCapture()},LinearLayout.LayoutParams(0,dp(42),1f))
@@ -475,6 +477,10 @@ class MainActivity : Activity() {
             val combL=Array(4){FloatArray(combLengths[it])}
             val combR=Array(4){FloatArray(combLengths[it])}
             val combCursor=IntArray(4)
+            val allpassLengths=intArrayOf(225,556)
+            val allpassL=Array(2){FloatArray(allpassLengths[it])}
+            val allpassR=Array(2){FloatArray(allpassLengths[it])}
+            val allpassCursor=IntArray(2)
             var framesSeen=0L
             while(captureRunning){
                 val n=try{record.read(samples,0,samples.size,AudioRecord.READ_BLOCKING)}catch(_:Throwable){-1}
@@ -501,15 +507,25 @@ class MainActivity : Activity() {
                     for(c in 0..3){
                         val p=combCursor[c]
                         val a=combL[c][p];val b=combR[c][p]
-                        val fb=0.68f+(c*0.025f)
+                        val fb=0.72f+(c*0.025f)
                         combL[c][p]=(inL+a*fb).coerceIn(-0.95f,0.95f)
                         combR[c][p]=(inR+b*fb).coerceIn(-0.95f,0.95f)
                         revL+=a*0.25f;revR+=b*0.25f
                         combCursor[c]=if(p+1>=combLengths[c])0 else p+1
                     }
+                    // Two serial all-pass diffusers soften the comb resonances.
+                    for(c in 0..1){
+                        val p=allpassCursor[c]
+                        val dl=allpassL[c][p];val dr=allpassR[c][p]
+                        val yl=dl-0.5f*revL;val yr=dr-0.5f*revR
+                        allpassL[c][p]=(revL+0.5f*yl).coerceIn(-0.95f,0.95f)
+                        allpassR[c][p]=(revR+0.5f*yr).coerceIn(-0.95f,0.95f)
+                        revL=yl;revR=yr
+                        allpassCursor[c]=if(p+1>=allpassLengths[c])0 else p+1
+                    }
 
-                    val outL=(inL+echoL*wetDelay*0.78f+revL*wetReverb*0.82f).coerceIn(-1f,1f)
-                    val outR=(inR+echoR*wetDelay*0.78f+revR*wetReverb*0.82f).coerceIn(-1f,1f)
+                    val outL=(inL+echoL*wetDelay*0.78f+revL*wetReverb*0.72f).coerceIn(-1f,1f)
+                    val outR=(inR+echoR*wetDelay*0.78f+revR*wetReverb*0.72f).coerceIn(-1f,1f)
                     samples[i]=(outL*32767f).roundToInt().toShort()
                     samples[i+1]=(outR*32767f).roundToInt().toShort()
                     i+=2;framesSeen++
