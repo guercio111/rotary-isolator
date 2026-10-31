@@ -270,30 +270,75 @@ private class RotaryControl(
     private var v=initial
     private var downY=0f
     private var downV=initial
-    private val rect get()={val s=min(width,height)*.70f;RectF(width/2f-s/2,height/2f-s/2-5,width/2f+s/2,height/2f+s/2-5)}()
-    init{isFocusable=true;contentDescription="$title rotary control"}
+    private val density get()=resources.displayMetrics.density
+    private fun dp(x:Float)=x*density
+    private val rect get()={
+        val side=min(width,height)*.80f
+        RectF(width/2f-side/2,height/2f-side/2- dp(7f),width/2f+side/2,height/2f+side/2-dp(7f))
+    }()
+    init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
     override fun onDraw(c:Canvas){
-        super.onDraw(c);val r=rect;val cx=r.centerX();val cy=r.centerY();val rad=r.width()/2
-        p.style=Paint.Style.STROKE;p.strokeWidth=dp(5).toFloat();p.strokeCap=Paint.Cap.ROUND;p.color=0xFF454B55.toInt()
-        c.drawArc(RectF(cx-rad+5,cy-rad+5,cx+rad-5,cy+rad-5),135f,270f,false,p)
-        val n=((v-minV)/(maxV-minV)).coerceIn(0f,1f);p.color=accent
-        c.drawArc(RectF(cx-rad+5,cy-rad+5,cx+rad-5,cy+rad-5),135f,270f*n,false,p)
-        p.style=Paint.Style.FILL;p.color=0xFF292E36.toInt();c.drawCircle(cx,cy,rad*.77f,p)
-        val a=Math.toRadians((135+270*n).toDouble());p.color=Color.WHITE;p.strokeWidth=dp(2).toFloat()
-        c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.56f,cy+sin(a).toFloat()*rad*.56f,p)
-        p.textAlign=Paint.Align.CENTER;p.textSize=dp(10).toFloat();p.color=Color.WHITE
-        c.drawText(title,cx,r.bottom+dp(15),p);p.color=accent;p.textSize=dp(10).toFloat();c.drawText(valueText(),cx,r.bottom+dp(29),p)
+        super.onDraw(c)
+        val r=rect;val cx=r.centerX();val cy=r.centerY();val rad=r.width()/2f
+        val arc=RectF(cx-rad+dp(5f),cy-rad+dp(5f),cx+rad-dp(5f),cy+rad-dp(5f))
+        p.style=Paint.Style.STROKE;p.strokeWidth=dp(6f);p.strokeCap=Paint.Cap.ROUND;p.color=0xFF454B55.toInt()
+        c.drawArc(arc,135f,270f,false,p)
+        // Clearly visible click targets around the dial.
+        for(i in 0..20){
+            val a=Math.toRadians((135.0+i*270.0/20.0))
+            val inner=rad*if(i%5==0) .78f else .84f
+            val outer=rad*.98f
+            p.color=if(i%5==0)accent else 0xFF9AA2AE.toInt()
+            p.strokeWidth=dp(if(i%5==0)2.5f else 1.3f)
+            c.drawLine(cx+cos(a).toFloat()*inner,cy+sin(a).toFloat()*inner,cx+cos(a).toFloat()*outer,cy+sin(a).toFloat()*outer,p)
+            if(i%5==0){
+                p.style=Paint.Style.FILL
+                c.drawCircle(cx+cos(a).toFloat()*rad*.91f,cy+sin(a).toFloat()*rad*.91f,dp(3.2f),p)
+                p.style=Paint.Style.STROKE
+            }
+        }
+        val n=((v-minV)/(maxV-minV)).coerceIn(0f,1f)
+        p.color=accent;p.strokeWidth=dp(6f);c.drawArc(arc,135f,270f*n,false,p)
+        p.style=Paint.Style.FILL;p.color=0xFF292E36.toInt();c.drawCircle(cx,cy,rad*.70f,p)
+        val a=Math.toRadians((135+270*n).toDouble())
+        p.color=Color.WHITE;p.strokeWidth=dp(3f)
+        c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
+        p.textAlign=Paint.Align.CENTER;p.textSize=dp(11f);p.color=Color.WHITE
+        c.drawText(title,cx,r.bottom+dp(17f),p)
+        p.color=accent;p.textSize=dp(10f);c.drawText(valueText(),cx,r.bottom+dp(31f),p)
     }
-    private fun dp(x:Int)=(x*resources.displayMetrics.density).roundToInt()
+    private fun updateFromPoint(x:Float,y:Float){
+        val r=rect;val cx=r.centerX();val cy=r.centerY()
+        var degrees=Math.toDegrees(atan2((y-cy).toDouble(),(x-cx).toDouble())).toFloat()
+        if(degrees<0f)degrees+=360f
+        if(degrees<45f)degrees+=360f
+        val fraction=((degrees.coerceIn(135f,405f)-135f)/270f).coerceIn(0f,1f)
+        v=minV+fraction*(maxV-minV)
+        changed(v);invalidate()
+    }
     override fun onTouchEvent(e:MotionEvent):Boolean{
         when(e.action){
-            MotionEvent.ACTION_DOWN->{downY=e.y;downV=v;parent?.requestDisallowInterceptTouchEvent(true);return true}
-            MotionEvent.ACTION_MOVE->{v=(downV-(e.y-downY)/(dp(170).toFloat())*(maxV-minV)).coerceIn(minV,maxV);changed(v);invalidate();return true}
+            MotionEvent.ACTION_DOWN->{
+                downY=e.y;downV=v
+                parent?.requestDisallowInterceptTouchEvent(true)
+                updateFromPoint(e.x,e.y)
+                return true
+            }
+            MotionEvent.ACTION_MOVE->{
+                // Direct angular positioning makes the dial usable with mouse and stylus.
+                updateFromPoint(e.x,e.y)
+                return true
+            }
             MotionEvent.ACTION_UP->{performClick();return true}
-        };return true
+            MotionEvent.ACTION_CANCEL->{return true}
+        }
+        return true
     }
     override fun onGenericMotionEvent(e:MotionEvent):Boolean{
-        if(e.action==MotionEvent.ACTION_SCROLL){v=(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f).coerceIn(minV,maxV);changed(v);invalidate();return true}
+        if(e.action==MotionEvent.ACTION_SCROLL){
+            v=(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f).coerceIn(minV,maxV)
+            changed(v);invalidate();return true
+        }
         return super.onGenericMotionEvent(e)
     }
     override fun performClick():Boolean{super.performClick();return true}
