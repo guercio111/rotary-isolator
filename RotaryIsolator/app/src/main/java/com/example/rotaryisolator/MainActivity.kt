@@ -36,6 +36,12 @@ class MainActivity : Activity() {
     private var masterMode = 0
     private var bassBoost = 0f
     private var loudness = 0f
+    private var bassBoostOn = false
+    private var loudnessOn = false
+    private var previousBassBoost = 0f
+    private var previousLoudness = 0f
+    private val sectionPreviousEq = FloatArray(3)
+    private val sectionPreviousIso = FloatArray(3)
     private val previousEq = FloatArray(3)
     private val previousIso = FloatArray(3)
     private val previousFilters = FloatArray(3)
@@ -65,6 +71,10 @@ class MainActivity : Activity() {
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
         bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
         loudness = prefs.getFloat("loudness", 0f).coerceIn(0f,100f)
+        bassBoostOn = prefs.getBoolean("bass_boost_on", false)
+        loudnessOn = prefs.getBoolean("loudness_on", false)
+        previousBassBoost = prefs.getFloat("previous_bass_boost", bassBoost)
+        previousLoudness = prefs.getFloat("previous_loudness", loudness)
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         limiterOn = prefs.getBoolean("limiter", false)
@@ -113,7 +123,7 @@ class MainActivity : Activity() {
         }
     }
     private fun save() {
-        prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
+        prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
@@ -136,7 +146,6 @@ class MainActivity : Activity() {
         addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..24f, {isoOn}) { scheduleUpdate() }
         addFilterSection()
         addGainSection()
-        addMasterToneSection()
         val bar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         bar.addView(button(if(eqOn)"EQ ON" else "EQ OFF"){eqOn=!eqOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button(if(isoOn)"ISO ON" else "ISO OFF"){isoOn=!isoOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
@@ -163,7 +172,16 @@ class MainActivity : Activity() {
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(4),dp(4),dp(2))}
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         header.addView(label(title,10f,gold),LinearLayout.LayoutParams(0,dp(26),1f))
-        // Per-control FLAT and restore buttons are placed beside each dial.
+        header.addView(roundAction("↶","RETURN",true){
+            val previous = if(key=="EQ") sectionPreviousEq else sectionPreviousIso
+            for(i in 0..2) values[i]=previous[i]
+            save();refreshUi();scheduleUpdate()
+        })
+        header.addView(roundAction("F","FLAT",true){
+            val previous = if(key=="EQ") sectionPreviousEq else sectionPreviousIso
+            for(i in 0..2){ previous[i]=values[i]; values[i]=0f }
+            save();refreshUi();scheduleUpdate()
+        })
         box.addView(header)
         val row=LinearLayout(this).apply{orientation=if(verticalLayout)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(verticalLayout)0f else 3f}
         val names=listOf("LOW","MID","HIGH")
@@ -260,34 +278,44 @@ class MainActivity : Activity() {
 
     private fun addGainSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(3),dp(4),dp(2))}
-        box.addView(label("MASTER GAIN",10f,gold))
+        box.addView(label("MASTER  •  GAIN / BASS BOOST / LOUDNESS",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
+        val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+        gainCol.addView(label("GAIN",11f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(24)))
         if(modes["GAIN"]==true){
-            val l=label("GAIN  ${fmt(gain)} dB",12f,Color.WHITE)
             val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;l.text="GAIN  ${fmt(gain)} dB";scheduleUpdate()}}
+                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;scheduleUpdate()}}
                 override fun onStartTrackingTouch(b:SeekBar?){}
                 override fun onStopTrackingTouch(b:SeekBar?){}
             })}
-            box.addView(l);box.addView(s)
+            gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
         }else{
-            box.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"}),LinearLayout.LayoutParams(-1,dp(92)))
+            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"}),LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
         }
+        row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
+        row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
+        row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
+        box.addView(row)
         content.addView(box);sections["GAIN"]=box
     }
 
-    private fun addMasterToneSection(){
-        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(5),dp(4),dp(5))}
-        box.addView(label("MASTER TONE",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
-        val modeRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        modeRow.addView(button("BASS BOOST"){masterMode=0;save();refreshUi();scheduleUpdate()},LinearLayout.LayoutParams(0,dp(38),1f))
-        modeRow.addView(button("LOUDNESS"){masterMode=1;save();refreshUi();scheduleUpdate()},LinearLayout.LayoutParams(0,dp(38),1f))
-        box.addView(modeRow)
-        val value=if(masterMode==0)bassBoost else loudness
-        box.addView(RotaryControl(this,if(masterMode==0)"BASS BOOST" else "LOUDNESS",value,0f,100f,gold,{v->
-            if(masterMode==0)bassBoost=v else loudness=v
-            scheduleUpdate()
-        },{"${(if(masterMode==0)bassBoost else loudness).roundToInt()}%"}),LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
-        content.addView(box);sections["MASTER_TONE"]=box
+    private fun masterToneControl(
+        title:String,value:Float,enabled:Boolean,setValue:(Float)->Unit,setEnabled:(Boolean)->Unit,
+        remember:()->Unit,restore:()->Unit
+    ):View{
+        val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+        col.addView(label("${value.roundToInt()}%",10f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(20)))
+        val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        actions.addView(roundAction("",if(enabled)"ON" else "OFF",enabled){
+            setEnabled(!enabled);save();refreshUi();scheduleUpdate()
+        })
+        actions.addView(roundAction("↶","RETURN",true){
+            restore();save();refreshUi();scheduleUpdate()
+        })
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(30)))
+        col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{"${value.roundToInt()}%"},onStart=remember),
+            LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
+        return col
     }
 
     private fun refreshUi(){ buildUi() }
@@ -321,8 +349,10 @@ class MainActivity : Activity() {
                 val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
                 fx.setPostEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,freqs[i],isoGain))
             }
-            val masterLow=if(masterMode==0)bassBoost/100f*12f else loudness/100f*9f
-            val masterHigh=if(masterMode==1)loudness/100f*6f else 0f
+            // More pronounced, rounded tone curves. Bass boost adds weight and punch;
+            // loudness adds bass body plus a restrained upper presence lift.
+            val masterLow=(if(bassBoostOn)bassBoost/100f*15f else 0f)+(if(loudnessOn)loudness/100f*12f else 0f)
+            val masterHigh=if(loudnessOn)loudness/100f*8f else 0f
             for(ch in 0..1){
                 val low=if(isoOn && isoControlOn[0])iso[0].coerceIn(-24f,24f) else 0f
                 val mid=if(isoOn && isoControlOn[1])iso[1].coerceIn(-24f,24f) else 0f
@@ -336,7 +366,7 @@ class MainActivity : Activity() {
                 val lim=DynamicsProcessing.Limiter(true,true,0,5f,80f,20f,-1f,0f)
                 fx.setLimiterAllChannelsTo(lim)
             }
-            fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoost>.01f||loudness>.01f
+            fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn
             status.text=if(fx.enabled)"Processing ON • EQ / ISO / Gain" else "BYPASS"
         }catch(t:Throwable){status.text="Audio DSP non supportato dal driver del dispositivo"}
     }
