@@ -97,6 +97,11 @@ class MainActivity : Activity() {
         }
         for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
         for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", false)
+        val filterRotaryDefaultApplied = prefs.getBoolean("filter_rotary_default_v1", false)
+        if (!filterRotaryDefaultApplied) {
+            modes["FILTERS"] = false
+            prefs.edit().putBoolean("mode_FILTERS", false).putBoolean("filter_rotary_default_v1", true).apply()
+        }
         buildUi()
         connectAudio()
     }
@@ -113,7 +118,7 @@ class MainActivity : Activity() {
         if (w <= 0 || h <= 0 || rw <= 0 || rh <= 0) return
         val availableW = (w - dp(12)).coerceAtLeast(1).toFloat()
         val availableH = (h - dp(12)).coerceAtLeast(1).toFloat()
-        autoFitScale = min(1f, min(availableW / rw.toFloat(), availableH / rh.toFloat())).coerceAtLeast(0.10f)
+        autoFitScale = min(1f, min(availableW / (rw.toFloat() * uiScale.coerceAtLeast(0.01f)), availableH / (rh.toFloat() * uiScale.coerceAtLeast(0.01f)))).coerceAtLeast(0.10f)
         root.pivotX = rw / 2f
         root.pivotY = rh / 2f
         root.scaleX = uiScale * autoFitScale
