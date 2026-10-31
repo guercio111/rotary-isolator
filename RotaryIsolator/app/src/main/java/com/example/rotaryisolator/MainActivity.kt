@@ -33,6 +33,7 @@ class MainActivity : Activity() {
     private var gain = 0f
     private var resonance = 0f
     private var verticalLayout = false
+    private var phonePortrait = false
     private var masterMode = 0
     private var bassBoost = 0f
     private var loudness = 0f
@@ -78,6 +79,8 @@ class MainActivity : Activity() {
         previousBassBoost = prefs.getFloat("previous_bass_boost", bassBoost)
         previousLoudness = prefs.getFloat("previous_loudness", loudness)
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
+        val dm = resources.displayMetrics
+        phonePortrait = (dm.widthPixels / dm.density) < 600f && dm.heightPixels > dm.widthPixels
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
@@ -253,7 +256,7 @@ class MainActivity : Activity() {
             } else {
                 val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]})
                 knob.isEnabled=active[i]
-                col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
+                col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)82 else if(compact)104 else 132)))
             }
             row.addView(col,if(verticalLayout)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-1,1f))
         }
@@ -315,7 +318,7 @@ class MainActivity : Activity() {
                     scheduleUpdate()
                 },{((if(i==2)resonance else filters[i])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==2)resonance else filters[i]})
                 knob.isEnabled=controlEnabled
-                col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
+                col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)82 else if(compact)104 else 132)))
             }
             row.addView(col,if(verticalLayout)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-1,1f))
         }
@@ -489,8 +492,9 @@ private class RotaryControl(
     private val density get()=resources.displayMetrics.density
     private fun dp(x:Float)=x*density
     private val rect get()={
-        val side=min(width,height)*.80f
-        RectF(width/2f-side/2,height/2f-side/2- dp(7f),width/2f+side/2,height/2f+side/2-dp(7f))
+        val side=min(width,(height-dp(28f)).coerceAtLeast(1))* .82f
+        val cy=(height-dp(26f))/2f
+        RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
     init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
     override fun onDraw(c:Canvas){
@@ -520,8 +524,8 @@ private class RotaryControl(
         p.color=Color.WHITE;p.strokeWidth=dp(3f)
         c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
         p.textAlign=Paint.Align.CENTER;p.textSize=dp(11f);p.color=Color.WHITE
-        c.drawText(title,cx,r.bottom+dp(17f),p)
-        p.color=accent;p.textSize=dp(10f);c.drawText(valueText(),cx,r.bottom+dp(31f),p)
+        c.drawText(title,cx,height-dp(17f),p)
+        p.color=accent;p.textSize=dp(10f);c.drawText(valueText(),cx,height-dp(4f),p)
     }
     private fun updateFromPoint(x:Float,y:Float){
         val r=rect;val cx=r.centerX();val cy=r.centerY()
