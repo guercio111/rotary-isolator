@@ -109,7 +109,7 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
-    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 88; h<820f -> 94; else -> 100 }) }
+    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 66; h<820f -> 74; else -> 82 }) }
 
     // Recalculate after both the window and the complete mixer have been measured.
     // Do not scale the whole mixer: it clips text and controls. Scroll the center instead.
@@ -145,12 +145,12 @@ class MainActivity : Activity() {
                 }
                 setOnClickListener { action() }
             }
-            addView(dot,LinearLayout.LayoutParams(dp(26),dp(26)))
+            addView(dot,LinearLayout.LayoutParams(dp(26),dp(24)))
             val txt=TextView(this@MainActivity).apply {
                 text=caption;textSize=9f;setTextColor(Color.WHITE);gravity=Gravity.CENTER_VERTICAL
                 setPadding(dp(5),0,dp(3),0);setOnClickListener { action() }
             }
-            addView(txt,LinearLayout.LayoutParams(-2,dp(30)))
+            addView(txt,LinearLayout.LayoutParams(-2,dp(24)))
         }
     }
     private fun save() {
@@ -202,7 +202,7 @@ class MainActivity : Activity() {
         val active = if(key=="EQ") eqControlOn else isoControlOn
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(1))}
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        header.addView(label(title,if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 26),1f))
+        header.addView(label(title,if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(20),1f))
         box.addView(header)
         val useVerticalRows=false
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
@@ -212,7 +212,7 @@ class MainActivity : Activity() {
             val vLabel=label("${names[i]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             controlHeader.addView(vLabel,LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 28),1f))
-            col.addView(controlHeader,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)22 else 30)))
+            col.addView(controlHeader,LinearLayout.LayoutParams(-1,dp(24)))
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
                     max=(range.endInclusive-range.start).roundToInt()*10
@@ -231,9 +231,9 @@ class MainActivity : Activity() {
                 col.addView(knob,LinearLayout.LayoutParams(-1,dialHeight()))
             }
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(dp(2),0,dp(2),0) }
-            bandActions.addView(phoneActionButton("RETURN") { val old=if(key=="EQ")previousEq[i] else previousIso[i]; if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]; values[i]=old; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(0,dp(34),1f).apply{rightMargin=dp(3)})
-            bandActions.addView(phoneActionButton("FLAT") { if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]; values[i]=0f; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(0,dp(34),1f))
-            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(36)))
+            bandActions.addView(phoneActionButton("RETURN") { val old=if(key=="EQ")previousEq[i] else previousIso[i]; if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]; values[i]=old; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(0,dp(32),1f).apply{rightMargin=dp(3)})
+            bandActions.addView(phoneActionButton("FLAT") { if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]; values[i]=0f; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(0,dp(32),1f))
+            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(34)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
@@ -246,20 +246,20 @@ class MainActivity : Activity() {
                 val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
                 for(i in 0..2)values[i]=previous[i]
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(0,dp(34),1f).apply{rightMargin=dp(6)})
+            },LinearLayout.LayoutParams(0,dp(32),1f).apply{rightMargin=dp(6)})
             sectionActions.addView(phoneActionButton("FLAT"){
                 val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
                 for(i in 0..2){previous[i]=values[i];values[i]=0f}
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(0,dp(34),1f))
-        box.addView(sectionActions,LinearLayout.LayoutParams(-1,dp(36)))
+            },LinearLayout.LayoutParams(0,dp(32),1f))
+        box.addView(sectionActions,LinearLayout.LayoutParams(-1,dp(34)))
         content.addView(box);sections[key]=box
     }
 
     private fun addFilterSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 26),1f))
+        filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(20),1f))
         box.addView(filterTitle)
         val useVerticalRows=false
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
@@ -270,11 +270,11 @@ class MainActivity : Activity() {
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",10f,Color.WHITE)
             val controlEnabled=if(i==2) true else filterControlOn[i]
             val filterHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-            filterHeader.addView(l,LinearLayout.LayoutParams(0,dp(28),1f))
+            filterHeader.addView(l,LinearLayout.LayoutParams(0,dp(24),1f))
             if(i<2) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
                 filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
             })
-            col.addView(filterHeader,LinearLayout.LayoutParams(-1,dp(30)))
+            col.addView(filterHeader,LinearLayout.LayoutParams(-1,dp(24)))
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
@@ -305,10 +305,10 @@ class MainActivity : Activity() {
 
     private fun addGainSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 3),dp(if(phonePortrait)1 else 4),dp(2))}
-        box.addView(label("MASTER  •  GAIN / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)20 else 24)))
+        box.addView(label("MASTER  •  GAIN / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(20)))
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
         val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-        gainCol.addView(label("GAIN",if(phonePortrait)9f else 11f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)18 else 24)))
+        gainCol.addView(label("GAIN",if(phonePortrait)9f else 11f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(18)))
         if(modes["GAIN"]==true){
             val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
                 override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;scheduleUpdate()}}
@@ -331,7 +331,7 @@ class MainActivity : Activity() {
         remember:()->Unit,restore:()->Unit
     ):View{
         val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-        col.addView(label("${value.roundToInt()}%",if(phonePortrait)9f else 10f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)16 else 20)))
+        col.addView(label("${value.roundToInt()}%",if(phonePortrait)9f else 10f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(16)))
         val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         actions.addView(roundAction("",if(enabled)"ON" else "OFF",enabled){
             setEnabled(!enabled);save();refreshUi();scheduleUpdate()
@@ -339,7 +339,7 @@ class MainActivity : Activity() {
         actions.addView(roundAction("↶","RETURN",true){
             restore();save();refreshUi();scheduleUpdate()
         })
-        col.addView(actions,LinearLayout.LayoutParams(-1,dp(26)))
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
         col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember),
             LinearLayout.LayoutParams(-1,dialHeight()))
         return col
@@ -416,7 +416,7 @@ class MainActivity : Activity() {
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
         }
         val scaleLabel=label("SCALA INTERFACCIA  ${(uiScale*100).roundToInt()}%",12f,Color.WHITE)
-        panel.addView(scaleLabel,LinearLayout.LayoutParams(-1,dp(30)))
+        panel.addView(scaleLabel,LinearLayout.LayoutParams(-1,dp(24)))
         val scaleSeek=SeekBar(this).apply{
             max=60;progress=((uiScale-.70f)*100).roundToInt().coerceIn(0,60)
             setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
@@ -469,7 +469,7 @@ private class RotaryControl(
     private val density get()=resources.displayMetrics.density
     private fun dp(x:Float)=x*density
     private val rect get()={
-        val side=min(width.toFloat(),(height.toFloat()-dp(28f)).coerceAtLeast(1f))* .82f
+        val side=min(width.toFloat(),(height.toFloat()-dp(22f)).coerceAtLeast(1f))* .82f
         val cy=(height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
