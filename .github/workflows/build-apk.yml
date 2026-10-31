@@ -32,24 +32,103 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
-      - name: Add audio capture permission
+      - name: Configure Android 14+ media projection foreground service
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-          manifests = list(Path("extracted").glob("**/src/main/AndroidManifest.xml"))
+          import xml.etree.ElementTree as ET
+
+          root = Path("extracted/RotaryIsolator")
+          manifests = list(root.glob("**/src/main/AndroidManifest.xml"))
           if not manifests:
               raise SystemExit("AndroidManifest.xml not found")
-          p = manifests[0]
-          s = p.read_text()
-          permission = '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
-          if "android.permission.RECORD_AUDIO" not in s:
-              m = re.search(r'(<manifest[^>]*>)', s)
-              if not m:
-                  raise SystemExit("manifest tag not found")
-              s = s[:m.end()] + chr(10) + "    " + permission + s[m.end():]
-              p.write_text(s)
-          print("RECORD_AUDIO permission ensured in", p)
+          manifest = manifests[0]
+          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+          ns = "{http://schemas.android.com/apk/res/android}"
+          tree = ET.parse(manifest)
+          mroot = tree.getroot()
+
+          for permission in (
+              "android.permission.RECORD_AUDIO",
+              "android.permission.FOREGROUND_SERVICE",
+              "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
+          ):
+              if not any(e.tag == "uses-permission" and e.get(ns+"name") == permission for e in mroot):
+                  ET.SubElement(mroot, "uses-permission", {ns+"name": permission})
+
+          app = mroot.find("application")
+          if app is None:
+              raise SystemExit("application element not found")
+          service_name = "com.example.rotaryisolator.AudioCaptureFgService"
+          service = next((e for e in app.findall("service") if e.get(ns+"name") == service_name), None)
+          if service is None:
+              service = ET.SubElement(app, "service")
+              service.set(ns+"name", service_name)
+          service.set(ns+"exported", "false")
+          service.set(ns+"foregroundServiceType", "mediaProjection")
+          tree.write(manifest, encoding="utf-8", xml_declaration=True)
+
+          java = root / "app/src/main/java/com/example/rotaryisolator/AudioCaptureFgService.kt"
+          java.parent.mkdir(parents=True, exist_ok=True)
+          java.write_text("""package com.example.rotaryisolator
+
+          import android.app.Notification
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.app.Service
+          import android.content.Intent
+          import android.content.pm.ServiceInfo
+          import android.os.Build
+          import android.os.IBinder
+
+          class AudioCaptureFgService : Service() {
+              override fun onCreate() {
+                  super.onCreate()
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      val manager = getSystemService(NotificationManager::class.java)
+                      manager.createNotificationChannel(
+                          NotificationChannel(CHANNEL_ID, "Isolator audio capture", NotificationManager.IMPORTANCE_LOW)
+                      )
+                  }
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  return try {
+                      val notification = if (Build.VERSION.SDK_INT >= 26) {
+                          Notification.Builder(this, CHANNEL_ID)
+                      } else {
+                          @Suppress("DEPRECATION")
+                          Notification.Builder(this)
+                      }.setSmallIcon(android.R.drawable.ic_media_play)
+                          .setContentTitle("Rotary Isolator")
+                          .setContentText("Audio FX capture is active")
+                          .setOngoing(true)
+                          .build()
+                      if (Build.VERSION.SDK_INT >= 29) {
+                          startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+                      } else {
+                          startForeground(NOTIFICATION_ID, notification)
+                      }
+                      sendBroadcast(Intent(ACTION_READY).setPackage(packageName))
+                      START_NOT_STICKY
+                  } catch (t: Throwable) {
+                      sendBroadcast(Intent(ACTION_FAILED).setPackage(packageName))
+                      stopSelf(startId)
+                      START_NOT_STICKY
+                  }
+              }
+
+              override fun onBind(intent: Intent?): IBinder? = null
+
+              companion object {
+                  const val ACTION_READY = "com.example.rotaryisolator.CAPTURE_FGS_READY"
+                  const val ACTION_FAILED = "com.example.rotaryisolator.CAPTURE_FGS_FAILED"
+                  private const val CHANNEL_ID = "isolator_audio_capture"
+                  private const val NOTIFICATION_ID = 7303
+              }
+          }
+          """)
+          print("Configured foreground mediaProjection service:", java)
           PY
 
       - name: Use maintained Kotlin source
