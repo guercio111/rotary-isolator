@@ -177,7 +177,7 @@ class MainActivity : Activity() {
             clipChildren=false
             clipToPadding=false
             overScrollMode=View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(content,ScrollView.LayoutParams(-1,-2))
+            addView(content,FrameLayout.LayoutParams(-1,-2))
         }
         root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
