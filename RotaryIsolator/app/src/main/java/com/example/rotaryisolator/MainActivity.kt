@@ -135,6 +135,12 @@ class MainActivity : Activity() {
     }
     private fun button(t:String, action:()->Unit)=Button(this).apply { text=t; setOnClickListener { action() } }
     private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
+    private fun phoneActionButton(textValue:String, action:()->Unit):View = TextView(this).apply{
+        text=textValue;textSize=9f;setTextColor(Color.WHITE);gravity=Gravity.CENTER;isAllCaps=true
+        background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(6).toFloat();setColor(Color.rgb(190,28,38));setStroke(dp(1),Color.rgb(245,90,90))}
+        setOnClickListener{action()}
+    }
+
     private fun roundAction(symbol:String, caption:String, active:Boolean=true, action:()->Unit):View {
         return LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
@@ -183,9 +189,7 @@ class MainActivity : Activity() {
         addFilterSection()
         addGainSection()
         val bar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        bar.addView(button(if(eqOn)"EQ ON" else "EQ OFF"){eqOn=!eqOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
-        bar.addView(button(if(isoOn)"ISO ON" else "ISO OFF"){isoOn=!isoOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
-        bar.addView(button(if(filtersOn)"FILTER ON" else "FILTER OFF"){filtersOn=!filtersOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
+        bar.addView(button(if(filtersOn)"FILTER ON" else "FILTER OFF"){filtersOn=!filtersOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(if(phonePortrait)dp(112) else 0,dp(if(phonePortrait)32 else 44),if(phonePortrait)0f else 1f))
         root.addView(bar,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)34 else 44)))
         status=label("Connecting audio engine…",if(phonePortrait)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)13 else 18)))
@@ -244,6 +248,12 @@ class MainActivity : Activity() {
                 val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]})
                 knob.isEnabled=active[i]
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)68 else if(compact)104 else 132)))
+            }
+            if(phonePortrait && modes[key]!=true){
+                val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+                actions.addView(phoneActionButton("RETURN"){val old=if(key=="EQ")previousEq[i] else previousIso[i];if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i];values[i]=old;save();refreshUi();scheduleUpdate()},LinearLayout.LayoutParams(dp(58),dp(30)).apply{rightMargin=dp(6)})
+                actions.addView(phoneActionButton("FLAT"){if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i];values[i]=0f;save();refreshUi();scheduleUpdate()},LinearLayout.LayoutParams(dp(58),dp(30)))
+                col.addView(actions,LinearLayout.LayoutParams(-1,dp(32)))
             }
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
