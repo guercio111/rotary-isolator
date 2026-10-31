@@ -32,6 +32,23 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
+      - name: Add audio capture permission
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          manifests = list(Path("extracted").glob("**/src/main/AndroidManifest.xml"))
+          if not manifests:
+              raise SystemExit("AndroidManifest.xml not found")
+          p = manifests[0]
+          s = p.read_text()
+          permission = '<uses-permission android:name="android.permission.RECORD_AUDIO" />'
+          if "android.permission.RECORD_AUDIO" not in s:
+              s = re.sub(r'(<manifest[^>]*>)', r'\\1\\n    ' + permission, s, count=1)
+              p.write_text(s)
+          print("RECORD_AUDIO permission ensured in", p)
+          PY
+
       - name: Use maintained Kotlin source
         run: |
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
