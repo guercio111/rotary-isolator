@@ -82,7 +82,7 @@ class MainActivity : Activity() {
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
         filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
-        for(i in 0..2){previousEq[i]=eq[i];previousIso[i]=iso[i]}
+        for(i in 0..2){previousEq[i]=eq[i];previousIso[i]=iso[i];sectionPreviousEq[i]=eq[i];sectionPreviousIso[i]=iso[i]}
         previousFilters[0]=filters[0];previousFilters[1]=filters[1];previousFilters[2]=resonance
         resonance = prefs.getFloat("resonance",0f).coerceIn(0f,1f)
         for (i in 0..2) {
@@ -313,7 +313,7 @@ class MainActivity : Activity() {
             restore();save();refreshUi();scheduleUpdate()
         })
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(30)))
-        col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{"${value.roundToInt()}%"},onStart=remember),
+        col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember),
             LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
         return col
     }
