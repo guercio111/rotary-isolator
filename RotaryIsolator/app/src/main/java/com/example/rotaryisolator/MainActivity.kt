@@ -34,6 +34,7 @@ class MainActivity : Activity() {
     private var resonance = 0f
     private var verticalLayout = false
     private var phonePortrait = false
+    private var wideLayout = false
     private var masterMode = 0
     private var bassBoost = 0f
     private var loudness = 0f
@@ -81,11 +82,15 @@ class MainActivity : Activity() {
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         val dm = resources.displayMetrics
         phonePortrait = (dm.widthPixels / dm.density) < 600f && dm.heightPixels > dm.widthPixels
+        wideLayout = !phonePortrait && dm.widthPixels > dm.heightPixels
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
-        eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true); filtersOn = prefs.getBoolean("filters_on", false)
+        eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
+        val filterMasterDefaultApplied = prefs.getBoolean("filter_master_default_v2", false)
+        filtersOn = if(filterMasterDefaultApplied) prefs.getBoolean("filters_on", true) else true
+        if(!filterMasterDefaultApplied) prefs.edit().putBoolean("filters_on", true).putBoolean("filter_master_default_v2", true).apply()
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
         filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
@@ -109,7 +114,10 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
-    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 88; h<820f -> 94; else -> 98 }) }
+    private fun dialHeight():Int {
+        val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density
+        return dp(when { wideLayout -> 130; phonePortrait && h<760f -> 104; phonePortrait -> 112; h<700f -> 112; else -> 124 })
+    }
 
     // Recalculate after both the window and the complete mixer have been measured.
     // Do not scale the whole mixer: it clips text and controls. Scroll the center instead.
@@ -180,10 +188,21 @@ class MainActivity : Activity() {
         // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
         root.addView(content,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
-        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq, -12f..12f, {eqOn}) { scheduleUpdate() }
-        addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..24f, {isoOn}) { scheduleUpdate() }
-        addFilterSection()
-        addGainSection()
+        if(wideLayout) {
+            val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+            val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+            content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
+            content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
+            addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-12f..12f,{eqOn},upper)
+            addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso,-24f..24f,{isoOn},upper)
+            addFilterSection(lower)
+            addGainSection(lower)
+        } else {
+            addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-12f..12f,{eqOn})
+            addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso,-24f..24f,{isoOn})
+            addFilterSection()
+            addGainSection()
+        }
         status=label("Connecting audio engine…",if(phonePortrait)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
@@ -202,7 +221,7 @@ class MainActivity : Activity() {
         handler.postDelayed(saveUpdate, 220L)
     }
 
-    private fun addSection(key:String,title:String,values:FloatArray,range:ClosedFloatingPointRange<Float>,enabled:()->Boolean,onChange:()->Unit) {
+    private fun addSection(key:String,title:String,values:FloatArray,range:ClosedFloatingPointRange<Float>,enabled:()->Boolean,parent:LinearLayout=content) {
         val active = if(key=="EQ") eqControlOn else isoControlOn
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(1))}
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
@@ -235,18 +254,18 @@ class MainActivity : Activity() {
                 knob.isEnabled=active[i]
                 controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
             }
-            val bandActions=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(2),0,dp(2),0) }
-            bandActions.addView(circleAction("↶",28) {
+            col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
+            val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
+            bandActions.addView(circleAction("↶",30) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(30),dp(30)).apply{bottomMargin=dp(4)})
+            },LinearLayout.LayoutParams(dp(32),dp(32)).apply{rightMargin=dp(12)})
             bandActions.addView(circleAction("F",50) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f; save(); refreshUi(); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(50),dp(50)))
-            controlRow.addView(bandActions,LinearLayout.LayoutParams(dp(56),dp(84)))
-            col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(52)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
@@ -260,10 +279,10 @@ class MainActivity : Activity() {
             for(i in 0..2){previous[i]=values[i];values[i]=0f}
             save();refreshUi();scheduleUpdate()
         },LinearLayout.LayoutParams(dp(38),dp(38)))
-        content.addView(box);sections[key]=box
+        parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
     }
 
-    private fun addFilterSection(){
+    private fun addFilterSection(parent:LinearLayout=content){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(28),1f))
@@ -278,7 +297,7 @@ class MainActivity : Activity() {
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==2) resonance else filters[i]
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",10f,Color.WHITE)
-            val controlEnabled=if(i==2) true else filterControlOn[i]
+            val controlEnabled=filtersOn && (if(i==2) true else filterControlOn[i])
             val filterHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             filterHeader.addView(l,LinearLayout.LayoutParams(0,dp(24),1f))
             if(i<2) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
@@ -305,25 +324,25 @@ class MainActivity : Activity() {
                 knob.isEnabled=controlEnabled
                 controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
             }
-            val filterActions=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-            filterActions.addView(circleAction("↶",28){
+            col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
+            val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            filterActions.addView(circleAction("↶",30){
                 val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=old else filters[i]=old
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(30),dp(30)).apply{bottomMargin=dp(4)})
+            },LinearLayout.LayoutParams(dp(32),dp(32)).apply{rightMargin=dp(12)})
             filterActions.addView(circleAction("F",50){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
                 save();refreshUi();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(50),dp(50)))
-            controlRow.addView(filterActions,LinearLayout.LayoutParams(dp(56),dp(84)))
-            col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(52)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
-        box.addView(row);content.addView(box);sections["FILTERS"]=box
+        box.addView(row);parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
     }
 
-    private fun addGainSection(){
+    private fun addGainSection(parent:LinearLayout=content){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 3),dp(if(phonePortrait)1 else 4),dp(2))}
         box.addView(label("MASTER  •  GAIN / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(20)))
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
@@ -343,7 +362,7 @@ class MainActivity : Activity() {
         row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
         row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
         box.addView(row)
-        content.addView(box);sections["GAIN"]=box
+        parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
     }
 
     private fun masterToneControl(
@@ -489,7 +508,7 @@ private class RotaryControl(
     private val density get()=resources.displayMetrics.density
     private fun dp(x:Float)=x*density
     private val rect get()={
-        val side=min(width.toFloat(),(height.toFloat()-dp(22f)).coerceAtLeast(1f))* .82f
+        val side=min(width.toFloat(),(height.toFloat()-dp(18f)).coerceAtLeast(1f))* .96f
         val cy=(height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
