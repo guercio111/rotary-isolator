@@ -36,6 +36,9 @@ class MainActivity : Activity() {
     private var masterMode = 0
     private var bassBoost = 0f
     private var loudness = 0f
+    private val previousEq = FloatArray(3)
+    private val previousIso = FloatArray(3)
+    private val previousFilters = FloatArray(3)
     private val eq = FloatArray(3)
     private val iso = floatArrayOf(0f, 0f, 0f)
     // HPF, LPF intensity (0..100%)
@@ -69,6 +72,8 @@ class MainActivity : Activity() {
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
         filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
+        for(i in 0..2){previousEq[i]=eq[i];previousIso[i]=iso[i]}
+        previousFilters[0]=filters[0];previousFilters[1]=filters[1];previousFilters[2]=resonance
         resonance = prefs.getFloat("resonance",0f).coerceIn(0f,1f)
         for (i in 0..2) {
             eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
@@ -158,7 +163,7 @@ class MainActivity : Activity() {
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(4),dp(4),dp(2))}
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         header.addView(label(title,10f,gold),LinearLayout.LayoutParams(0,dp(26),1f))
-        header.addView(roundAction("F","FLAT",true){ for(i in 0..2) values[i]=0f; save(); refreshUi(); scheduleUpdate() })
+        // Per-control FLAT and restore buttons are placed beside each dial.
         box.addView(header)
         val row=LinearLayout(this).apply{orientation=if(verticalLayout)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(verticalLayout)0f else 3f}
         val names=listOf("LOW","MID","HIGH")
@@ -167,6 +172,15 @@ class MainActivity : Activity() {
             val vLabel=label("${names[i]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             controlHeader.addView(vLabel,LinearLayout.LayoutParams(0,dp(28),1f))
+            controlHeader.addView(roundAction("↶","",true){
+                val old=if(key=="EQ")previousEq[i] else previousIso[i]
+                if(key=="EQ"){previousEq[i]=values[i]}else{previousIso[i]=values[i]}
+                values[i]=old;save();refreshUi();scheduleUpdate()
+            })
+            controlHeader.addView(roundAction("F","",true){
+                if(key=="EQ"){previousEq[i]=values[i]}else{previousIso[i]=values[i]}
+                values[i]=0f;save();refreshUi();scheduleUpdate()
+            })
             controlHeader.addView(roundAction("",if(active[i])"ON" else "OFF",active[i]){
                 active[i]=!active[i];save();refreshUi();scheduleUpdate()
             })
@@ -177,18 +191,18 @@ class MainActivity : Activity() {
                     progress=((values[i]-range.start)*10).roundToInt().coerceIn(0,max)
                     isEnabled=active[i]
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){values[i]=range.start+p/10f;vLabel.text="${names[i]}  ${fmt(values[i])} dB";scheduleUpdate()}}
+                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i];values[i]=range.start+p/10f;vLabel.text="${names[i]}  ${fmt(values[i])} dB";scheduleUpdate()}}
                         override fun onStartTrackingTouch(s:SeekBar?){}
                         override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
                 }
                 col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             } else {
-                val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"})
+                val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i];values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"})
                 knob.isEnabled=active[i]
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
-            row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
+            row.addView(col,if(verticalLayout)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-1,1f))
         }
         box.addView(row);content.addView(box);sections[key]=box
     }
@@ -205,6 +219,17 @@ class MainActivity : Activity() {
             val controlEnabled=if(i==2) true else filterControlOn[i]
             val filterHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             filterHeader.addView(l,LinearLayout.LayoutParams(0,dp(28),1f))
+            filterHeader.addView(roundAction("↶","",true){
+                val old=previousFilters[i]
+                previousFilters[i]=if(i==2)resonance else filters[i]
+                if(i==2)resonance=old else filters[i]=old
+                save();refreshUi();scheduleUpdate()
+            })
+            filterHeader.addView(roundAction("F","",true){
+                previousFilters[i]=if(i==2)resonance else filters[i]
+                if(i==2)resonance=0f else filters[i]=0f
+                save();refreshUi();scheduleUpdate()
+            })
             if(i<2) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
                 filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
             })
@@ -213,7 +238,7 @@ class MainActivity : Activity() {
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==2)resonance=p/100f else filters[i]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){previousFilters[i]=if(i==2)resonance else filters[i];if(i==2)resonance=p/100f else filters[i]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
                         override fun onStartTrackingTouch(b:SeekBar?){}
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
@@ -221,6 +246,7 @@ class MainActivity : Activity() {
                 col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             }else{
                 val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->
+                    previousFilters[i]=if(i==2)resonance else filters[i]
                     if(i==2)resonance=v else filters[i]=v
                     l.text=names[i]+"  "+(v*100).roundToInt()+"%"
                     scheduleUpdate()
@@ -228,7 +254,7 @@ class MainActivity : Activity() {
                 knob.isEnabled=controlEnabled
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
-            row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
+            row.addView(col,if(verticalLayout)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-1,1f))
         }
         box.addView(row);content.addView(box);sections["FILTERS"]=box
     }
