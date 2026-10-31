@@ -34,11 +34,11 @@ class MainActivity : Activity() {
     private var resonance = 0f
     private val eq = FloatArray(3)
     private val iso = floatArrayOf(0f, 0f, 0f)
-    // HPF, LPF, MID PASS intensity (0..100%)
-    private val filters = floatArrayOf(0f, 0f, 0f)
+    // HPF, LPF intensity (0..100%)
+    private val filters = floatArrayOf(0f, 0f)
     private val eqControlOn = BooleanArray(3) { true }
     private val isoControlOn = BooleanArray(3) { true }
-    private val filterControlOn = BooleanArray(3) { true }
+    private val filterControlOn = BooleanArray(2) { true }
     private val handler = Handler(Looper.getMainLooper())
     private val dspUpdate = Runnable { applyDspNow() }
     private val saveUpdate = Runnable { save() }
@@ -60,13 +60,13 @@ class MainActivity : Activity() {
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true); filtersOn = prefs.getBoolean("filters_on", false)
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
-        filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f); filters[2] = prefs.getFloat("midpass",0f)
+        filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
         resonance = prefs.getFloat("resonance",0f).coerceIn(0f,1f)
         for (i in 0..2) {
             eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
             isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
-            filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
         }
+        for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
         for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", key=="FILTERS")
         buildUi()
         connectAudio()
@@ -104,8 +104,9 @@ class MainActivity : Activity() {
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
-                putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("midpass",filters[2]);putFloat("resonance",resonance)
-                for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i]);putBoolean("filter_control_$i",filterControlOn[i])}
+                putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("resonance",resonance)
+                for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i])}
+                for(i in 0..1)putBoolean("filter_control_$i",filterControlOn[i])
                 modes.forEach{(k,v)->putBoolean("mode_$k",v)}
             }.apply()
     }
@@ -185,17 +186,17 @@ class MainActivity : Activity() {
 
     private fun addFilterSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(3),dp(4),dp(2))}
-        box.addView(label("FILTERS  •  HPF / MID PASS / LPF",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
-        val names=listOf("HPF","MID PASS","LPF","RESONANCE")
-        for(i in 0..3){
+        box.addView(label("FILTERS  •  HPF / LPF",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
+        val names=listOf("HPF","LPF","RESONANCE")
+        for(i in 0..2){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-            val current=if(i==3) resonance else filters[i]
+            val current=if(i==2) resonance else filters[i]
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",10f,Color.WHITE)
-            val controlEnabled=if(i==3) true else filterControlOn[i]
+            val controlEnabled=if(i==2) true else filterControlOn[i]
             val filterHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             filterHeader.addView(l,LinearLayout.LayoutParams(0,dp(28),1f))
-            if(i<3) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
+            if(i<2) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
                 filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
             })
             col.addView(filterHeader,LinearLayout.LayoutParams(-1,dp(30)))
@@ -203,18 +204,20 @@ class MainActivity : Activity() {
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==3)resonance=p/100f else filters[i]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==2)resonance=p/100f else filters[i]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
                         override fun onStartTrackingTouch(b:SeekBar?){}
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
                 }
                 col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             }else{
-                val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->if(i==3)resonance=v else filters[i]=v;l.text=names[i]+"  "+(v*100).roundToInt()+"%"},{((if(i==3)resonance else filters[i])*100).roundToInt().toString()+"%"})
+                val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->
+                    if(i==2)resonance=v else filters[i]=v
+                    l.text=names[i]+"  "+(v*100).roundToInt()+"%"
+                    scheduleUpdate()
+                },{((if(i==2)resonance else filters[i])*100).roundToInt().toString()+"%"})
                 knob.isEnabled=controlEnabled
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
-            }
-            if(i<3){
             }
             row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
         }
@@ -260,11 +263,9 @@ class MainActivity : Activity() {
                 var eqGain=if(eqOn && eqControlOn[i])eq[i].coerceIn(-12f,12f) else 0f
                 if(filtersOn && filterControlOn[0] && i==0) eqGain -= filters[0]*36f
                 if(filtersOn && filterControlOn[1] && i==2) eqGain -= filters[1]*36f
-                if(filtersOn && filterControlOn[2] && i!=1) eqGain -= filters[2]*36f
                 if(filtersOn && resonance>0f){
                     if(filterControlOn[0] && filters[0]>.01f && i==0) eqGain += resonance*12f
                     if(filterControlOn[1] && filters[1]>.01f && i==2) eqGain += resonance*6f
-                    if(filterControlOn[2] && filters[2]>.01f && i==1) eqGain += resonance*6f
                 }
                 val eqBand=DynamicsProcessing.EqBand(true,freqs[i],eqGain.coerceIn(-36f,12f))
                 fx.setPreEqBandByChannelIndex(ch,i,eqBand)
