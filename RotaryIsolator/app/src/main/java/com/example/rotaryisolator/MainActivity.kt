@@ -270,7 +270,7 @@ class MainActivity : Activity() {
             })}
             box.addView(l);box.addView(s)
         }else{
-            box.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()}){"${fmt(gain)} dB"},LinearLayout.LayoutParams(-1,dp(92)))
+            box.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"}),LinearLayout.LayoutParams(-1,dp(92)))
         }
         content.addView(box);sections["GAIN"]=box
     }
