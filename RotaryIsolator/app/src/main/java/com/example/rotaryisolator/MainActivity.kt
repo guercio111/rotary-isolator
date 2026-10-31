@@ -26,7 +26,7 @@ class MainActivity : Activity() {
     private var compact = false
     private var uiScale = 1.0f
     private var skin = 0
-    private var limiterOn = false
+    private var limiterOn = true
     private var eqOn = true
     private var isoOn = true
     private var filtersOn = false
@@ -56,9 +56,10 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private val dspUpdate = Runnable { applyDspNow() }
     private val saveUpdate = Runnable { save() }
-    private val modes = mutableMapOf("EQ" to false, "ISOLATOR" to false, "FILTERS" to true, "GAIN" to false)
+    private val modes = mutableMapOf("EQ" to false, "ISOLATOR" to false, "FILTERS" to false, "GAIN" to false)
     private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
+    private lateinit var container: FrameLayout
     private lateinit var status: TextView
     private val sections = mutableMapOf<String, LinearLayout>()
     private val gold get() = when(skin) { 1 -> Color.rgb(100,190,210); 2 -> Color.rgb(220,130,80); else -> Color.rgb(214,179,106) }
@@ -78,7 +79,9 @@ class MainActivity : Activity() {
         previousLoudness = prefs.getFloat("previous_loudness", loudness)
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
-        limiterOn = prefs.getBoolean("limiter", false)
+        val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
+        limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
+        if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true); filtersOn = prefs.getBoolean("filters_on", false)
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
@@ -92,12 +95,38 @@ class MainActivity : Activity() {
             isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
         }
         for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
-        for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", key=="FILTERS")
+        for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", false)
+        val filterRotaryDefaultApplied = prefs.getBoolean("filter_rotary_default_v1", false)
+        if (!filterRotaryDefaultApplied) {
+            modes["FILTERS"] = false
+            prefs.edit().putBoolean("mode_FILTERS", false).putBoolean("filter_rotary_default_v1", true).apply()
+        }
         buildUi()
         connectAudio()
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
+
+    // Recalculate after both the window and the complete mixer have been measured.
+    private fun fitUiToWindow() {
+        if (!::root.isInitialized || !::container.isInitialized) return
+        val w = container.width
+        val h = container.height
+        val rw = root.width
+        val rh = root.height
+        if (w <= 0 || h <= 0 || rw <= 0 || rh <= 0) return
+        val availableW = (w - dp(8)).coerceAtLeast(1).toFloat()
+        val availableH = (h - dp(8)).coerceAtLeast(1).toFloat()
+        val requested = uiScale.coerceIn(0.70f, 1.30f)
+        val fit = min(1f, min(availableW / (rw * requested), availableH / (rh * requested)))
+        val scale = requested * fit
+        root.pivotX = rw / 2f
+        root.pivotY = 0f
+        root.scaleX = scale
+        root.scaleY = scale
+        root.translationY = ((h - rh * scale) / 2f).coerceAtLeast(0f)
+    }
+
     private fun label(t:String, size:Float=11f, color:Int=Color.LTGRAY)=TextView(this).apply {
         text=t; textSize=size; setTextColor(color); gravity=Gravity.CENTER; letterSpacing=.08f
     }
@@ -137,12 +166,14 @@ class MainActivity : Activity() {
     }
 
     private fun buildUi() {
-        root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(6),dp(12),dp(6));setBackgroundColor(bg)}
-        root.addView(label("ROTARY ISOLATOR", if(compact) 17f else 22f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(30)))
-        root.addView(label("MASTER PROCESSING  •  V10 / XONE CONCEPT",9f,gold),LinearLayout.LayoutParams(-1,dp(20)))
-        val scroll=ScrollView(this)
-        content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
-        scroll.addView(content);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+        root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(8),dp(4),dp(8),dp(4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
+        val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        titleBar.addView(label("ROTARY ISOLATOR", if(compact) 16f else 20f,Color.WHITE),LinearLayout.LayoutParams(0,dp(32),1f))
+        titleBar.addView(button("OPTIONS"){showOptions()},LinearLayout.LayoutParams(dp(104),dp(36)))
+        root.addView(titleBar)
+        root.addView(label("MASTER PROCESSING  •  V10 / XONE CONCEPT",8f,gold),LinearLayout.LayoutParams(-1,dp(17)))
+        content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
+        root.addView(content,LinearLayout.LayoutParams(-1,-2))
         sections.clear()
         addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq, -12f..12f, {eqOn}) { scheduleUpdate() }
         addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..24f, {isoOn}) { scheduleUpdate() }
@@ -152,13 +183,15 @@ class MainActivity : Activity() {
         bar.addView(button(if(eqOn)"EQ ON" else "EQ OFF"){eqOn=!eqOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button(if(isoOn)"ISO ON" else "ISO OFF"){isoOn=!isoOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button(if(filtersOn)"FILTER ON" else "FILTER OFF"){filtersOn=!filtersOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
-        bar.addView(button("OPTIONS"){showOptions()},LinearLayout.LayoutParams(0,dp(44),1f))
         root.addView(bar)
-        status=label("Connecting audio engine…",10f)
-        root.addView(status,LinearLayout.LayoutParams(-1,dp(22)))
-        root.scaleX=uiScale;root.scaleY=uiScale
-        val frame=FrameLayout(this).apply{clipChildren=false;clipToPadding=false;addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))}
-        setContentView(frame)
+        status=label("Connecting audio engine…",9f)
+        root.addView(status,LinearLayout.LayoutParams(-1,dp(18)))
+        container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
+        container.addView(root,FrameLayout.LayoutParams(-1,-2,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        setContentView(container)
+        container.addOnLayoutChangeListener { _,_,_,_,_,_,_,_,_ -> fitUiToWindow() }
+        root.addOnLayoutChangeListener { _,_,_,_,_,_,_,_,_ -> fitUiToWindow() }
+        container.post { root.post { fitUiToWindow() } }
     }
 
     private fun scheduleUpdate() {
@@ -407,7 +440,7 @@ class MainActivity : Activity() {
         val scaleSeek=SeekBar(this).apply{
             max=60;progress=((uiScale-.70f)*100).roundToInt().coerceIn(0,60)
             setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){uiScale=.70f+p/100f;root.scaleX=uiScale;root.scaleY=uiScale;scaleLabel.text="SCALA INTERFACCIA  ${(uiScale*100).roundToInt()}%"}}
+                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){uiScale=.70f+p/100f;fitUiToWindow();scaleLabel.text="SCALA INTERFACCIA  ${(uiScale*100).roundToInt()}%"}}
                 override fun onStartTrackingTouch(b:SeekBar?){}
                 override fun onStopTrackingTouch(b:SeekBar?){save()}
             })
