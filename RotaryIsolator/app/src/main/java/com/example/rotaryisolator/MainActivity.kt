@@ -227,6 +227,11 @@ class MainActivity : Activity() {
                 if(filtersOn && filterControlOn[0] && i==0) eqGain -= filters[0]*24f
                 if(filtersOn && filterControlOn[1] && i==2) eqGain -= filters[1]*24f
                 if(filtersOn && filterControlOn[2] && i!=1) eqGain -= filters[2]*24f
+                if(filtersOn && resonance>0f){
+                    if(filterControlOn[0] && filters[0]>.01f && i==0) eqGain += resonance*6f
+                    if(filterControlOn[1] && filters[1]>.01f && i==2) eqGain += resonance*6f
+                    if(filterControlOn[2] && filters[2]>.01f && i==1) eqGain += resonance*6f
+                }
                 val eqBand=DynamicsProcessing.EqBand(true,freqs[i],eqGain.coerceIn(-36f,12f))
                 fx.setPreEqBandByChannelIndex(ch,i,eqBand)
                 val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
@@ -243,16 +248,36 @@ class MainActivity : Activity() {
     }
 
     private fun showOptions(){
-        val names=arrayOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Pioneer V10","Tema Xone","Tema Rotativo classico","Limiter ON / OFF")
-        AlertDialog.Builder(this).setTitle("OPTIONS")
-            .setItems(names){d,w->
-                when(w){
-                    in 0..3->{val key=listOf("EQ","ISOLATOR","FILTERS","GAIN")[w];val opts=arrayOf("Manopole rotative","Slider");AlertDialog.Builder(this).setTitle("$key • tipo controllo").setSingleChoiceItems(opts,if(modes[key]==true)1 else 0){a,c->modes[key]=c==1;save();refreshUi();applyDsp();a.dismiss()}.setNegativeButton("Annulla",null).show()}
+        val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
+        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Pioneer V10","Tema Xone","Tema Rotativo classico")
+        names.forEachIndexed{index,name->
+            val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
+                when(index){
+                    in 0..3->{
+                        val key=listOf("EQ","ISOLATOR","FILTERS","GAIN")[index]
+                        val opts=arrayOf("Manopole rotative","Slider")
+                        AlertDialog.Builder(this@MainActivity).setTitle(key+" • tipo controllo").setSingleChoiceItems(opts,if(modes[key]==true)1 else 0){a,c->modes[key]=c==1;save();refreshUi();applyDsp();a.dismiss()}.setNegativeButton("Annulla",null).show()
+                    }
                     4->{compact=!compact;save();refreshUi();applyDsp()}
-                    in 5..7->{skin=w-5;save();refreshUi();applyDsp()}
-                    8->{limiterOn=!limiterOn;save();rebuildEffect()}
+                    in 5..7->{skin=index-5;save();refreshUi();applyDsp()}
                 }
-            }.setNegativeButton("CHIUDI",null).show()
+            }}
+            panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
+        }
+        val limiterRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(4))}
+        limiterRow.addView(label("LIMITER",14f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
+        val led=View(this).apply{background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(if(limiterOn)Color.rgb(40,220,90) else Color.rgb(75,75,75))}}
+        limiterRow.addView(led,LinearLayout.LayoutParams(dp(14),dp(14)).apply{rightMargin=dp(12)})
+        val toggle=Switch(this).apply{
+            text=if(limiterOn)"ON" else "OFF";isChecked=limiterOn
+            setOnCheckedChangeListener{_,checked->
+                limiterOn=checked;text=if(checked)"ON" else "OFF"
+                (led.background as? android.graphics.drawable.GradientDrawable)?.setColor(if(checked)Color.rgb(40,220,90) else Color.rgb(75,75,75))
+                save();rebuildEffect()
+            }
+        }
+        limiterRow.addView(toggle);panel.addView(limiterRow)
+        AlertDialog.Builder(this).setTitle("OPTIONS").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
     }
     private fun rebuildEffect(){
         try{dpEffect?.release()}catch(_:Throwable){}
