@@ -109,7 +109,7 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
-    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 58; h<820f -> 66; else -> 76 }) }
+    private fun dialHeight():Int { val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density; return dp(when { h<700f -> 88; h<820f -> 94; else -> 100 }) }
 
     // Recalculate after both the window and the complete mixer have been measured.
     // Do not scale the whole mixer: it clips text and controls. Scroll the center instead.
@@ -204,7 +204,7 @@ class MainActivity : Activity() {
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         header.addView(label(title,if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 26),1f))
         box.addView(header)
-        val useVerticalRows=verticalLayout && !phonePortrait
+        val useVerticalRows=false
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
         val names=listOf("LOW","MID","HIGH")
         for(i in 0..2){
@@ -263,7 +263,7 @@ class MainActivity : Activity() {
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 26),1f))
         box.addView(filterTitle)
-        val useVerticalRows=verticalLayout && !phonePortrait
+        val useVerticalRows=false
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
         val names=listOf("HPF","LPF","RESONANCE")
         for(i in 0..2){
@@ -343,7 +343,7 @@ class MainActivity : Activity() {
         })
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(26)))
         col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember),
-            LinearLayout.LayoutParams(-1,dp(if(phonePortrait)66 else if(compact)104 else 132)))
+            LinearLayout.LayoutParams(-1,dialHeight()))
         return col
     }
 
@@ -402,7 +402,7 @@ class MainActivity : Activity() {
 
     private fun showOptions(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
-        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Pioneer V10","Tema Xone","Tema Rotativo classico","Disposizione orizzontale / verticale")
+        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Pioneer V10","Tema Xone","Tema Rotativo classico")
         names.forEachIndexed{index,name->
             val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
                 when(index){
@@ -413,7 +413,6 @@ class MainActivity : Activity() {
                     }
                     4->{compact=!compact;save();refreshUi();applyDsp()}
                     in 5..7->{skin=index-5;save();refreshUi();applyDsp()}
-                    8->{verticalLayout=!verticalLayout;save();refreshUi();applyDsp()}
                 }
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
