@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.content.res.ColorStateList
 import android.media.audiofx.DynamicsProcessing
+import android.media.audiofx.EnvironmentalReverb
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -22,6 +23,9 @@ import kotlin.math.*
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
+    private var globalReverb: EnvironmentalReverb? = null
+    private var globalReverbAvailable = false
+    private var reverbAmount = 0f
     private var audioReady = false
     private var compact = false
     private var uiScale = 1.0f
@@ -68,6 +72,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         compact = prefs.getBoolean("mini", false)
+        reverbAmount = prefs.getFloat("master_reverb", 0f).coerceIn(0f,100f)
         verticalLayout = prefs.getBoolean("vertical_layout", false)
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
         bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
@@ -126,7 +131,7 @@ class MainActivity : Activity() {
     }
     private fun save() {
         prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
-            .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
+            .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale).putFloat("master_reverb",reverbAmount)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("resonance",resonance)
@@ -148,6 +153,7 @@ class MainActivity : Activity() {
         addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..24f, {isoOn}) { scheduleUpdate() }
         addFilterSection()
         addGainSection()
+        addGlobalReverbSection()
         val bar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         bar.addView(button(if(eqOn)"EQ ON" else "EQ OFF"){eqOn=!eqOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button(if(isoOn)"ISO ON" else "ISO OFF"){isoOn=!isoOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
@@ -331,9 +337,46 @@ class MainActivity : Activity() {
         return col
     }
 
+    private fun addGlobalReverbSection(){
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(5),dp(6),dp(5),dp(4))}
+        box.addView(label("MASTER FX  •  GLOBAL REVERB",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
+        box.addView(label("Effetto nativo sull'uscita audio • sempre pronto",9f,Color.LTGRAY),LinearLayout.LayoutParams(-1,dp(22)))
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        row.addView(RotaryControl(this,"REVERB",reverbAmount,0f,100f,gold,{v->
+            reverbAmount=v
+            scheduleUpdate()
+        },{"${reverbAmount.roundToInt()}%"},onStart={}),LinearLayout.LayoutParams(dp(170),dp(if(compact)104 else 132)))
+        val info=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_VERTICAL}
+        info.addView(label("GLOBAL OUTPUT",10f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(24)))
+        info.addView(label(if(globalReverbAvailable)"Nativo disponibile" else "Non ancora verificato",9f,Color.LTGRAY),LinearLayout.LayoutParams(-1,dp(24)))
+        row.addView(info,LinearLayout.LayoutParams(0,dp(100),1f))
+        box.addView(row);content.addView(box);sections["MASTER_REVERB"]=box
+    }
+
     private fun refreshUi(){ buildUi() }
 
     private fun connectAudio(){
+        try{
+            globalReverb?.release()
+            globalReverb = EnvironmentalReverb(0,0).also { effect ->
+                effect.setRoomLevel((-3000).toShort())
+                effect.setRoomHFLevel((-1800).toShort())
+                effect.setDecayTime(1800)
+                effect.setDecayHFRatio(650.toShort())
+                effect.setReflectionsLevel((-5000).toShort())
+                effect.setReflectionsDelay(12)
+                effect.setReverbDelay(35)
+                effect.setDiffusion(850.toShort())
+                effect.setDensity(900.toShort())
+                effect.setReverbLevel((-9000).toShort())
+                effect.enabled = true
+            }
+            globalReverbAvailable=true
+        }catch(t:Throwable){
+            globalReverbAvailable=false
+            try{globalReverb?.release()}catch(_:Throwable){}
+            globalReverb=null
+        }
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
             val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,3,false,0,true,3,limiterOn).build()
@@ -345,6 +388,16 @@ class MainActivity : Activity() {
     private fun applyDsp(){ scheduleUpdate() }
 
     private fun applyDspNow(){
+        try{
+            val amount=reverbAmount.coerceIn(0f,100f)
+            globalReverb?.let { fx ->
+                fx.setReverbLevel((-9000f + amount*95f).roundToInt().coerceIn(-9000,500).toShort())
+                fx.setRoomLevel((-4500f + amount*35f).roundToInt().coerceIn(-4500,-500).toShort())
+                fx.setDecayTime((700f + amount*42f).roundToInt().coerceIn(700,4900))
+                fx.setDecayHFRatio((450f + amount*2.5f).roundToInt().coerceIn(450,700).toShort())
+                if(!fx.enabled)fx.enabled=true
+            }
+        }catch(_:Throwable){globalReverbAvailable=false}
         val fx=dpEffect?:return
         if(Build.VERSION.SDK_INT<28)return
         try{
@@ -433,7 +486,7 @@ class MainActivity : Activity() {
         dpEffect=null;connectAudio()
     }
     private fun fmt(v:Float)="%.1f".format(v)
-    override fun onDestroy(){try{dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){};super.onDestroy()}
+    override fun onDestroy(){try{dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){};try{globalReverb?.enabled=false;globalReverb?.release()}catch(_:Throwable){};super.onDestroy()}
 }
 
 private class RotaryControl(
