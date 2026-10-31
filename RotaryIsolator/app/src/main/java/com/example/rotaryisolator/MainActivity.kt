@@ -156,29 +156,32 @@ class MainActivity : Activity() {
     private fun addFilterSection(){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(3),dp(4),dp(2))}
         box.addView(label("FILTERS  •  HPF / MID PASS / LPF",10f,gold),LinearLayout.LayoutParams(-1,dp(24)))
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
-        val names=listOf("HPF","MID PASS","LPF")
-        for(i in 0..2){
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
+        val names=listOf("HPF","MID PASS","LPF","RESONANCE")
+        for(i in 0..3){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-            val l=label("${names[i]}  ${(filters[i]*100).roundToInt()}%",10f,Color.WHITE)
+            val current=if(i==3) resonance else filters[i]
+            val l=label(names[i]+"  "+(current*100).roundToInt()+"%",10f,Color.WHITE)
+            val controlEnabled=if(i==3) true else filterControlOn[i]
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
-                    max=100;progress=(filters[i]*100).roundToInt();isEnabled=filterControlOn[i]
+                    max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){filters[i]=p/100f;l.text="${names[i]}  $p%";scheduleUpdate()}}
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==3)resonance=p/100f else filters[i]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
                         override fun onStartTrackingTouch(b:SeekBar?){}
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
                 }
                 col.addView(l);col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             }else{
-                val knob=RotaryControl(this,names[i],filters[i],0f,1f,gold,{v->filters[i]=v;l.text="${names[i]}  ${(v*100).roundToInt()}%";scheduleUpdate()},{"${(filters[i]*100).roundToInt()}%"})
-                knob.isEnabled=filterControlOn[i]
+                val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->if(i==3)resonance=v else filters[i]=v;l.text=names[i]+"  "+(v*100).roundToInt()+"%"},{((if(i==3)resonance else filters[i])*100).roundToInt().toString()+"%"})
+                knob.isEnabled=controlEnabled
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
-            val bypass=button(if(filterControlOn[i])"BYP" else "BYP OFF"){filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()}
-            bypass.textSize=9f
-            col.addView(bypass,LinearLayout.LayoutParams(dp(62),dp(28)).apply{gravity=Gravity.END})
+            if(i<3){
+                val bypass=redButton(if(filterControlOn[i])"ON" else "OFF",filterControlOn[i]){filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()}
+                col.addView(bypass,LinearLayout.LayoutParams(dp(62),dp(28)).apply{gravity=Gravity.CENTER})
+            }
             row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
         }
         box.addView(row);content.addView(box);sections["FILTERS"]=box
