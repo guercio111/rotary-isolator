@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.content.res.ColorStateList
 import android.media.audiofx.DynamicsProcessing
 import android.os.Build
 import android.os.Bundle
@@ -28,6 +29,7 @@ class MainActivity : Activity() {
     private var isoOn = true
     private var filtersOn = false
     private var gain = 0f
+    private var resonance = 0f
     private val eq = FloatArray(3)
     private val iso = floatArrayOf(0f, 0f, 0f)
     // HPF, LPF, MID PASS intensity (0..100%)
@@ -56,6 +58,7 @@ class MainActivity : Activity() {
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
         filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f); filters[2] = prefs.getFloat("midpass",0f)
+        resonance = prefs.getFloat("resonance",0f).coerceIn(0f,1f)
         for (i in 0..2) {
             eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
             isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
@@ -71,12 +74,13 @@ class MainActivity : Activity() {
         text=t; textSize=size; setTextColor(color); gravity=Gravity.CENTER; letterSpacing=.08f
     }
     private fun button(t:String, action:()->Unit)=Button(this).apply { text=t; setOnClickListener { action() } }
+    private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
     private fun save() {
         prefs.edit().putBoolean("mini",compact).putInt("skin",skin).putBoolean("limiter",limiterOn)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
-                putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("midpass",filters[2])
+                putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("midpass",filters[2]);putFloat("resonance",resonance)
                 for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i]);putBoolean("filter_control_$i",filterControlOn[i])}
                 modes.forEach{(k,v)->putBoolean("mode_$k",v)}
             }.apply()
@@ -118,7 +122,7 @@ class MainActivity : Activity() {
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(4),dp(4),dp(2))}
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         header.addView(label(title,10f,gold),LinearLayout.LayoutParams(0,dp(26),1f))
-        header.addView(button("FLAT"){ for(i in 0..2) values[i]=0f; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(dp(66),dp(30)))
+        header.addView(redButton("FLAT"){ for(i in 0..2) values[i]=0f; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(dp(66),dp(30)))
         box.addView(header)
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
         val names=listOf("LOW","MID","HIGH")
@@ -142,8 +146,7 @@ class MainActivity : Activity() {
                 knob.isEnabled=active[i]
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
-            val bypass=button(if(active[i])"BYP" else "BYP OFF"){active[i]=!active[i];save();refreshUi();scheduleUpdate()}
-            bypass.textSize=9f
+            val bypass=redButton(if(active[i])"ON" else "OFF",active[i]){active[i]=!active[i];save();refreshUi();scheduleUpdate()}
             col.addView(bypass,LinearLayout.LayoutParams(dp(62),dp(28)).apply{gravity=Gravity.END})
             row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
         }
