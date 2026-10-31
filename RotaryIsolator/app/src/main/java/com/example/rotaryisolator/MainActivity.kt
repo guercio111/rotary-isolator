@@ -11,6 +11,7 @@ import android.media.audiofx.DynamicsProcessing
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.widget.FrameLayout
 import android.view.MotionEvent
 import android.os.Handler
 import android.os.Looper
@@ -23,6 +24,7 @@ class MainActivity : Activity() {
     private var dpEffect: DynamicsProcessing? = null
     private var audioReady = false
     private var compact = false
+    private var uiScale = 1.0f
     private var skin = 0
     private var limiterOn = false
     private var eqOn = true
@@ -52,6 +54,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         compact = prefs.getBoolean("mini", false)
+        uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         limiterOn = prefs.getBoolean("limiter", false)
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true); filtersOn = prefs.getBoolean("filters_on", false)
@@ -75,9 +78,30 @@ class MainActivity : Activity() {
     }
     private fun button(t:String, action:()->Unit)=Button(this).apply { text=t; setOnClickListener { action() } }
     private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
+    private fun roundAction(symbol:String, caption:String, active:Boolean=true, action:()->Unit):View {
+        return LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
+            val dot=TextView(this@MainActivity).apply {
+                text=symbol;gravity=Gravity.CENTER;textSize=if(symbol=="F")10f else 13f
+                setTextColor(Color.WHITE)
+                background=android.graphics.drawable.GradientDrawable().apply {
+                    shape=android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(if(active)Color.rgb(205,35,43) else Color.rgb(75,43,46))
+                    setStroke(dp(1),if(active)Color.rgb(245,95,95) else Color.rgb(130,70,70))
+                }
+                setOnClickListener { action() }
+            }
+            addView(dot,LinearLayout.LayoutParams(dp(26),dp(26)))
+            val txt=TextView(this@MainActivity).apply {
+                text=caption;textSize=9f;setTextColor(Color.WHITE);gravity=Gravity.CENTER_VERTICAL
+                setPadding(dp(5),0,dp(3),0);setOnClickListener { action() }
+            }
+            addView(txt,LinearLayout.LayoutParams(-2,dp(30)))
+        }
+    }
     private fun save() {
         prefs.edit().putBoolean("mini",compact).putInt("skin",skin).putBoolean("limiter",limiterOn)
-            .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain)
+            .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("midpass",filters[2]);putFloat("resonance",resonance)
@@ -106,7 +130,9 @@ class MainActivity : Activity() {
         root.addView(bar)
         status=label("Connecting audio engine…",10f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(22)))
-        setContentView(root)
+        root.scaleX=uiScale;root.scaleY=uiScale
+        val frame=FrameLayout(this).apply{clipChildren=false;clipToPadding=false;addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER))}
+        setContentView(frame)
     }
 
     private fun scheduleUpdate() {
@@ -122,13 +148,19 @@ class MainActivity : Activity() {
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(4),dp(4),dp(4),dp(2))}
         val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         header.addView(label(title,10f,gold),LinearLayout.LayoutParams(0,dp(26),1f))
-        header.addView(redButton("FLAT"){ for(i in 0..2) values[i]=0f; save(); refreshUi(); scheduleUpdate() },LinearLayout.LayoutParams(dp(66),dp(30)))
+        header.addView(roundAction("F","FLAT",true){ for(i in 0..2) values[i]=0f; save(); refreshUi(); scheduleUpdate() })
         box.addView(header)
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
         val names=listOf("LOW","MID","HIGH")
         for(i in 0..2){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val vLabel=label("${names[i]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
+            val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+            controlHeader.addView(vLabel,LinearLayout.LayoutParams(0,dp(28),1f))
+            controlHeader.addView(roundAction("",if(active[i])"ON" else "OFF",active[i]){
+                active[i]=!active[i];save();refreshUi();scheduleUpdate()
+            })
+            col.addView(controlHeader,LinearLayout.LayoutParams(-1,dp(30)))
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
                     max=(range.endInclusive-range.start).roundToInt()*10
@@ -140,14 +172,12 @@ class MainActivity : Activity() {
                         override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
                 }
-                col.addView(vLabel);col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
+                col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             } else {
                 val knob=RotaryControl(this,names[i],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"})
                 knob.isEnabled=active[i]
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
-            val bypass=redButton(if(active[i])"ON" else "OFF",active[i]){active[i]=!active[i];save();refreshUi();scheduleUpdate()}
-            col.addView(bypass,LinearLayout.LayoutParams(dp(62),dp(28)).apply{gravity=Gravity.END})
             row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
         }
         box.addView(row);content.addView(box);sections[key]=box
@@ -163,6 +193,12 @@ class MainActivity : Activity() {
             val current=if(i==3) resonance else filters[i]
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",10f,Color.WHITE)
             val controlEnabled=if(i==3) true else filterControlOn[i]
+            val filterHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+            filterHeader.addView(l,LinearLayout.LayoutParams(0,dp(28),1f))
+            if(i<3) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
+                filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
+            })
+            col.addView(filterHeader,LinearLayout.LayoutParams(-1,dp(30)))
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
@@ -172,15 +208,13 @@ class MainActivity : Activity() {
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
                 }
-                col.addView(l);col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
+                col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
             }else{
                 val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->if(i==3)resonance=v else filters[i]=v;l.text=names[i]+"  "+(v*100).roundToInt()+"%"},{((if(i==3)resonance else filters[i])*100).roundToInt().toString()+"%"})
                 knob.isEnabled=controlEnabled
                 col.addView(knob,LinearLayout.LayoutParams(-1,dp(if(compact)104 else 132)))
             }
             if(i<3){
-                val bypass=redButton(if(filterControlOn[i])"ON" else "OFF",filterControlOn[i]){filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()}
-                col.addView(bypass,LinearLayout.LayoutParams(dp(62),dp(28)).apply{gravity=Gravity.CENTER})
             }
             row.addView(col,LinearLayout.LayoutParams(0,-1,1f))
         }
@@ -264,6 +298,17 @@ class MainActivity : Activity() {
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
         }
+        val scaleLabel=label("SCALA INTERFACCIA  ${(uiScale*100).roundToInt()}%",12f,Color.WHITE)
+        panel.addView(scaleLabel,LinearLayout.LayoutParams(-1,dp(30)))
+        val scaleSeek=SeekBar(this).apply{
+            max=60;progress=((uiScale-.70f)*100).roundToInt().coerceIn(0,60)
+            setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){uiScale=.70f+p/100f;root.scaleX=uiScale;root.scaleY=uiScale;scaleLabel.text="SCALA INTERFACCIA  ${(uiScale*100).roundToInt()}%"}}
+                override fun onStartTrackingTouch(b:SeekBar?){}
+                override fun onStopTrackingTouch(b:SeekBar?){save()}
+            })
+        }
+        panel.addView(scaleSeek,LinearLayout.LayoutParams(-1,dp(44)))
         val limiterRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(4))}
         limiterRow.addView(label("LIMITER",14f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
         val led=View(this).apply{background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(if(limiterOn)Color.rgb(40,220,90) else Color.rgb(75,75,75))}}
@@ -301,6 +346,7 @@ private class RotaryControl(
     private var v=initial
     private var downY=0f
     private var downV=initial
+    private var dragged=false
     private val density get()=resources.displayMetrics.density
     private fun dp(x:Float)=x*density
     private val rect get()={
@@ -350,17 +396,17 @@ private class RotaryControl(
     override fun onTouchEvent(e:MotionEvent):Boolean{
         when(e.action){
             MotionEvent.ACTION_DOWN->{
-                downY=e.y;downV=v
+                downY=e.y;downV=v;dragged=false
                 parent?.requestDisallowInterceptTouchEvent(true)
-                updateFromPoint(e.x,e.y)
                 return true
             }
             MotionEvent.ACTION_MOVE->{
-                // Direct angular positioning makes the dial usable with mouse and stylus.
-                updateFromPoint(e.x,e.y)
+                val delta=downY-e.y
+                if(abs(delta)>dp(4f)) dragged=true
+                if(dragged){val sensitivity=(maxV-minV)*1.5f/height.coerceAtLeast(1);v=(downV+delta*sensitivity).coerceIn(minV,maxV);changed(v);invalidate()}
                 return true
             }
-            MotionEvent.ACTION_UP->{performClick();return true}
+            MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);performClick();return true}
             MotionEvent.ACTION_CANCEL->{return true}
         }
         return true
