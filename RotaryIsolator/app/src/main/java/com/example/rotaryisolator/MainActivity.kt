@@ -124,7 +124,14 @@ class MainActivity : Activity() {
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
     private fun dialHeight():Int {
         val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density
-        return dp(when { wideLayout -> 130; phonePortrait && h<760f -> 104; phonePortrait -> 112; h<700f -> 112; else -> 124 })
+        // Larger mixer dials; the landscape tablet gets the most room.
+        return dp(when {
+            wideLayout -> 168
+            phonePortrait && h<760f -> 136
+            phonePortrait -> 148
+            h<700f -> 148
+            else -> 160
+        })
     }
 
     // Recalculate after both the window and the complete mixer have been measured.
@@ -268,12 +275,12 @@ class MainActivity : Activity() {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(32),dp(32)).apply{rightMargin=dp(12)})
-            bandActions.addView(circleAction("F",50) {
+            },LinearLayout.LayoutParams(dp(42),dp(42)).apply{rightMargin=dp(8)})
+            bandActions.addView(circleAction("F",56) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(50),dp(50)))
-            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(52)))
+            },LinearLayout.LayoutParams(dp(56),dp(56)))
+            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
@@ -338,13 +345,13 @@ class MainActivity : Activity() {
                 val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=old else filters[i]=old
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(32),dp(32)).apply{rightMargin=dp(12)})
-            filterActions.addView(circleAction("F",50){
+            },LinearLayout.LayoutParams(dp(42),dp(42)).apply{rightMargin=dp(8)})
+            filterActions.addView(circleAction("F",56){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(50),dp(50)))
-            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(52)))
+            },LinearLayout.LayoutParams(dp(56),dp(56)))
+            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row);parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
