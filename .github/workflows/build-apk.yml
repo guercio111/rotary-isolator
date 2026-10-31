@@ -32,6 +32,10 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
+      - name: Use maintained Kotlin source
+        run: |
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
+
       - name: Set Java compatibility to 17
         run: |
           python3 - <<'PY'
