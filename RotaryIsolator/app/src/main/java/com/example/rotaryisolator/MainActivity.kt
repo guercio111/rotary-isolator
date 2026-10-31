@@ -35,6 +35,8 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
     private var projectionManager: MediaProjectionManager? = null
+    private var captureServiceReceiver: android.content.BroadcastReceiver? = null
+    private var captureServiceReceiverRegistered = false
     private var mediaProjection: MediaProjection? = null
     @Volatile private var captureRunning = false
     private var captureThread: Thread? = null
@@ -396,13 +398,43 @@ class MainActivity : Activity() {
         if(requestCode!=7301)return
         if(resultCode!=Activity.RESULT_OK||data==null){fxStatus="Cattura annullata";fxStatusView?.text=fxStatus;return}
         try{
-            mediaProjection=projectionManager?.getMediaProjection(resultCode,data)
-            if(mediaProjection==null){fxStatus="MediaProjection non disponibile";fxStatusView?.text=fxStatus;return}
-            mediaProjection?.registerCallback(object:MediaProjection.Callback(){
-                override fun onStop(){runOnUiThread{stopCapture();fxStatus="Cattura interrotta dal sistema";fxStatusView?.text=fxStatus}}
-            },handler)
-            startCapturePipeline()
-        }catch(t:Throwable){fxStatus="Errore avvio audio: ${t.javaClass.simpleName}";fxStatusView?.text=fxStatus;stopCapture()}
+            val readyAction="com.example.rotaryisolator.CAPTURE_FGS_READY"
+            val failedAction="com.example.rotaryisolator.CAPTURE_FGS_FAILED"
+            captureServiceReceiver=object:android.content.BroadcastReceiver(){
+                override fun onReceive(context:Context,intent:Intent){
+                    when(intent.action){
+                        readyAction->{
+                            try{
+                                captureServiceReceiver?.let{try{unregisterReceiver(it)}catch(_:Throwable){}}
+                                captureServiceReceiverRegistered=false;captureServiceReceiver=null
+                                mediaProjection=projectionManager?.getMediaProjection(resultCode,data)
+                                if(mediaProjection==null)throw IllegalStateException("MediaProjection non disponibile")
+                                mediaProjection?.registerCallback(object:MediaProjection.Callback(){
+                                    override fun onStop(){runOnUiThread{stopCapture();fxStatus="Cattura interrotta dal sistema";fxStatusView?.text=fxStatus}}
+                                },handler)
+                                startCapturePipeline()
+                            }catch(t:Throwable){
+                                fxStatus="Errore avvio audio: ${t.javaClass.simpleName}";fxStatusView?.text=fxStatus;stopCapture()
+                            }
+                        }
+                        failedAction->{
+                            fxStatus="Servizio audio non avviato";fxStatusView?.text=fxStatus
+                            stopCapture()
+                        }
+                    }
+                }
+            }
+            val filter=android.content.IntentFilter().apply{addAction(readyAction);addAction(failedAction)}
+            if(Build.VERSION.SDK_INT>=33)registerReceiver(captureServiceReceiver,filter,Context.RECEIVER_NOT_EXPORTED)
+            else @Suppress("DEPRECATION") registerReceiver(captureServiceReceiver,filter)
+            captureServiceReceiverRegistered=true
+            val serviceIntent=Intent(this,AudioCaptureFgService::class.java)
+            if(Build.VERSION.SDK_INT>=26)startForegroundService(serviceIntent) else startService(serviceIntent)
+            fxStatus="Preparazione cattura audio…";fxStatusView?.text=fxStatus
+        }catch(t:Throwable){
+            fxStatus="Errore avvio servizio: ${t.javaClass.simpleName}";fxStatusView?.text=fxStatus
+            stopCapture()
+        }
     }
 
     private fun startCapturePipeline(){
@@ -474,6 +506,9 @@ class MainActivity : Activity() {
     }
 
     private fun stopCapture(){
+        captureServiceReceiver?.let{try{if(captureServiceReceiverRegistered)unregisterReceiver(it)}catch(_:Throwable){}}
+        captureServiceReceiver=null;captureServiceReceiverRegistered=false
+        try{stopService(Intent(this,AudioCaptureFgService::class.java))}catch(_:Throwable){}
         captureRunning=false
         try{captureRecord?.stop()}catch(_:Throwable){}
         try{captureTrack?.pause();captureTrack?.flush();captureTrack?.stop()}catch(_:Throwable){}
