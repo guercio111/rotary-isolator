@@ -42,8 +42,8 @@ class MainActivity : Activity() {
     private var captureThread: Thread? = null
     private var captureRecord: AudioRecord? = null
     private var captureTrack: AudioTrack? = null
-    private var dubDelay = 0f
-    private var reverbAmount = 0f
+    @Volatile private var dubDelay = 0f
+    @Volatile private var reverbAmount = 0f
     private var fxStatus = "Audio capture non avviata"
     private var fxStatusView: TextView? = null
     private var audioReady = false
@@ -374,6 +374,7 @@ class MainActivity : Activity() {
     }
 
     private fun startCaptureRequest(){
+        if(captureRunning || mediaProjection!=null){fxStatus="Cattura già attiva • usa STOP per terminarla";fxStatusView?.text=fxStatus;return}
         if(Build.VERSION.SDK_INT<29){fxStatus="Richiede Android 10 o superiore";fxStatusView?.text=fxStatus;return}
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),7302);return
@@ -465,8 +466,15 @@ class MainActivity : Activity() {
         captureThread=Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
             val samples=ShortArray(2048)
-            val delayL=FloatArray(sampleRate);val delayR=FloatArray(sampleRate)
-            var cursor=0
+            // Dedicated stereo dub-delay buffers (420 ms) and four parallel
+            // feedback-comb lines per channel for a denser, independent reverb.
+            val delayFrames=(sampleRate*0.42f).roundToInt()
+            val dubL=FloatArray(delayFrames);val dubR=FloatArray(delayFrames)
+            var dubCursor=0
+            val combLengths=intArrayOf(1493,1601,1867,1999)
+            val combL=Array(4){FloatArray(combLengths[it])}
+            val combR=Array(4){FloatArray(combLengths[it])}
+            val combCursor=IntArray(4)
             var framesSeen=0L
             while(captureRunning){
                 val n=try{record.read(samples,0,samples.size,AudioRecord.READ_BLOCKING)}catch(_:Throwable){-1}
@@ -477,27 +485,38 @@ class MainActivity : Activity() {
                     val inL=samples[i].toFloat()/32768f
                     val inR=samples[i+1].toFloat()/32768f
                     blockPeak=max(blockPeak,max(abs(inL),abs(inR)))
-                    val dFrames=(sampleRate*0.42f).roundToInt().coerceIn(1,sampleRate-1)
-                    val rFrames=(sampleRate*0.037f).roundToInt()
-                    val dIndex=(cursor-dFrames+sampleRate)%sampleRate
-                    val r1=(cursor-rFrames+sampleRate)%sampleRate
-                    val r2=(cursor-(rFrames*1.37f).roundToInt()+sampleRate)%sampleRate
-                    val delayedL=delayL[dIndex];val delayedR=delayR[dIndex]
-                    val revL=(delayL[r1]*0.55f+delayL[r2]*0.32f)
-                    val revR=(delayR[r1]*0.55f+delayR[r2]*0.32f)
-                    val wetDelay=dubDelay/100f
-                    val wetReverb=reverbAmount/100f
-                    val outL=(inL+delayedL*wetDelay*0.72f+revL*wetReverb*0.48f).coerceIn(-1f,1f)
-                    val outR=(inR+delayedR*wetDelay*0.72f+revR*wetReverb*0.48f).coerceIn(-1f,1f)
-                    delayL[cursor]=(inL+delayedL*wetDelay*0.58f+revL*wetReverb*0.28f).coerceIn(-1f,1f)
-                    delayR[cursor]=(inR+delayedR*wetDelay*0.58f+revR*wetReverb*0.28f).coerceIn(-1f,1f)
+                    val wetDelay=(dubDelay/100f).coerceIn(0f,1f)
+                    val wetReverb=(reverbAmount/100f).coerceIn(0f,1f)
+
+                    // Ping-pong repeats with a soft feedback path.
+                    val echoL=dubL[dubCursor]
+                    val echoR=dubR[dubCursor]
+                    val feedback=(0.18f+wetDelay*0.62f).coerceIn(0f,0.80f)
+                    dubL[dubCursor]=(inL+echoR*feedback).coerceIn(-0.95f,0.95f)
+                    dubR[dubCursor]=(inR+echoL*feedback).coerceIn(-0.95f,0.95f)
+                    dubCursor++;if(dubCursor>=delayFrames)dubCursor=0
+
+                    // Four differently-tuned combs create a diffuse tail.
+                    var revL=0f;var revR=0f
+                    for(c in 0..3){
+                        val p=combCursor[c]
+                        val a=combL[c][p];val b=combR[c][p]
+                        val fb=0.68f+(c*0.025f)
+                        combL[c][p]=(inL+a*fb).coerceIn(-0.95f,0.95f)
+                        combR[c][p]=(inR+b*fb).coerceIn(-0.95f,0.95f)
+                        revL+=a*0.25f;revR+=b*0.25f
+                        combCursor[c]=if(p+1>=combLengths[c])0 else p+1
+                    }
+
+                    val outL=(inL+echoL*wetDelay*0.78f+revL*wetReverb*0.82f).coerceIn(-1f,1f)
+                    val outR=(inR+echoR*wetDelay*0.78f+revR*wetReverb*0.82f).coerceIn(-1f,1f)
                     samples[i]=(outL*32767f).roundToInt().toShort()
                     samples[i+1]=(outR*32767f).roundToInt().toShort()
-                    cursor=(cursor+1)%sampleRate;i+=2;framesSeen++
+                    i+=2;framesSeen++
                 }
                 try{track.write(samples,0,n,AudioTrack.WRITE_BLOCKING)}catch(_:Throwable){}
                 if(framesSeen>sampleRate/2){
-                    val message=if(blockPeak>0.002f)"Audio ricevuto • Reverb / Dub Delay in elaborazione" else "Cattura attiva ma nessun audio ricevuto (app potrebbe bloccarla)"
+                    val message=if(blockPeak>0.002f)"Audio ricevuto • FX attivi secondo le manopole" else "Cattura attiva ma nessun audio ricevuto (app potrebbe bloccarla)"
                     if(fxStatus!=message)runOnUiThread{fxStatus=message;fxStatusView?.text=fxStatus}
                 }
             }
@@ -622,7 +641,7 @@ class MainActivity : Activity() {
         dpEffect=null;connectAudio()
     }
     private fun fmt(v:Float)="%.1f".format(v)
-    override fun onDestroy(){stopCapture();try{dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){};super.onDestroy()}
+    override fun onDestroy(){try{dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){};super.onDestroy()}
 }
 
 private class RotaryControl(
