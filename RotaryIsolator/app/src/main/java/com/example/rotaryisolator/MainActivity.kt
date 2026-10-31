@@ -242,16 +242,18 @@ class MainActivity : Activity() {
                 gravity=Gravity.CENTER
                 setPadding(dp(3),dp(3),dp(3),dp(2))
             }
-            sectionActions.addView(phoneActionButton("RETURN"){
+            val sectionReturnButton=phoneActionButton("RETURN", {
                 val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
                 for(i in 0..2)values[i]=previous[i]
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(0,dp(32),1f).apply{rightMargin=dp(6)})
-            sectionActions.addView(phoneActionButton("FLAT"){
+            })
+            val sectionFlatButton=phoneActionButton("FLAT", {
                 val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
                 for(i in 0..2){previous[i]=values[i];values[i]=0f}
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(0,dp(32),1f))
+            })
+            sectionActions.addView(sectionReturnButton,LinearLayout.LayoutParams(0,dp(32),1f).apply{rightMargin=dp(6)})
+            sectionActions.addView(sectionFlatButton,LinearLayout.LayoutParams(0,dp(32),1f))
         box.addView(sectionActions,LinearLayout.LayoutParams(-1,dp(34)))
         content.addView(box);sections[key]=box
     }
