@@ -237,8 +237,7 @@ class MainActivity : Activity() {
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
-        {
-            val sectionActions=LinearLayout(this).apply{
+        val sectionActions=LinearLayout(this).apply{
                 orientation=LinearLayout.HORIZONTAL
                 gravity=Gravity.CENTER
                 setPadding(dp(3),dp(3),dp(3),dp(2))
@@ -253,8 +252,7 @@ class MainActivity : Activity() {
                 for(i in 0..2){previous[i]=values[i];values[i]=0f}
                 save();refreshUi();scheduleUpdate()
             },LinearLayout.LayoutParams(0,dp(34),1f))
-            box.addView(sectionActions,LinearLayout.LayoutParams(-1,dp(36)))
-        }
+        box.addView(sectionActions,LinearLayout.LayoutParams(-1,dp(36)))
         content.addView(box);sections[key]=box
     }
 
