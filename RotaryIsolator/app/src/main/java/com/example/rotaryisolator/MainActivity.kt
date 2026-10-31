@@ -8,6 +8,16 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.content.res.ColorStateList
 import android.media.audiofx.DynamicsProcessing
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.AudioTrack
+import android.media.MediaRecorder
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
+import android.content.Context
+import android.content.Intent
+import android.os.Process
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -22,6 +32,16 @@ import kotlin.math.*
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
+    private var projectionManager: MediaProjectionManager? = null
+    private var mediaProjection: MediaProjection? = null
+    @Volatile private var captureRunning = false
+    private var captureThread: Thread? = null
+    private var captureRecord: AudioRecord? = null
+    private var captureTrack: AudioTrack? = null
+    private var dubDelay = 0f
+    private var reverbAmount = 0f
+    private var fxStatus = "Audio capture non avviata"
+    private var fxStatusView: TextView? = null
     private var audioReady = false
     private var compact = false
     private var uiScale = 1.0f
@@ -148,6 +168,7 @@ class MainActivity : Activity() {
         addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso, -24f..24f, {isoOn}) { scheduleUpdate() }
         addFilterSection()
         addGainSection()
+        addCaptureFxSection()
         val bar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         bar.addView(button(if(eqOn)"EQ ON" else "EQ OFF"){eqOn=!eqOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button(if(isoOn)"ISO ON" else "ISO OFF"){isoOn=!isoOn;save();refreshUi();applyDsp()},LinearLayout.LayoutParams(0,dp(44),1f))
@@ -331,6 +352,123 @@ class MainActivity : Activity() {
         return col
     }
 
+    private fun addCaptureFxSection(){
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(5),dp(8),dp(5),dp(5))}
+        box.addView(label("MASTER FX  •  AUDIO CAPTURE TEST",10f,gold),LinearLayout.LayoutParams(-1,dp(26)))
+        box.addView(label("PROVA TECNICA: cattura una copia dell'audio consentito da Android",9f,Color.LTGRAY),LinearLayout.LayoutParams(-1,dp(24)))
+        val buttons=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        buttons.addView(button("START CAPTURE"){startCaptureRequest()},LinearLayout.LayoutParams(0,dp(42),1f))
+        buttons.addView(button("STOP"){stopCapture()},LinearLayout.LayoutParams(0,dp(42),1f))
+        box.addView(buttons)
+        fxStatusView=label(fxStatus,10f,Color.WHITE)
+        box.addView(fxStatusView,LinearLayout.LayoutParams(-1,dp(28)))
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        row.addView(RotaryControl(this,"REVERB",reverbAmount,0f,100f,gold,{v->reverbAmount=v;scheduleUpdate()},{"${reverbAmount.roundToInt()}%"}),LinearLayout.LayoutParams(0,dp(if(compact)104 else 132),1f))
+        row.addView(RotaryControl(this,"DUB DELAY",dubDelay,0f,100f,gold,{v->dubDelay=v;scheduleUpdate()},{"${dubDelay.roundToInt()}%"}),LinearLayout.LayoutParams(0,dp(if(compact)104 else 132),1f))
+        box.addView(row)
+        content.addView(box);sections["CAPTURE_FX"]=box
+    }
+
+    private fun startCaptureRequest(){
+        if(Build.VERSION.SDK_INT<29){fxStatus="Richiede Android 10 o superiore";fxStatusView?.text=fxStatus;return}
+        try{
+            projectionManager=getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            startActivityForResult(projectionManager!!.createScreenCaptureIntent(),7301)
+        }catch(t:Throwable){fxStatus="Impossibile avviare la richiesta di cattura";fxStatusView?.text=fxStatus}
+    }
+
+    @Deprecated("Deprecated by Android API; retained for compatibility with the current Activity")
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
+        super.onActivityResult(requestCode,resultCode,data)
+        if(requestCode!=7301)return
+        if(resultCode!=Activity.RESULT_OK||data==null){fxStatus="Cattura annullata";fxStatusView?.text=fxStatus;return}
+        try{
+            mediaProjection=projectionManager?.getMediaProjection(resultCode,data)
+            if(mediaProjection==null){fxStatus="MediaProjection non disponibile";fxStatusView?.text=fxStatus;return}
+            mediaProjection?.registerCallback(object:MediaProjection.Callback(){
+                override fun onStop(){runOnUiThread{stopCapture();fxStatus="Cattura interrotta dal sistema";fxStatusView?.text=fxStatus}}
+            },handler)
+            startCapturePipeline()
+        }catch(t:Throwable){fxStatus="Errore avvio audio: ${t.javaClass.simpleName}";fxStatusView?.text=fxStatus;stopCapture()}
+    }
+
+    private fun startCapturePipeline(){
+        val projection=mediaProjection?:return
+        val sampleRate=48000
+        val channelIn=AudioFormat.CHANNEL_IN_STEREO
+        val channelOut=AudioFormat.CHANNEL_OUT_STEREO
+        val format=AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sampleRate).setChannelMask(channelIn).build()
+        val config=android.media.AudioPlaybackCaptureConfiguration.Builder(projection)
+            .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+            .addMatchingUsage(AudioAttributes.USAGE_GAME)
+            .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+            .build()
+        val minIn=AudioRecord.getMinBufferSize(sampleRate,channelIn,AudioFormat.ENCODING_PCM_16BIT)
+        val minOut=AudioTrack.getMinBufferSize(sampleRate,channelOut,AudioFormat.ENCODING_PCM_16BIT)
+        val bufferBytes=max(minIn,minOut).coerceAtLeast(8192)*2
+        val record=AudioRecord.Builder().setAudioFormat(format).setBufferSizeInBytes(bufferBytes)
+            .setAudioPlaybackCaptureConfig(config).build()
+        val outFormat=AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(sampleRate).setChannelMask(channelOut).build()
+        val track=AudioTrack.Builder()
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            .setAudioFormat(outFormat).setBufferSizeInBytes(bufferBytes).setTransferMode(AudioTrack.MODE_STREAM).build()
+        if(record.state!=AudioRecord.STATE_INITIALIZED||track.state!=AudioTrack.STATE_INITIALIZED){
+            record.release();track.release();throw IllegalStateException("AudioRecord/AudioTrack non inizializzati")
+        }
+        captureRecord=record;captureTrack=track;captureRunning=true
+        record.startRecording();track.play()
+        captureThread=Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+            val samples=ShortArray(2048)
+            val delayL=FloatArray(sampleRate);val delayR=FloatArray(sampleRate)
+            var cursor=0
+            var framesSeen=0L
+            while(captureRunning){
+                val n=try{record.read(samples,0,samples.size,AudioRecord.READ_BLOCKING)}catch(_:Throwable){-1}
+                if(n<=0)continue
+                var i=0
+                while(i+1<n){
+                    val inL=samples[i].toFloat()/32768f
+                    val inR=samples[i+1].toFloat()/32768f
+                    val dFrames=(sampleRate*0.42f).roundToInt().coerceIn(1,sampleRate-1)
+                    val rFrames=(sampleRate*0.037f).roundToInt()
+                    val dIndex=(cursor-dFrames+sampleRate)%sampleRate
+                    val r1=(cursor-rFrames+sampleRate)%sampleRate
+                    val r2=(cursor-(rFrames*1.37f).roundToInt()+sampleRate)%sampleRate
+                    val delayedL=delayL[dIndex];val delayedR=delayR[dIndex]
+                    val revL=(delayL[r1]*0.55f+delayL[r2]*0.32f)
+                    val revR=(delayR[r1]*0.55f+delayR[r2]*0.32f)
+                    val wetDelay=dubDelay/100f
+                    val wetReverb=reverbAmount/100f
+                    val outL=(inL+delayedL*wetDelay*0.72f+revL*wetReverb*0.48f).coerceIn(-1f,1f)
+                    val outR=(inR+delayedR*wetDelay*0.72f+revR*wetReverb*0.48f).coerceIn(-1f,1f)
+                    delayL[cursor]=(inL+delayedL*wetDelay*0.58f+revL*wetReverb*0.28f).coerceIn(-1f,1f)
+                    delayR[cursor]=(inR+delayedR*wetDelay*0.58f+revR*wetReverb*0.28f).coerceIn(-1f,1f)
+                    samples[i]=(outL*32767f).roundToInt().toShort()
+                    samples[i+1]=(outR*32767f).roundToInt().toShort()
+                    cursor=(cursor+1)%sampleRate;i+=2;framesSeen++
+                }
+                try{track.write(samples,0,n,AudioTrack.WRITE_BLOCKING)}catch(_:Throwable){}
+                if(framesSeen>sampleRate/2&&fxStatus!="Cattura attiva • audio copiato e rielaborato"){
+                    runOnUiThread{fxStatus="Cattura attiva • audio copiato e rielaborato";fxStatusView?.text=fxStatus}
+                }
+            }
+        },"IsolatorAudioCapture").apply{start()}
+        fxStatus="Cattura avviata • prova YouTube o IPTV";fxStatusView?.text=fxStatus
+    }
+
+    private fun stopCapture(){
+        captureRunning=false
+        try{captureRecord?.stop()}catch(_:Throwable){}
+        try{captureTrack?.pause();captureTrack?.flush();captureTrack?.stop()}catch(_:Throwable){}
+        try{captureThread?.join(250)}catch(_:Throwable){}
+        try{captureRecord?.release()}catch(_:Throwable){}
+        try{captureTrack?.release()}catch(_:Throwable){}
+        try{mediaProjection?.stop()}catch(_:Throwable){}
+        captureRecord=null;captureTrack=null;captureThread=null;mediaProjection=null
+        fxStatus="Cattura fermata";fxStatusView?.text=fxStatus
+    }
+
     private fun refreshUi(){ buildUi() }
 
     private fun connectAudio(){
@@ -433,7 +571,7 @@ class MainActivity : Activity() {
         dpEffect=null;connectAudio()
     }
     private fun fmt(v:Float)="%.1f".format(v)
-    override fun onDestroy(){try{dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){};super.onDestroy()}
+    override fun onDestroy(){stopCapture();try{dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){};super.onDestroy()}
 }
 
 private class RotaryControl(
