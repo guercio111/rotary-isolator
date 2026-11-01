@@ -191,16 +191,35 @@ class MainActivity : Activity() {
         return max(view.measuredHeight, nested)
     }
 
-    // Uniformly fit all four sections to the measured window. The scale is only
-    // applied when a nested section would otherwise overflow; normal tablet
-    // landscape therefore keeps its original geometry. Also handles pop-up resizing.
+    // Measure nested horizontal stacks as well as their parent columns.
+    // This complements requiredContentHeight and catches controls that exceed
+    // the available width on narrow phone screens.
+    private fun requiredContentWidth(view: View): Int {
+        val group = view as? ViewGroup ?: return view.measuredWidth
+        val horizontal = group is LinearLayout && group.orientation == LinearLayout.HORIZONTAL
+        var childrenExtent = 0
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            val lp = child.layoutParams as? ViewGroup.MarginLayoutParams
+            val extent = requiredContentWidth(child) + (lp?.leftMargin ?: 0) + (lp?.rightMargin ?: 0)
+            childrenExtent = if (horizontal) childrenExtent + extent else max(childrenExtent, extent)
+        }
+        val nested = view.paddingLeft + view.paddingRight + childrenExtent
+        return max(view.measuredWidth, nested)
+    }
+
+    // Uniformly scale the complete interface only when a section exceeds the
+    // measured window in either direction. At the tablet's existing dimensions
+    // the factor remains 1, preserving its current appearance exactly.
     private fun fitUiToWindow() {
         if (!::root.isInitialized || !::container.isInitialized || container.width <= 0 || container.height <= 0) return
         var scale = 1f
         for (section in sections.values) {
-            if (section.height <= 0) continue
-            val required = requiredContentHeight(section)
-            if (required > 0) scale = min(scale, section.height.toFloat() / required.toFloat())
+            if (section.height <= 0 || section.width <= 0) continue
+            val requiredHeight = requiredContentHeight(section)
+            val requiredWidth = requiredContentWidth(section)
+            if (requiredHeight > 0) scale = min(scale, section.height.toFloat() / requiredHeight.toFloat())
+            if (requiredWidth > 0) scale = min(scale, section.width.toFloat() / requiredWidth.toFloat())
         }
         scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         root.pivotX = 0f
@@ -208,7 +227,7 @@ class MainActivity : Activity() {
         root.scaleX = scale
         root.scaleY = scale
         root.translationX = (container.width - root.width * scale) / 2f
-        root.translationY = 0f
+        root.translationY = (container.height - root.height * scale) / 2f
     }
 
     private fun label(t:String, size:Float=11f, color:Int=Color.LTGRAY)=TextView(this).apply {
