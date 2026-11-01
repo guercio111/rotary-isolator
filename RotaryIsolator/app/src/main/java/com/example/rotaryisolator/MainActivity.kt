@@ -18,6 +18,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.Process
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import kotlin.math.*
 
@@ -162,16 +163,31 @@ class MainActivity : Activity() {
         })
     }
 
+    // Measure nested vertical stacks as well as their parent rows. This catches
+    // overflow inside MASTER's compact 2x2 controls, not just the outer quadrant.
+    private fun requiredContentHeight(view: View): Int {
+        val group = view as? ViewGroup ?: return view.measuredHeight
+        val vertical = group is LinearLayout && group.orientation == LinearLayout.VERTICAL
+        var childrenExtent = 0
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            val lp = child.layoutParams as? ViewGroup.MarginLayoutParams
+            val extent = requiredContentHeight(child) + (lp?.topMargin ?: 0) + (lp?.bottomMargin ?: 0)
+            childrenExtent = if (vertical) childrenExtent + extent else max(childrenExtent, extent)
+        }
+        val nested = view.paddingTop + view.paddingBottom + childrenExtent
+        return max(view.measuredHeight, nested)
+    }
+
     // Uniformly fit all four sections to the measured window. The scale is only
-    // applied when a section would otherwise overflow; normal tablet landscape
-    // therefore keeps its original geometry. This also handles freeform resizing.
+    // applied when a nested section would otherwise overflow; normal tablet
+    // landscape therefore keeps its original geometry. Also handles pop-up resizing.
     private fun fitUiToWindow() {
         if (!::root.isInitialized || !::container.isInitialized || container.width <= 0 || container.height <= 0) return
         var scale = 1f
         for (section in sections.values) {
             if (section.height <= 0) continue
-            var required = section.paddingTop + section.paddingBottom
-            for (i in 0 until section.childCount) required += section.getChildAt(i).measuredHeight
+            val required = requiredContentHeight(section)
             if (required > 0) scale = min(scale, section.height.toFloat() / required.toFloat())
         }
         scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
