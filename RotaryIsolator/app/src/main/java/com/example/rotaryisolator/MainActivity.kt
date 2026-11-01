@@ -546,6 +546,7 @@ class MainActivity : Activity() {
     }
 
     private fun masterDialHeight():Int {
+        if(phonePortrait && wideLayout) return dialHeight()
         if(phonePortrait && !wideLayout){
             val section=(windowHeightDp()-64f)/2f
             val row=(section-18f)/2f
