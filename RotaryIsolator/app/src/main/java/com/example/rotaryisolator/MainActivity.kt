@@ -470,32 +470,99 @@ class MainActivity : Activity() {
     }
 
     private fun showCompressor(){
-        val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(8))}
-        val state=Switch(this).apply{text="COMPRESSOR";isChecked=compressorOn}
-        panel.addView(state,LinearLayout.LayoutParams(-1,dp(48)))
-        fun addControl(title:String,min:Int,max:Int,initial:Int,format:(Int)->String,onChange:(Int)->Unit){
-            val line=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
-            val value=label(title+"  "+format(initial),12f,Color.WHITE)
-            line.addView(value,LinearLayout.LayoutParams(-1,dp(24)))
-            val seek=SeekBar(this).apply{
-                this.max=max-min
-                progress=(initial-min).coerceIn(0,this.max)
-                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                    override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){val v=min+p;value.text=title+"  "+format(v);onChange(v);scheduleUpdate()}}
-                    override fun onStartTrackingTouch(b:SeekBar?){}
-                    override fun onStopTrackingTouch(b:SeekBar?){save()}
-                })
-            }
-            line.addView(seek,LinearLayout.LayoutParams(-1,dp(42)))
-            panel.addView(line)
+        var rotaryMode = true
+        val panel=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL
+            setPadding(dp(10),dp(6),dp(10),dp(6))
         }
-        addControl("THRESHOLD", -36, 0, compThreshold.roundToInt(), {"$it dB"}){compThreshold=it.toFloat()}
-        addControl("RATIO", 1, 12, compRatio.roundToInt(), {"$it:1"}){compRatio=it.toFloat()}
-        addControl("ATTACK", 1, 100, compAttack.roundToInt(), {"$it ms"}){compAttack=it.toFloat()}
-        addControl("RELEASE", 20, 500, compRelease.roundToInt(), {"$it ms"}){compRelease=it.toFloat()}
-        addControl("MAKE-UP", 0, 12, compMakeup.roundToInt(), {"+$it dB"}){compMakeup=it.toFloat()}
+        val top=LinearLayout(this).apply{
+            orientation=LinearLayout.HORIZONTAL
+            gravity=Gravity.CENTER_VERTICAL
+        }
+        val state=Switch(this).apply{text="COMPRESSOR";isChecked=compressorOn}
+        top.addView(state,LinearLayout.LayoutParams(0,dp(48),1f))
+        val modeButton=Button(this).apply{
+            text="MANOPOLE";textSize=10f;setTextColor(Color.WHITE)
+            backgroundTintList=ColorStateList.valueOf(Color.rgb(75,82,94))
+        }
+        top.addView(modeButton,LinearLayout.LayoutParams(dp(112),dp(40)))
+        panel.addView(top,LinearLayout.LayoutParams(-1,dp(50)))
+
+        val controls=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+        panel.addView(controls,LinearLayout.LayoutParams(-1,-2))
+
+        data class CompControl(
+            val title:String,val min:Int,val max:Int,val initial:Int,
+            val format:(Int)->String,val change:(Int)->Unit,
+            val read:()->Float
+        )
+        val items=listOf(
+            CompControl("THRESHOLD",-36,0,compThreshold.roundToInt(),{"$it dB"},{compThreshold=it.toFloat()},{compThreshold}),
+            CompControl("RATIO",1,12,compRatio.roundToInt(),{"$it:1"},{compRatio=it.toFloat()},{compRatio}),
+            CompControl("ATTACK",1,100,compAttack.roundToInt(),{"$it ms"},{compAttack=it.toFloat()},{compAttack}),
+            CompControl("RELEASE",20,500,compRelease.roundToInt(),{"$it ms"},{compRelease=it.toFloat()},{compRelease}),
+            CompControl("MAKE-UP",0,12,compMakeup.roundToInt(),{"+$it dB"},{compMakeup=it.toFloat()},{compMakeup})
+        )
+        fun buildControl(item:CompControl):View{
+            val col=LinearLayout(this).apply{
+                orientation=LinearLayout.VERTICAL
+                gravity=Gravity.CENTER
+                setPadding(dp(3),dp(2),dp(3),dp(2))
+            }
+            val value=label(item.title+"  "+item.format(item.initial),11f,Color.WHITE)
+            col.addView(value,LinearLayout.LayoutParams(-1,dp(25)))
+            if(rotaryMode){
+                val knob=RotaryControl(
+                    this,item.title,item.read(),item.min.toFloat(),item.max.toFloat(),gold,
+                    {v->item.change(v.roundToInt());value.text=item.title+"  "+item.format(item.read().roundToInt());scheduleUpdate()},
+                    {item.format(item.read().roundToInt())}
+                )
+                col.addView(knob,LinearLayout.LayoutParams(-1,dp(112)))
+            }else{
+                val seek=SeekBar(this).apply{
+                    max=item.max-item.min
+                    progress=(item.initial-item.min).coerceIn(0,this.max)
+                    setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){
+                            if(user){item.change(item.min+p);value.text=item.title+"  "+item.format(item.read().roundToInt());scheduleUpdate()}
+                        }
+                        override fun onStartTrackingTouch(b:SeekBar?){}
+                        override fun onStopTrackingTouch(b:SeekBar?){save()}
+                    })
+                }
+                col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
+            }
+            return col
+        }
+        fun rebuildControls(){
+            controls.removeAllViews()
+            var index=0
+            while(index<items.size){
+                val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+                for(slot in 0..1){
+                    if(index<items.size){
+                        row.addView(buildControl(items[index]),LinearLayout.LayoutParams(0,dp(if(rotaryMode)142 else 82),1f))
+                        index++
+                    }else{
+                        row.addView(View(this),LinearLayout.LayoutParams(0,dp(if(rotaryMode)142 else 82),1f))
+                    }
+                }
+                controls.addView(row,LinearLayout.LayoutParams(-1,dp(if(rotaryMode)142 else 82)))
+            }
+            modeButton.text=if(rotaryMode)"MANOPOLE" else "SLIDER"
+        }
+        modeButton.setOnClickListener{
+            rotaryMode=!rotaryMode
+            rebuildControls()
+        }
         state.setOnCheckedChangeListener{_,checked->compressorOn=checked;save();scheduleUpdate()}
-        AlertDialog.Builder(this).setTitle("COMPRESSOR • MASTER").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
+        rebuildControls()
+        val dialog=AlertDialog.Builder(this)
+            .setTitle("COMPRESSOR • MASTER")
+            .setView(ScrollView(this).apply{addView(panel)})
+            .setNegativeButton("CHIUDI",null)
+            .show()
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels*0.92f).roundToInt(),-2)
     }
 
     private fun showOptions(){
