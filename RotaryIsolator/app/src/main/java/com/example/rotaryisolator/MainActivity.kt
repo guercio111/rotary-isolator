@@ -43,10 +43,9 @@ class MainActivity : Activity() {
     private var filtersOn = false
     private var gain = 0f
     private var resonance = 0f
-    private var verticalLayout = false
-    private var layoutModeSet = false
     private var phonePortrait = false
     private var wideLayout = false
+    private var layoutRebuildPending = false
     private var masterMode = 0
     private var bassBoost = 0f
     private var loudness = 0f
@@ -87,8 +86,6 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         compact = prefs.getBoolean("mini", false)
-        verticalLayout = prefs.getBoolean("vertical_layout", false)
-        layoutModeSet = prefs.getBoolean("layout_mode_set", false)
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
         bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
         loudness = prefs.getFloat("loudness", 0f).coerceIn(0f,100f)
@@ -98,9 +95,11 @@ class MainActivity : Activity() {
         previousLoudness = prefs.getFloat("previous_loudness", loudness)
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         val dm = resources.displayMetrics
-        phonePortrait = (dm.widthPixels / dm.density) < 600f && dm.heightPixels > dm.widthPixels
-        wideLayout = if (layoutModeSet) !verticalLayout else dm.widthPixels > dm.heightPixels
-        verticalLayout = !wideLayout
+        val cfg = resources.configuration
+        val windowWidthDp = if (cfg.screenWidthDp > 0) cfg.screenWidthDp else (dm.widthPixels / dm.density).roundToInt()
+        val windowHeightDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else (dm.heightPixels / dm.density).roundToInt()
+        phonePortrait = min(windowWidthDp, windowHeightDp) < 600
+        wideLayout = windowWidthDp > windowHeightDp
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         mouseWheelAdjustOn = prefs.getBoolean("mouse_wheel_adjust_on", false)
         mouseWheelSensitivity = prefs.getFloat("mouse_wheel_sensitivity", 4f).coerceIn(1f,10f)
@@ -151,8 +150,10 @@ class MainActivity : Activity() {
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
     private fun dialHeight():Int {
         val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density
-        // Larger mixer dials; the landscape tablet gets the most room.
+        // Keep the established tablet-landscape dimensions. Smaller phone windows
+        // use shorter dials so the complete four-section mixer remains visible.
         return dp(when {
+            phonePortrait && wideLayout -> 112
             wideLayout -> 168
             phonePortrait && h<760f -> 136
             phonePortrait -> 148
@@ -161,36 +162,19 @@ class MainActivity : Activity() {
         })
     }
 
-    // Fit the complete mixer to the available window. The same uniform scale is
-    // applied to labels, controls and buttons, including when a floating window resizes.
+    // Uniformly fit all four sections to the measured window. The scale is only
+    // applied when a section would otherwise overflow; normal tablet landscape
+    // therefore keeps its original geometry. This also handles freeform resizing.
     private fun fitUiToWindow() {
         if (!::root.isInitialized || !::container.isInitialized || container.width <= 0 || container.height <= 0) return
-        var requiredHeight = root.paddingTop + root.paddingBottom
-        if (wideLayout) {
-            var scaleLimit = 1f
-            for (section in sections.values) {
-                if (section.height <= 0) continue
-                var sectionContent = 0
-                for (i in 0 until section.childCount) sectionContent += section.getChildAt(i).measuredHeight
-                if (sectionContent > 0) scaleLimit = min(scaleLimit, section.height.toFloat() / sectionContent.toFloat())
-            }
-            requiredHeight = container.height
-            val scale = scaleLimit.coerceIn(0.55f, 1f)
-            root.pivotX = 0f
-            root.pivotY = 0f
-            root.scaleX = scale
-            root.scaleY = scale
-            root.translationX = (container.width - root.width * scale) / 2f
-            root.translationY = 0f
-            return
+        var scale = 1f
+        for (section in sections.values) {
+            if (section.height <= 0) continue
+            var required = section.paddingTop + section.paddingBottom
+            for (i in 0 until section.childCount) required += section.getChildAt(i).measuredHeight
+            if (required > 0) scale = min(scale, section.height.toFloat() / required.toFloat())
         }
-        for (i in 0 until root.childCount) {
-            val child = root.getChildAt(i)
-            if (child === content) {
-                for (j in 0 until content.childCount) requiredHeight += content.getChildAt(j).measuredHeight
-            } else requiredHeight += child.measuredHeight
-        }
-        val scale = (container.height.toFloat() / requiredHeight.coerceAtLeast(1)).coerceIn(0.55f, 1f)
+        scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         root.pivotX = 0f
         root.pivotY = 0f
         root.scaleX = scale
@@ -247,7 +231,7 @@ class MainActivity : Activity() {
     }
 
     private fun save() {
-        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putBoolean("layout_mode_set",layoutModeSet).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
+        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
@@ -262,23 +246,7 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
-        val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        val layoutButton=Button(this).apply {
-            text=if(wideLayout) "ORIZZONTALE" else "VERTICALE"
-            textSize=if(phonePortrait)9f else 10f;isAllCaps=false;setTextColor(Color.WHITE)
-            minHeight=dp(30);minimumHeight=dp(30);setPadding(dp(5),0,dp(5),0)
-            backgroundTintList=ColorStateList.valueOf(Color.rgb(65,72,84))
-            contentDescription="Cambia disposizione orizzontale o verticale"
-            setOnClickListener {
-                wideLayout=!wideLayout
-                verticalLayout=!wideLayout
-                layoutModeSet=true
-                save()
-                refreshUi()
-            }
-        }
-        titleBar.addView(layoutButton,LinearLayout.LayoutParams(dp(if(phonePortrait)108 else 124),dp(if(phonePortrait)30 else 34)))
-        titleBar.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
+        val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(phonePortrait)72 else 82),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(5)})
         titleBar.addView(TextView(this).apply { text="⚙"; textSize=23f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(46),dp(if(phonePortrait)30 else 36)))
         root.addView(titleBar)
@@ -286,27 +254,38 @@ class MainActivity : Activity() {
         // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
         root.addView(content,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
-        if(wideLayout) {
-            val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-            val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-            content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
-            content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
-            addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-12f..12f,{eqOn},upper)
-            addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso,-24f..24f,{isoOn},upper)
-            addFilterSection(lower)
-            addGainSection(lower)
-        } else {
-            addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-12f..12f,{eqOn})
-            addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso,-24f..24f,{isoOn})
-            addFilterSection()
-            addGainSection()
-        }
+        // Fixed four-quadrant mixer in every orientation: only the available
+        // dimensions change, never the order or the set of controls.
+        val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+        val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+        content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
+        content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
+        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-12f..12f,{eqOn},upper)
+        addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso,-24f..24f,{isoOn},upper)
+        addFilterSection(lower)
+        addGainSection(lower)
         status=label("Connecting audio engine…",if(phonePortrait)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
         container.addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         setContentView(container)
-        container.addOnLayoutChangeListener { _,_,_,_,_,_,_,_,_ -> fitUiToWindow() }
+        container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
+            if (view.width > 0 && view.height > 0) {
+                val newWide = view.width > view.height
+                val newPhone = min(view.width,view.height) / resources.displayMetrics.density < 600f
+                if (newWide != wideLayout || newPhone != phonePortrait) {
+                    wideLayout = newWide
+                    phonePortrait = newPhone
+                    if (!layoutRebuildPending) {
+                        layoutRebuildPending = true
+                        handler.post {
+                            layoutRebuildPending = false
+                            if (::container.isInitialized) buildUi()
+                        }
+                    }
+                } else fitUiToWindow()
+            }
+        }
         root.addOnLayoutChangeListener { _,_,_,_,_,_,_,_,_ -> fitUiToWindow() }
         container.post { root.post { fitUiToWindow() } }
     }
