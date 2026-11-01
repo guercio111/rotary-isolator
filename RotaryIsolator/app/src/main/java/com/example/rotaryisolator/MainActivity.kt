@@ -642,3 +642,5 @@ private class RotaryControl(
     }
     override fun performClick():Boolean{super.performClick();return true}
 }
+
+// Experimental master compressor prototype: Android DynamicsProcessing MBC.
