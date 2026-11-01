@@ -514,7 +514,7 @@ class MainActivity : Activity() {
                         // a cutoff-tracking resonant peak while HPF resonance is raised.
                         // The boost offsets the HPF attenuation so the kick remains audible.
                         eqGain -= filters[0]*36f
-                        eqGain += resonance*48f
+                        eqGain += resonance * resonance * 8f
                     }
                     if(lpfActive && valueIndex==2) eqGain -= filters[1]*36f
                     val bandFrequency = if(hpfActive && resonance>.001f && valueIndex==0)
