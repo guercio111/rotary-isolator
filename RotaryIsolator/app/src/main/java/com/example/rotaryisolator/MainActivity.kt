@@ -32,7 +32,7 @@ class MainActivity : Activity() {
     private var compRatio = 3f
     private var compAttack = 10f
     private var compRelease = 150f
-    private var compMakeup = 2f
+    private var compMakeup = 0f
     private var eqOn = true
     private var isoOn = true
     private var filtersOn = false
@@ -97,7 +97,7 @@ class MainActivity : Activity() {
         compRatio = prefs.getFloat("comp_ratio", 3f).coerceIn(1f, 12f)
         compAttack = prefs.getFloat("comp_attack", 10f).coerceIn(1f, 100f)
         compRelease = prefs.getFloat("comp_release", 150f).coerceIn(20f, 500f)
-        compMakeup = prefs.getFloat("comp_makeup", 2f).coerceIn(0f, 12f)
+        compMakeup = prefs.getFloat("comp_makeup", 0f).coerceIn(0f, 100f)
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
         // Keep the filter section enabled at every app start, regardless of
@@ -209,7 +209,6 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         titleBar.addView(label("ROTARY ISOLATOR", if(phonePortrait)15f else if(compact) 16f else 20f,Color.WHITE),LinearLayout.LayoutParams(0,dp(if(phonePortrait)28 else 32),1f))
-        titleBar.addView(Button(this).apply { text="COMP"; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(compressorOn) Color.rgb(185,45,48) else Color.rgb(65,70,78)); setOnClickListener { showCompressor() } },LinearLayout.LayoutParams(dp(62),dp(if(phonePortrait)30 else 36)))
         titleBar.addView(TextView(this).apply { text="⚙"; textSize=23f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(46),dp(if(phonePortrait)30 else 36)))
         root.addView(titleBar)
         root.addView(label("MASTER PROCESSING  •  V10 / XONE CONCEPT",if(phonePortrait)7f else 8f,gold),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)12 else 17)))
@@ -374,8 +373,8 @@ class MainActivity : Activity() {
 
     private fun addGainSection(parent:LinearLayout=content){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 3),dp(if(phonePortrait)1 else 4),dp(2))}
-        box.addView(label("MASTER  •  GAIN / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(20)))
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=3f}
+        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(20)))
+        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
         val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
         gainCol.addView(label("GAIN",if(phonePortrait)9f else 11f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(18)))
         if(modes["GAIN"]==true){
@@ -386,9 +385,10 @@ class MainActivity : Activity() {
             })}
             gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
         }else{
-            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"}),LinearLayout.LayoutParams(-1,dialHeight()))
+            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"}),LinearLayout.LayoutParams(-1,masterDialHeight()))
         }
         row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
+        row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
         row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
         row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
         box.addView(row)
@@ -410,7 +410,27 @@ class MainActivity : Activity() {
         })
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
         col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember),
-            LinearLayout.LayoutParams(-1,dialHeight()))
+            LinearLayout.LayoutParams(-1,masterDialHeight()))
+        return col
+    }
+
+    private fun masterDialHeight():Int = (dialHeight()*0.82f).roundToInt()
+
+    private fun masterCompControl():View{
+        val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+        col.addView(label("${compMakeup.roundToInt()}%",if(phonePortrait)9f else 10f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(16)))
+        val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        actions.addView(roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
+            compressorOn=!compressorOn
+            save()
+            refreshUi()
+            scheduleUpdate()
+        })
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
+        col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,gold,{v->
+            compMakeup=v.coerceIn(0f,100f)
+            scheduleUpdate()
+        },{"${compMakeup.roundToInt()}%"}),LinearLayout.LayoutParams(-1,masterDialHeight()))
         return col
     }
 
@@ -458,11 +478,18 @@ class MainActivity : Activity() {
                 fx.setPostEqBandByChannelIndex(ch,2,DynamicsProcessing.EqBand(true,20000f,high+masterHigh))
             }
             fx.setInputGainAllChannelsTo(gain.coerceIn(-12f,12f))
-            // Apply the compressor state explicitly to both stereo channels.
-            // Keeping the band configured while disabled makes the ON/OFF switch a true bypass.
+            // Fixed, music-oriented compressor: moderate 3:1 ratio, -18 dB threshold,
+            // 10 ms attack and 150 ms release. The single COMP control is the make-up
+            // amount (0..100% mapped to 0..12 dB). OFF uses a neutral 1:1 band with
+            // zero make-up, so it bypasses compression without relying on the driver's
+            // sometimes-unreliable MBC enabled toggle.
+            val makeupDb = (compMakeup.coerceIn(0f,100f) / 100f) * 12f
             val compBand = DynamicsProcessing.MbcBand(
-                compressorOn,20000f,compAttack,compRelease,compRatio,compThreshold,
-                6f,-90f,1f,0f,compMakeup
+                true,20000f,10f,150f,
+                if(compressorOn) 3f else 1f,
+                if(compressorOn) -18f else 0f,
+                6f,-90f,1f,0f,
+                if(compressorOn) makeupDb else 0f
             )
             for(ch in 0..1) fx.setMbcBandByChannelIndex(ch,0,compBand)
             if(limiterOn){
@@ -472,108 +499,6 @@ class MainActivity : Activity() {
             fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn
             status.text=if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
         }catch(t:Throwable){status.text="Audio DSP non supportato dal driver del dispositivo"}
-    }
-
-    private fun showCompressor(){
-        var rotaryMode = true
-        val panel=LinearLayout(this).apply{
-            orientation=LinearLayout.VERTICAL
-            setPadding(dp(10),dp(6),dp(10),dp(6))
-        }
-        val top=LinearLayout(this).apply{
-            orientation=LinearLayout.HORIZONTAL
-            gravity=Gravity.CENTER_VERTICAL
-        }
-        val state=Switch(this).apply{text="COMPRESSOR";isChecked=compressorOn}
-        top.addView(state,LinearLayout.LayoutParams(0,dp(48),1f))
-        val modeButton=Button(this).apply{
-            text="MANOPOLE";textSize=10f;setTextColor(Color.WHITE)
-            backgroundTintList=ColorStateList.valueOf(Color.rgb(75,82,94))
-        }
-        top.addView(modeButton,LinearLayout.LayoutParams(dp(112),dp(40)))
-        panel.addView(top,LinearLayout.LayoutParams(-1,dp(50)))
-
-        val controls=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
-        panel.addView(controls,LinearLayout.LayoutParams(-1,-2))
-
-        data class CompControl(
-            val title:String,val min:Int,val max:Int,val initial:Int,
-            val format:(Int)->String,val change:(Int)->Unit,
-            val read:()->Float
-        )
-        val items=listOf(
-            CompControl("THRESHOLD",-36,0,compThreshold.roundToInt(),{"$it dB"},{compThreshold=it.toFloat()},{compThreshold}),
-            CompControl("RATIO",1,12,compRatio.roundToInt(),{"$it:1"},{compRatio=it.toFloat()},{compRatio}),
-            CompControl("ATTACK",1,100,compAttack.roundToInt(),{"$it ms"},{compAttack=it.toFloat()},{compAttack}),
-            CompControl("RELEASE",20,500,compRelease.roundToInt(),{"$it ms"},{compRelease=it.toFloat()},{compRelease}),
-            CompControl("MAKE-UP",0,12,compMakeup.roundToInt(),{"+$it dB"},{compMakeup=it.toFloat()},{compMakeup})
-        )
-        fun buildControl(item:CompControl):View{
-            val col=LinearLayout(this).apply{
-                orientation=LinearLayout.VERTICAL
-                gravity=Gravity.CENTER
-                setPadding(dp(3),dp(2),dp(3),dp(2))
-            }
-            val value=label(item.title+"  "+item.format(item.initial),11f,Color.WHITE)
-            col.addView(value,LinearLayout.LayoutParams(-1,dp(25)))
-            if(rotaryMode){
-                val knob=RotaryControl(
-                    this,item.title,item.read(),item.min.toFloat(),item.max.toFloat(),gold,
-                    {v->item.change(v.roundToInt());value.text=item.title+"  "+item.format(item.read().roundToInt());scheduleUpdate()},
-                    {item.format(item.read().roundToInt())}
-                )
-                col.addView(knob,LinearLayout.LayoutParams(-1,dp(112)))
-            }else{
-                val seek=SeekBar(this).apply{
-                    max=item.max-item.min
-                    progress=(item.initial-item.min).coerceIn(0,this.max)
-                    setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){
-                            if(user){item.change(item.min+p);value.text=item.title+"  "+item.format(item.read().roundToInt());scheduleUpdate()}
-                        }
-                        override fun onStartTrackingTouch(b:SeekBar?){}
-                        override fun onStopTrackingTouch(b:SeekBar?){save()}
-                    })
-                }
-                col.addView(seek,LinearLayout.LayoutParams(-1,dp(48)))
-            }
-            return col
-        }
-        fun rebuildControls(){
-            controls.removeAllViews()
-            var index=0
-            while(index<items.size){
-                val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-                for(slot in 0..1){
-                    if(index<items.size){
-                        row.addView(buildControl(items[index]),LinearLayout.LayoutParams(0,dp(if(rotaryMode)142 else 82),1f))
-                        index++
-                    }else{
-                        row.addView(View(this),LinearLayout.LayoutParams(0,dp(if(rotaryMode)142 else 82),1f))
-                    }
-                }
-                controls.addView(row,LinearLayout.LayoutParams(-1,dp(if(rotaryMode)142 else 82)))
-            }
-            modeButton.text=if(rotaryMode)"MANOPOLE" else "SLIDER"
-        }
-        modeButton.setOnClickListener{
-            rotaryMode=!rotaryMode
-            rebuildControls()
-        }
-        state.setOnCheckedChangeListener{_,checked->
-            compressorOn=checked
-            save()
-            // Apply the bypass/enable change immediately instead of waiting in the DSP queue.
-            handler.removeCallbacks(dspUpdate)
-            applyDspNow()
-        }
-        rebuildControls()
-        val dialog=AlertDialog.Builder(this)
-            .setTitle("COMPRESSOR • MASTER")
-            .setView(ScrollView(this).apply{addView(panel)})
-            .setNegativeButton("CHIUDI",null)
-            .show()
-        dialog.window?.setLayout((resources.displayMetrics.widthPixels*0.92f).roundToInt(),-2)
     }
 
     private fun showOptions(){
