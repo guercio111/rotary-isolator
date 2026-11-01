@@ -357,16 +357,16 @@ class MainActivity : Activity() {
             }
             col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
-            bandActions.addView(circleAction("↶",if(compactHeader)22 else 30) {
+            bandActions.addView(circleAction("↶",if(compactHeader)18 else 30) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(if(compactHeader)24 else 42),dp(if(compactHeader)24 else 42)).apply{rightMargin=dp(if(compactHeader)3 else 8)})
-            bandActions.addView(circleAction("F",if(compactHeader)28 else 56) {
+            },LinearLayout.LayoutParams(dp(if(compactHeader)18 else 42),dp(if(compactHeader)18 else 42)).apply{rightMargin=dp(if(compactHeader)1 else 8)})
+            bandActions.addView(circleAction("F",if(compactHeader)22 else 56) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f; scheduleUpdate(); refreshUi()
-            },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 56),dp(if(compactHeader)30 else 56)))
-            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(if(compactHeader)32 else 58)))
+            },LinearLayout.LayoutParams(dp(if(compactHeader)22 else 56),dp(if(compactHeader)22 else 56)))
+            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(if(compactHeader)24 else 58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
@@ -453,17 +453,17 @@ class MainActivity : Activity() {
             }
             col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterActions.addView(circleAction("↶",if(phonePortrait && !wideLayout)22 else 30){
+            filterActions.addView(circleAction("↶",if(phonePortrait && !wideLayout)18 else 30){
                 val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=old else filters[i]=old
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)24 else 42),dp(if(phonePortrait && !wideLayout)24 else 42)).apply{rightMargin=dp(if(phonePortrait && !wideLayout)3 else 8)})
-            filterActions.addView(circleAction("F",if(phonePortrait && !wideLayout)28 else 56){
+            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)18 else 42),dp(if(phonePortrait && !wideLayout)18 else 42)).apply{rightMargin=dp(if(phonePortrait && !wideLayout)1 else 8)})
+            filterActions.addView(circleAction("F",if(phonePortrait && !wideLayout)22 else 56){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
                 scheduleUpdate();refreshUi()
-            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)30 else 56),dp(if(phonePortrait && !wideLayout)30 else 56)))
-            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(if(phonePortrait && !wideLayout)32 else 58)))
+            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)22 else 56),dp(if(phonePortrait && !wideLayout)22 else 56)))
+            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(if(phonePortrait && !wideLayout)24 else 58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row);parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
@@ -754,9 +754,12 @@ private class RotaryControl(
         val a=Math.toRadians((135+270*n).toDouble())
         p.color=Color.WHITE;p.strokeWidth=dp(3f)
         c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
-        p.textAlign=Paint.Align.CENTER;p.textSize=dp(11f);p.color=Color.WHITE
-        if(titleInside){p.textAlign=Paint.Align.CENTER;p.textSize=dp(11f);p.color=Color.WHITE;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp(17f),p)}
-        p.color=accent;p.textSize=dp(10f);c.drawText(valueText(),cx,height-dp(4f),p)
+        p.textAlign=Paint.Align.CENTER
+        val titleSize=min(dp(11f),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
+        p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
+        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp(17f),p)}
+        val value=valueText()
+        p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp(4f),p)
     }
     private fun updateFromPoint(x:Float,y:Float){
         val r=rect;val cx=r.centerX();val cy=r.centerY()
