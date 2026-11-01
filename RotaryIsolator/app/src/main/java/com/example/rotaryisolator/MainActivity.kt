@@ -489,7 +489,7 @@ class MainActivity : Activity() {
     private fun connectAudio(){
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
-            val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,6,true,1,true,3,limiterOn).build()
+            val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
@@ -507,18 +507,21 @@ class MainActivity : Activity() {
                 for(i in 0 until eqCount){
                     val valueIndex = if(eqDoubleMid) listOf(0,1,3,2)[i] else i
                     var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-12f,12f) else 0f
-                    if(filtersOn && filterControlOn[0] && valueIndex==0) eqGain -= filters[0]*36f
-                    if(filtersOn && filterControlOn[1] && valueIndex==2) eqGain -= filters[1]*36f
-                    fx.setPreEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,eqFreqs[i],eqGain.coerceIn(-36f,12f)))
+                    val hpfActive = filtersOn && filterControlOn[0] && filters[0]>.01f
+                    val lpfActive = filtersOn && filterControlOn[1] && filters[1]>.01f
+                    if(hpfActive && valueIndex==0) {
+                        // Keep the original EQ layout, but turn its LOW band into
+                        // a cutoff-tracking resonant peak while HPF resonance is raised.
+                        // The boost offsets the HPF attenuation so the kick remains audible.
+                        eqGain -= filters[0]*36f
+                        eqGain += resonance*48f
+                    }
+                    if(lpfActive && valueIndex==2) eqGain -= filters[1]*36f
+                    val bandFrequency = if(hpfActive && resonance>.001f && valueIndex==0)
+                        20f * Math.pow(50.0, filters[0].toDouble()).toFloat()
+                    else eqFreqs[i]
+                    fx.setPreEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,bandFrequency,eqGain.coerceIn(-36f,12f)))
                 }
-                // Dedicated resonant peaks follow the HPF/LPF cutoff.
-                // A full-scale resonance reaches +18 dB for a pronounced Xone-style sweep.
-                val hpfCutoff = 20f * Math.pow(50.0, filters[0].toDouble()).toFloat()
-                val lpfCutoff = 20000f * Math.pow(0.05, filters[1].toDouble()).toFloat()
-                val hpfResonance = if(filtersOn && filterControlOn[0] && filters[0]>.01f) resonance*18f else 0f
-                val lpfResonance = if(filtersOn && filterControlOn[1] && filters[1]>.01f) resonance*18f else 0f
-                fx.setPreEqBandByChannelIndex(ch,4,DynamicsProcessing.EqBand(true,hpfCutoff,hpfResonance))
-                fx.setPreEqBandByChannelIndex(ch,5,DynamicsProcessing.EqBand(true,lpfCutoff,lpfResonance))
                 val isoFreqs=floatArrayOf(250f,4000f,20000f)
                 for(i in 0..2){
                     val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
