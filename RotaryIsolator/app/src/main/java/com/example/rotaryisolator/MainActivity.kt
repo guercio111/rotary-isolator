@@ -423,18 +423,19 @@ class MainActivity : Activity() {
         box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(20)))
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
         val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-        gainCol.addView(label("${fmt(gain)} dB",if(phonePortrait)9f else 10f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(16)))
+        val gainValueLabel=label("${fmt(gain)} dB",if(phonePortrait)9f else 10f,Color.WHITE)
+        gainCol.addView(gainValueLabel,LinearLayout.LayoutParams(-1,dp(16)))
         gainCol.addView(LinearLayout(this),LinearLayout.LayoutParams(-1,dp(24)))
         
         if(modes["GAIN"]==true){
             val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;scheduleUpdate()}}
+                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()}}
                 override fun onStartTrackingTouch(b:SeekBar?){}
                 override fun onStopTrackingTouch(b:SeekBar?){}
             })}
             gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
         }else{
-            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"},titleInside=true),LinearLayout.LayoutParams(-1,masterDialHeight()))
+            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()},{"${fmt(gain)} dB"},titleInside=true),LinearLayout.LayoutParams(-1,masterDialHeight()))
         }
         row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
         row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
