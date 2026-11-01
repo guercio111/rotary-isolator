@@ -508,13 +508,13 @@ class MainActivity : Activity() {
         }
         if(compactMaster){
             val top=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            top.addView(gainCol,LinearLayout.LayoutParams(0,-1,1f))
-            top.addView(masterCompControl(),LinearLayout.LayoutParams(0,-1,1f))
+            top.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
+            top.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
             val bottom=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            bottom.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost},true),LinearLayout.LayoutParams(0,-1,1f))
-            bottom.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness},true),LinearLayout.LayoutParams(0,-1,1f))
-            box.addView(top,LinearLayout.LayoutParams(-1,0,1f))
-            box.addView(bottom,LinearLayout.LayoutParams(-1,0,1f))
+            bottom.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost},true),LinearLayout.LayoutParams(0,-2,1f))
+            bottom.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness},true),LinearLayout.LayoutParams(0,-2,1f))
+            box.addView(top,LinearLayout.LayoutParams(-1,-2))
+            box.addView(bottom,LinearLayout.LayoutParams(-1,-2))
         }else{
             val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
             row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
@@ -549,7 +549,7 @@ class MainActivity : Activity() {
         if(phonePortrait && !wideLayout){
             val section=(windowHeightDp()-64f)/2f
             val row=(section-18f)/2f
-            return dp((row-64f).roundToInt().coerceIn(32,88))
+            return dp((row-64f).roundToInt().coerceIn(24,88))
         }
         return (dialHeight()*0.82f).roundToInt()
     }
