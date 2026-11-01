@@ -297,8 +297,8 @@ class MainActivity : Activity() {
             if (view.width > 0 && view.height > 0) {
                 val newWide = view.width > view.height
                 val newPhone = min(view.width,view.height) / resources.displayMetrics.density < 600f
-                val resized = lastWindowWidthPx == 0 ||
-                    abs(view.width-lastWindowWidthPx) > dp(12) || abs(view.height-lastWindowHeightPx) > dp(12)
+                val resized = lastWindowWidthPx > 0 &&
+                    (abs(view.width-lastWindowWidthPx) > dp(12) || abs(view.height-lastWindowHeightPx) > dp(12))
                 lastWindowWidthPx=view.width
                 lastWindowHeightPx=view.height
                 if (newWide != wideLayout || newPhone != phonePortrait || resized) {
