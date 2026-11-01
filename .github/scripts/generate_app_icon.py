@@ -68,17 +68,17 @@ draw_mark(432, transparent=True).save(folder / "ic_launcher_foreground.png", opt
 folder=res / "mipmap-anydpi-v26"
 folder.mkdir(parents=True, exist_ok=True)
 (folder / "ic_launcher.xml").write_text(
-    '<?xml version="1.0" encoding="utf-8"?>\\n'
-    '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\\n'
-    '    <background android:drawable="@color/ic_launcher_background" />\\n'
-    '    <foreground android:drawable="@drawable/ic_launcher_foreground" />\\n'
-    '</adaptive-icon>\\n', encoding="utf-8")
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+    '    <background android:drawable="@color/ic_launcher_background" />\n'
+    '    <foreground android:drawable="@drawable/ic_launcher_foreground" />\n'
+    '</adaptive-icon>\n', encoding="utf-8")
 folder=res / "values"
 folder.mkdir(parents=True, exist_ok=True)
 colors=folder / "ic_launcher_background.xml"
 colors.write_text(
-    '<?xml version="1.0" encoding="utf-8"?>\\n'
-    '<resources><color name="ic_launcher_background">#000000</color></resources>\\n',
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<resources><color name="ic_launcher_background">#000000</color></resources>\n',
     encoding="utf-8")
 
 # Point both regular and round launcher entries at the new icon.
