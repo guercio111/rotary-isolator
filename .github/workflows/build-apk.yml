@@ -33,7 +33,10 @@ jobs:
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
       - name: Generate EQ launcher icon
-        run: python3 .github/scripts/generate_app_icon.py extracted/RotaryIsolator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pil
+          /usr/bin/python3 .github/scripts/generate_app_icon.py extracted/RotaryIsolator
 
       - name: Use maintained Kotlin source
         run: |
