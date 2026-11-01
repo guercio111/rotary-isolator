@@ -47,6 +47,8 @@ class MainActivity : Activity() {
     private var phonePortrait = false
     private var wideLayout = false
     private var layoutRebuildPending = false
+    private var lastWindowWidthPx = 0
+    private var lastWindowHeightPx = 0
     private var masterMode = 0
     private var bassBoost = 0f
     private var loudness = 0f
@@ -149,18 +151,23 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
+    private fun windowHeightDp():Float {
+        if (::container.isInitialized && container.height > 0) return container.height / resources.displayMetrics.density
+        val h=resources.configuration.screenHeightDp
+        return if(h>0)h.toFloat() else resources.displayMetrics.heightPixels/resources.displayMetrics.density
+    }
     private fun dialHeight():Int {
-        val h=resources.displayMetrics.heightPixels/resources.displayMetrics.density
-        // Keep the established tablet-landscape dimensions. Smaller phone windows
-        // use shorter dials so the complete four-section mixer remains visible.
-        return dp(when {
-            phonePortrait && wideLayout -> 112
+        val h=windowHeightDp()
+        // Tablet landscape keeps the established 168dp dial. On phones the dial
+        // height is calculated from the actual window so both orientations fit.
+        val value=when {
+            phonePortrait && wideLayout -> (((h-64f)/2f)-102f).roundToInt().coerceIn(28,112)
             wideLayout -> 168
-            phonePortrait && h<760f -> 136
-            phonePortrait -> 148
+            phonePortrait -> (((h-64f)/2f)-104f).roundToInt().coerceIn(40,148)
             h<700f -> 148
             else -> 160
-        })
+        }
+        return dp(value)
     }
 
     // Measure nested vertical stacks as well as their parent rows. This catches
@@ -290,7 +297,11 @@ class MainActivity : Activity() {
             if (view.width > 0 && view.height > 0) {
                 val newWide = view.width > view.height
                 val newPhone = min(view.width,view.height) / resources.displayMetrics.density < 600f
-                if (newWide != wideLayout || newPhone != phonePortrait) {
+                val resized = lastWindowWidthPx == 0 ||
+                    abs(view.width-lastWindowWidthPx) > dp(12) || abs(view.height-lastWindowHeightPx) > dp(12)
+                lastWindowWidthPx=view.width
+                lastWindowHeightPx=view.height
+                if (newWide != wideLayout || newPhone != phonePortrait || resized) {
                     wideLayout = newWide
                     phonePortrait = newPhone
                     if (!layoutRebuildPending) {
@@ -320,6 +331,10 @@ class MainActivity : Activity() {
         val active = if(key=="EQ") eqControlOn else isoControlOn
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(1))}
         val compactHeader = phonePortrait && !wideLayout
+        val actionReturnSize=if(compactHeader)18 else if(phonePortrait)24 else 42
+        val actionFlatSize=if(compactHeader)22 else if(phonePortrait)32 else 56
+        val actionGap=if(compactHeader)1 else if(phonePortrait)3 else 8
+        val actionHeight=if(compactHeader)24 else if(phonePortrait)36 else 58
         val header=LinearLayout(this).apply{orientation=if(compactHeader)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         header.addView(label(title,if(phonePortrait)9f else 10f,gold),if(compactHeader)LinearLayout.LayoutParams(-1,dp(20)) else LinearLayout.LayoutParams(0,dp(20),1f))
         val headerControls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
@@ -357,16 +372,16 @@ class MainActivity : Activity() {
             }
             col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
-            bandActions.addView(circleAction("↶",if(compactHeader)18 else 30) {
+            bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(if(compactHeader)18 else 42),dp(if(compactHeader)18 else 42)).apply{rightMargin=dp(if(compactHeader)1 else 8)})
-            bandActions.addView(circleAction("F",if(compactHeader)22 else 56) {
+            },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
+            bandActions.addView(circleAction("F",actionFlatSize) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f; scheduleUpdate(); refreshUi()
-            },LinearLayout.LayoutParams(dp(if(compactHeader)22 else 56),dp(if(compactHeader)22 else 56)))
-            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(if(compactHeader)24 else 58)))
+            },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
+            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(actionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
@@ -423,6 +438,10 @@ class MainActivity : Activity() {
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==2) resonance else filters[i]
             val compactFilter = phonePortrait && !wideLayout
+            val filterReturnSize=if(compactFilter)18 else if(phonePortrait)24 else 42
+            val filterFlatSize=if(compactFilter)22 else if(phonePortrait)32 else 56
+            val filterActionGap=if(compactFilter)1 else if(phonePortrait)3 else 8
+            val filterActionHeight=if(compactFilter)24 else if(phonePortrait)36 else 58
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",if(compactFilter)8f else 10f,Color.WHITE)
             val controlEnabled=filtersOn && (if(i==2) true else filterControlOn[i])
             val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
@@ -453,17 +472,17 @@ class MainActivity : Activity() {
             }
             col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterActions.addView(circleAction("↶",if(phonePortrait && !wideLayout)18 else 30){
+            filterActions.addView(circleAction("↶",filterReturnSize){
                 val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=old else filters[i]=old
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)18 else 42),dp(if(phonePortrait && !wideLayout)18 else 42)).apply{rightMargin=dp(if(phonePortrait && !wideLayout)1 else 8)})
-            filterActions.addView(circleAction("F",if(phonePortrait && !wideLayout)22 else 56){
+            },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
+            filterActions.addView(circleAction("F",filterFlatSize){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
                 scheduleUpdate();refreshUi()
-            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)22 else 56),dp(if(phonePortrait && !wideLayout)22 else 56)))
-            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(if(phonePortrait && !wideLayout)24 else 58)))
+            },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
+            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row);parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
@@ -526,7 +545,14 @@ class MainActivity : Activity() {
         return col
     }
 
-    private fun masterDialHeight():Int = if(phonePortrait && !wideLayout) dp(88) else (dialHeight()*0.82f).roundToInt()
+    private fun masterDialHeight():Int {
+        if(phonePortrait && !wideLayout){
+            val section=(windowHeightDp()-64f)/2f
+            val row=(section-18f)/2f
+            return dp((row-64f).roundToInt().coerceIn(32,88))
+        }
+        return (dialHeight()*0.82f).roundToInt()
+    }
 
     private fun masterCompControl():View{
         val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
