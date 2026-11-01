@@ -39,10 +39,8 @@ def draw_mark(size, transparent=False):
         radius=23*scale, fill=black)
     d.rounded_rectangle((322*scale,239*scale,387*scale,362*scale),
         radius=23*scale, fill=black)
-    d.rounded_rectangle((140*scale,251*scale,177*scale,347*scale),
-        radius=13*scale, fill=yellow)
-    d.rounded_rectangle((335*scale,251*scale,372*scale,347*scale),
-        radius=13*scale, fill=yellow)
+    d.rectangle((140*scale,251*scale,177*scale,347*scale), fill=yellow)
+    d.rectangle((335*scale,251*scale,372*scale,347*scale), fill=yellow)
     # Bold EQ lettering
     f=font(int(105*scale))
     box=d.textbbox((0,0),"EQ",font=f,stroke_width=0)
