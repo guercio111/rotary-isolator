@@ -14,7 +14,9 @@ import android.view.Gravity
 import android.widget.FrameLayout
 import android.view.MotionEvent
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
+import android.os.Process
 import android.view.View
 import android.widget.*
 import kotlin.math.*
@@ -23,6 +25,7 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
     private var audioReady = false
+    private var appEnabled = true
     private var compact = false
     private var uiScale = 1.0f
     private var skin = 0
@@ -62,6 +65,8 @@ class MainActivity : Activity() {
     private val isoControlOn = BooleanArray(3) { true }
     private val filterControlOn = BooleanArray(2) { true }
     private val handler = Handler(Looper.getMainLooper())
+    private val dspThread = HandlerThread("Frequalizer-DSP", Process.THREAD_PRIORITY_AUDIO).apply { start() }
+    private val dspHandler = Handler(dspThread.looper)
     private val dspUpdate = Runnable { applyDspNow() }
     private val saveUpdate = Runnable { save() }
     private val modes = mutableMapOf("EQ" to false, "ISOLATOR" to false, "FILTERS" to false, "GAIN" to false)
@@ -76,6 +81,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        appEnabled = prefs.getBoolean("app_enabled", true)
         compact = prefs.getBoolean("mini", false)
         verticalLayout = prefs.getBoolean("vertical_layout", false)
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -192,8 +198,18 @@ class MainActivity : Activity() {
             addView(txt,LinearLayout.LayoutParams(-2,dp(24)))
         }
     }
+    private fun appPowerControl():Button = Button(this).apply {
+        fun paintState(){
+            text=if(appEnabled)"● ON" else "● OFF"
+            backgroundTintList=ColorStateList.valueOf(if(appEnabled)Color.rgb(25,150,65) else Color.rgb(190,35,42))
+        }
+        textSize=11f;isAllCaps=false;setTextColor(Color.WHITE);minHeight=dp(30);minimumHeight=dp(30)
+        setPadding(dp(3),0,dp(3),0);paintState();contentDescription="Interruttore generale audio"
+        setOnClickListener { appEnabled=!appEnabled;paintState();save();scheduleUpdate() }
+    }
+
     private fun save() {
-        prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
+        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
@@ -209,6 +225,7 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         titleBar.addView(label("ROTARY ISOLATOR", if(phonePortrait)15f else if(compact) 16f else 20f,Color.WHITE),LinearLayout.LayoutParams(0,dp(if(phonePortrait)28 else 32),1f))
+        titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(phonePortrait)72 else 82),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(4)})
         titleBar.addView(TextView(this).apply { text="⚙"; textSize=23f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(46),dp(if(phonePortrait)30 else 36)))
         root.addView(titleBar)
         root.addView(label("MASTER PROCESSING  •  V10 / XONE CONCEPT",if(phonePortrait)7f else 8f,gold),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)12 else 17)))
@@ -244,8 +261,8 @@ class MainActivity : Activity() {
     private fun scheduleUpdate() {
         // Update DSP at display cadence; persist settings off the hot interaction path.
         // Give audio parameter changes priority over UI work and persistence.
-        handler.removeCallbacks(dspUpdate)
-        handler.postAtFrontOfQueue(dspUpdate)
+        dspHandler.removeCallbacks(dspUpdate)
+        dspHandler.postAtFrontOfQueue(dspUpdate)
         handler.removeCallbacks(saveUpdate)
         handler.postDelayed(saveUpdate, 220L)
     }
@@ -498,9 +515,10 @@ class MainActivity : Activity() {
                 val lim=DynamicsProcessing.Limiter(true,true,0,5f,80f,20f,-1f,0f)
                 fx.setLimiterAllChannelsTo(lim)
             }
-            fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn
-            status.text=if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
-        }catch(t:Throwable){status.text="Audio DSP non supportato dal driver del dispositivo"}
+            fx.enabled=appEnabled && (eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn)
+            val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
+            runOnUiThread { if(::status.isInitialized) status.text=message }
+        }catch(t:Throwable){runOnUiThread { if(::status.isInitialized) status.text="Audio DSP non supportato dal driver del dispositivo" }}
     }
 
     private fun showOptions(){
@@ -551,7 +569,10 @@ class MainActivity : Activity() {
         dpEffect=null;connectAudio()
     }
     private fun fmt(v:Float)="%.1f".format(v)
-    override fun onDestroy(){try{dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){};super.onDestroy()}
+    override fun onDestroy(){
+        try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
+        super.onDestroy()
+    }
 }
 
 private class RotaryControl(
