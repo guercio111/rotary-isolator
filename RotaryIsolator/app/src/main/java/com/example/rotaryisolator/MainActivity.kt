@@ -200,10 +200,11 @@ class MainActivity : Activity() {
     }
 
     private fun roundAction(symbol:String, caption:String, active:Boolean=true, action:()->Unit):View {
+        val narrowPhone = phonePortrait && !wideLayout
         return LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
             val dot=TextView(this@MainActivity).apply {
-                text=symbol;gravity=Gravity.CENTER;textSize=if(symbol=="F")10f else 13f
+                text=symbol;gravity=Gravity.CENTER;textSize=if(symbol=="F")9f else 11f
                 setTextColor(Color.WHITE)
                 background=android.graphics.drawable.GradientDrawable().apply {
                     shape=android.graphics.drawable.GradientDrawable.OVAL
@@ -212,10 +213,10 @@ class MainActivity : Activity() {
                 }
                 setOnClickListener { action() }
             }
-            addView(dot,LinearLayout.LayoutParams(dp(26),dp(24)))
+            addView(dot,LinearLayout.LayoutParams(dp(if(narrowPhone)18 else 26),dp(if(narrowPhone)20 else 24)))
             val txt=TextView(this@MainActivity).apply {
-                text=caption;textSize=9f;setTextColor(Color.WHITE);gravity=Gravity.CENTER_VERTICAL
-                setPadding(dp(5),0,dp(3),0);setOnClickListener { action() }
+                text=caption;textSize=if(narrowPhone)8f else 9f;setTextColor(Color.WHITE);gravity=Gravity.CENTER_VERTICAL
+                setPadding(dp(if(narrowPhone)3 else 5),0,dp(2),0);setOnClickListener { action() }
             }
             addView(txt,LinearLayout.LayoutParams(-2,dp(24)))
         }
@@ -302,8 +303,10 @@ class MainActivity : Activity() {
     private fun addSection(key:String,title:String,values:FloatArray,range:ClosedFloatingPointRange<Float>,enabled:()->Boolean,parent:LinearLayout=content) {
         val active = if(key=="EQ") eqControlOn else isoControlOn
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(1))}
-        val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        header.addView(label(title,if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(20),1f))
+        val compactHeader = phonePortrait && !wideLayout
+        val header=LinearLayout(this).apply{orientation=if(compactHeader)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        header.addView(label(title,if(phonePortrait)9f else 10f,gold),if(compactHeader)LinearLayout.LayoutParams(-1,dp(20)) else LinearLayout.LayoutParams(0,dp(20),1f))
+        val headerControls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         box.addView(header)
         val useVerticalRows=false
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
@@ -315,7 +318,7 @@ class MainActivity : Activity() {
             val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             controlHeader.addView(vLabel,LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 28),1f))
-            col.addView(controlHeader,LinearLayout.LayoutParams(-1,dp(24)))
+            col.addView(controlHeader,LinearLayout.LayoutParams(-1,dp(if(compactHeader)30 else 24)))
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
@@ -338,24 +341,24 @@ class MainActivity : Activity() {
             }
             col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
-            bandActions.addView(circleAction("↶",30) {
+            bandActions.addView(circleAction("↶",if(compactHeader)22 else 30) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old; save(); refreshUi(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(42),dp(42)).apply{rightMargin=dp(8)})
-            bandActions.addView(circleAction("F",56) {
+            },LinearLayout.LayoutParams(dp(if(compactHeader)24 else 42),dp(if(compactHeader)24 else 42)).apply{rightMargin=dp(if(compactHeader)3 else 8)})
+            bandActions.addView(circleAction("F",if(compactHeader)28 else 56) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f; scheduleUpdate(); refreshUi()
-            },LinearLayout.LayoutParams(dp(56),dp(56)))
-            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(58)))
+            },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 56),dp(if(compactHeader)30 else 56)))
+            col.addView(bandActions,LinearLayout.LayoutParams(-1,dp(if(compactHeader)32 else 58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
-        header.addView(circleAction("↶",26) {
+        headerControls.addView(circleAction("↶",if(compactHeader)22 else 26) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..2)values[i]=previous[i]
             save();refreshUi();scheduleUpdate()
-        },LinearLayout.LayoutParams(dp(28),dp(28)).apply{rightMargin=dp(5)})
+        },LinearLayout.LayoutParams(dp(if(compactHeader)24 else 28),dp(if(compactHeader)24 else 28)).apply{rightMargin=dp(5)})
         val sectionPower = Button(this).apply {
             fun paintState() {
                 val on = if(key=="EQ") eqOn else isoOn
@@ -364,8 +367,8 @@ class MainActivity : Activity() {
                     if(on) Color.rgb(25,150,65) else Color.rgb(190,35,42)
                 )
             }
-            textSize=9f; isAllCaps=false; setTextColor(Color.WHITE)
-            minHeight=dp(27); minimumHeight=dp(27)
+            textSize=if(compactHeader)8f else 9f; isAllCaps=false; setTextColor(Color.WHITE)
+            minHeight=dp(if(compactHeader)24 else 27); minimumHeight=dp(if(compactHeader)24 else 27)
             setPadding(dp(3),0,dp(3),0)
             paintState()
             contentDescription = "$key on/off"
@@ -379,12 +382,13 @@ class MainActivity : Activity() {
                 refreshUi()
             }
         }
-        header.addView(sectionPower,LinearLayout.LayoutParams(dp(48),dp(28)).apply{rightMargin=dp(5)})
-        header.addView(circleAction("F",38) {
+        headerControls.addView(sectionPower,LinearLayout.LayoutParams(dp(if(compactHeader)38 else 48),dp(if(compactHeader)24 else 28)).apply{rightMargin=dp(5)})
+        headerControls.addView(circleAction("F",if(compactHeader)28 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..2){previous[i]=values[i];values[i]=0f}
             scheduleUpdate();refreshUi()
-        },LinearLayout.LayoutParams(dp(38),dp(38)))
+        },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
+        header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(30)) else LinearLayout.LayoutParams(-2,dp(38)))
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
     }
 
@@ -432,31 +436,30 @@ class MainActivity : Activity() {
             }
             col.addView(controlRow,LinearLayout.LayoutParams(-1,dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterActions.addView(circleAction("↶",30){
+            filterActions.addView(circleAction("↶",if(phonePortrait && !wideLayout)22 else 30){
                 val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=old else filters[i]=old
                 save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(42),dp(42)).apply{rightMargin=dp(8)})
-            filterActions.addView(circleAction("F",56){
+            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)24 else 42),dp(if(phonePortrait && !wideLayout)24 else 42)).apply{rightMargin=dp(if(phonePortrait && !wideLayout)3 else 8)})
+            filterActions.addView(circleAction("F",if(phonePortrait && !wideLayout)28 else 56){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
                 scheduleUpdate();refreshUi()
-            },LinearLayout.LayoutParams(dp(56),dp(56)))
-            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(58)))
+            },LinearLayout.LayoutParams(dp(if(phonePortrait && !wideLayout)30 else 56),dp(if(phonePortrait && !wideLayout)30 else 56)))
+            col.addView(filterActions,LinearLayout.LayoutParams(-1,dp(if(phonePortrait && !wideLayout)32 else 58)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(if(compact)150 else 178)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row);parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
     }
 
     private fun addGainSection(parent:LinearLayout=content){
-        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 3),dp(if(phonePortrait)1 else 4),dp(2))}
-        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(20)))
-        val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
+        val compactMaster = phonePortrait && !wideLayout
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(2))}
+        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(compactMaster)7.5f else if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(if(compactMaster)18 else 20)))
         val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
         val gainValueLabel=label("${fmt(gain)} dB",if(phonePortrait)9f else 10f,Color.WHITE)
         gainCol.addView(gainValueLabel,LinearLayout.LayoutParams(-1,dp(16)))
         gainCol.addView(LinearLayout(this),LinearLayout.LayoutParams(-1,dp(24)))
-        
         if(modes["GAIN"]==true){
             val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
                 override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()}}
@@ -467,34 +470,46 @@ class MainActivity : Activity() {
         }else{
             gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()},{"${fmt(gain)} dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
         }
-        row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
-        row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
-        row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
-        row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
-        box.addView(row)
+        if(compactMaster){
+            val top=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            top.addView(gainCol,LinearLayout.LayoutParams(0,-1,1f))
+            top.addView(masterCompControl(),LinearLayout.LayoutParams(0,-1,1f))
+            val bottom=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            bottom.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost},true),LinearLayout.LayoutParams(0,-1,1f))
+            bottom.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness},true),LinearLayout.LayoutParams(0,-1,1f))
+            box.addView(top,LinearLayout.LayoutParams(-1,0,1f))
+            box.addView(bottom,LinearLayout.LayoutParams(-1,0,1f))
+        }else{
+            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
+            row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
+            box.addView(row)
+        }
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
     }
 
     private fun masterToneControl(
         title:String,value:Float,enabled:Boolean,setValue:(Float)->Unit,setEnabled:(Boolean)->Unit,
-        remember:()->Unit,restore:()->Unit
+        remember:()->Unit,restore:()->Unit,compactActions:Boolean=false
     ):View{
         val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
         col.addView(label("${value.roundToInt()}%",if(phonePortrait)9f else 10f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(16)))
-        val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        val actions=LinearLayout(this).apply{orientation=if(compactActions)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         actions.addView(roundAction("",if(enabled)"ON" else "OFF",enabled){
             setEnabled(!enabled);save();refreshUi();scheduleUpdate()
         })
         actions.addView(roundAction("↶","RETURN",true){
             restore();save();refreshUi();scheduleUpdate()
         })
-        col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)48 else 24)))
         col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
             LinearLayout.LayoutParams(-1,masterDialHeight()))
         return col
     }
 
-    private fun masterDialHeight():Int = (dialHeight()*0.82f).roundToInt()
+    private fun masterDialHeight():Int = if(phonePortrait && !wideLayout) dp(88) else (dialHeight()*0.82f).roundToInt()
 
     private fun masterCompControl():View{
         val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
