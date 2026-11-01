@@ -30,6 +30,8 @@ class MainActivity : Activity() {
     private var uiScale = 1.0f
     private var skin = 0
     private var limiterOn = true
+    private var mouseWheelAdjustOn = false
+    private var mouseWheelSensitivity = 4f
     private var compressorOn = false
     private var compThreshold = -18f
     private var compRatio = 3f
@@ -97,6 +99,8 @@ class MainActivity : Activity() {
         phonePortrait = (dm.widthPixels / dm.density) < 600f && dm.heightPixels > dm.widthPixels
         wideLayout = !phonePortrait && dm.widthPixels > dm.heightPixels
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
+        mouseWheelAdjustOn = prefs.getBoolean("mouse_wheel_adjust_on", false)
+        mouseWheelSensitivity = prefs.getFloat("mouse_wheel_sensitivity", 4f).coerceIn(1f,10f)
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
         compressorOn = prefs.getBoolean("compressor_on", false)
@@ -212,7 +216,7 @@ class MainActivity : Activity() {
     }
 
     private fun save() {
-        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
+        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
@@ -300,7 +304,7 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]})
+                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=active[i]
                 val midBand = key=="EQ" && eqDoubleMid && (i==1 || i==3)
                 val knobParams = if(midBand) LinearLayout.LayoutParams((dialHeight()*0.78f).toInt(),dialHeight()) else LinearLayout.LayoutParams(-1,dialHeight())
@@ -396,7 +400,7 @@ class MainActivity : Activity() {
                     if(i==2)resonance=v else filters[i]=v
                     l.text=names[i]+"  "+(v*100).roundToInt()+"%"
                     scheduleUpdate()
-                },{((if(i==2)resonance else filters[i])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==2)resonance else filters[i]})
+                },{((if(i==2)resonance else filters[i])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==2)resonance else filters[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=controlEnabled
                 controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
             }
@@ -435,7 +439,7 @@ class MainActivity : Activity() {
             })}
             gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
         }else{
-            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()},{"${fmt(gain)} dB"},titleInside=true),LinearLayout.LayoutParams(-1,masterDialHeight()))
+            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()},{"${fmt(gain)} dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
         }
         row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
         row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
@@ -459,7 +463,7 @@ class MainActivity : Activity() {
             restore();save();refreshUi();scheduleUpdate()
         })
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
-        col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember),
+        col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
             LinearLayout.LayoutParams(-1,masterDialHeight()))
         return col
     }
@@ -480,7 +484,7 @@ class MainActivity : Activity() {
         col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,gold,{v->
             compMakeup=v.coerceIn(0f,100f)
             scheduleUpdate()
-        },{"${compMakeup.roundToInt()}%"}),LinearLayout.LayoutParams(-1,masterDialHeight()))
+        },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
         return col
     }
 
@@ -597,6 +601,31 @@ class MainActivity : Activity() {
             }
         }
         limiterRow.addView(toggle);panel.addView(limiterRow)
+        val wheelTitle=label("ROTELLINA MOUSE • VELOCITÀ POTENZIOMETRI",13f,Color.WHITE)
+        panel.addView(wheelTitle,LinearLayout.LayoutParams(-1,dp(34)))
+        val wheelRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(2),dp(8),dp(2))}
+        wheelRow.addView(label("Attiva regolazione con rotellina",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
+        val wheelSwitch=Switch(this).apply{
+            isChecked=mouseWheelAdjustOn
+            setOnCheckedChangeListener{_,checked->mouseWheelAdjustOn=checked;save()}
+        }
+        wheelRow.addView(wheelSwitch);panel.addView(wheelRow)
+        val wheelValue=label("Velocità: ${mouseWheelSensitivity.roundToInt()}x",12f,gold)
+        panel.addView(wheelValue,LinearLayout.LayoutParams(-1,dp(28)))
+        val wheelSeek=SeekBar(this).apply{
+            max=9;progress=(mouseWheelSensitivity.roundToInt()-1).coerceIn(0,9);isEnabled=mouseWheelAdjustOn
+            setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                override fun onProgressChanged(seek:SeekBar?,progress:Int,fromUser:Boolean){
+                    if(fromUser){mouseWheelSensitivity=(progress+1).toFloat();wheelValue.text="Velocità: ${mouseWheelSensitivity.roundToInt()}x";save()}
+                }
+                override fun onStartTrackingTouch(seek:SeekBar?){}
+                override fun onStopTrackingTouch(seek:SeekBar?){}
+            })
+        }
+        panel.addView(wheelSeek,LinearLayout.LayoutParams(-1,dp(42)))
+        wheelSwitch.setOnCheckedChangeListener{_,checked->
+            mouseWheelAdjustOn=checked;wheelSeek.isEnabled=checked;save()
+        }
         val doubleMidRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(4))}
         doubleMidRow.addView(label("EQ • DOPPIO MEDIO (XONE 92)",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
         val doubleMidSwitch=Switch(this).apply{isChecked=eqDoubleMid;setOnCheckedChangeListener{_,checked->eqDoubleMid=checked;save();refreshUi();applyDsp()}}
@@ -625,7 +654,8 @@ private class RotaryControl(
     private val valueText:()->String,
     private val onStart:()->Unit = {},
     private val onEnd:()->Unit = {},
-    private val titleInside:Boolean = false
+    private val titleInside:Boolean = false,
+    private val wheelMultiplier:()->Float = {1f}
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -701,7 +731,7 @@ private class RotaryControl(
     override fun onGenericMotionEvent(e:MotionEvent):Boolean{
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
-            v=(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f).coerceIn(minV,maxV)
+            v=(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f)).coerceIn(minV,maxV)
             changed(v);invalidate();onEnd();return true
         }
         return super.onGenericMotionEvent(e)
