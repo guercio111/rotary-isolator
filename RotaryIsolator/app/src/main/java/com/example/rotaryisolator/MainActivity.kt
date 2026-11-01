@@ -172,8 +172,9 @@ class MainActivity : Activity() {
         gravity=Gravity.CENTER; contentDescription=if(symbol=="F")"Flat" else "Return"
         background=android.graphics.drawable.GradientDrawable().apply {
             shape=android.graphics.drawable.GradientDrawable.OVAL
-            setColor(Color.rgb(195,30,40)); setStroke(dp(1),Color.rgb(245,90,90))
+            setColor(Color.rgb(255,205,0)); setStroke(dp(1),Color.rgb(255,235,100))
         }
+        setTextColor(Color.BLACK)
         setOnClickListener{action()}
     }
 
@@ -185,8 +186,8 @@ class MainActivity : Activity() {
                 setTextColor(Color.WHITE)
                 background=android.graphics.drawable.GradientDrawable().apply {
                     shape=android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(if(active)Color.rgb(205,35,43) else Color.rgb(75,43,46))
-                    setStroke(dp(1),if(active)Color.rgb(245,95,95) else Color.rgb(130,70,70))
+                    setColor(if(active)Color.rgb(25,150,65) else Color.rgb(190,35,42))
+                    setStroke(dp(1),if(active)Color.rgb(100,230,130) else Color.rgb(245,100,105))
                 }
                 setOnClickListener { action() }
             }
