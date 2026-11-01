@@ -1,10 +1,7 @@
 from pathlib import Path
 import sys
-import subprocess
-
 # Generate the launcher artwork in all legacy densities and as an Android
-# adaptive icon. Pillow is installed here so the build stays reproducible.
-subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", "Pillow"])
+# adaptive icon. Pillow is provided by the Ubuntu runner's python3-pil package.
 from PIL import Image, ImageDraw, ImageFont
 
 root = Path(sys.argv[1])
