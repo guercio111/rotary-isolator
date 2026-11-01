@@ -347,6 +347,9 @@ class MainActivity : Activity() {
         // In tablet portrait, stack LOW / MID / HIGH as full-width mixer strips.
         // Phone layouts keep their compact three-column arrangement.
         val useVerticalRows=!wideLayout && !phonePortrait
+        // On tablet portrait, size the three strips from the real quadrant height.
+        // This avoids oversized fixed rows forcing the whole interface to shrink.
+        val verticalRowHeight = ((windowHeightDp()/2f-42f)/3f).roundToInt().coerceIn(96,140)
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
         val indices = if(key=="EQ" && eqDoubleMid) listOf(0,1,3,2) else listOf(0,1,2)
         val names = if(key=="EQ" && eqDoubleMid) listOf("LOW","MID LOW","MID HIGH","HIGH") else listOf("LOW","MID","HIGH")
@@ -389,7 +392,7 @@ class MainActivity : Activity() {
                 values[i]=0f; scheduleUpdate(); refreshUi()
             },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
-            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(138)) else LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(verticalRowHeight)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
         headerControls.addView(circleAction("↶",if(compactHeader)22 else 26) {
@@ -439,6 +442,8 @@ class MainActivity : Activity() {
         })
         box.addView(filterTitle)
         val useVerticalRows=!wideLayout && !phonePortrait
+        // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
+        val verticalRowHeight = ((windowHeightDp()/2f-42f)/3f).roundToInt().coerceIn(96,140)
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
         val names=listOf("HPF","LPF","RESONANCE")
         for(i in 0..2){
@@ -490,7 +495,7 @@ class MainActivity : Activity() {
                 scheduleUpdate();refreshUi()
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
             col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
-            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(138)) else LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(verticalRowHeight)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row);parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
     }
