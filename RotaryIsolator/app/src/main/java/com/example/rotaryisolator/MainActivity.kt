@@ -2,6 +2,7 @@ package com.example.rotaryisolator
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.pm.ActivityInfo
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -86,6 +87,9 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Explicitly follow the physical sensor in both portrait and landscape.
+        // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         compact = prefs.getBoolean("mini", false)
