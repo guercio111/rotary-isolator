@@ -478,21 +478,18 @@ class MainActivity : Activity() {
                 fx.setPostEqBandByChannelIndex(ch,2,DynamicsProcessing.EqBand(true,20000f,high+masterHigh))
             }
             fx.setInputGainAllChannelsTo(gain.coerceIn(-12f,12f))
-            // Fixed, music-oriented compressor: moderate 3:1 ratio, -18 dB threshold,
-            // 10 ms attack and 150 ms release. The single COMP control is the make-up
-            // amount (0..100% mapped to 0..12 dB). OFF uses a neutral 1:1 band with
-            // zero make-up, so it bypasses compression without relying on the driver's
-            // sometimes-unreliable MBC enabled toggle.
-            // The lower half of the knob is a true neutral zone: it no longer
-            // applies compression or makeup, because the user found that range
-            // reduces perceived loudness. From 50% to 100%, the useful range
-            // maps to 6..12 dB makeup with the same fixed 3:1 compressor.
-            val compActive = compressorOn && compMakeup >= 50f
-            val makeupDb = (compMakeup.coerceIn(50f,100f) / 100f) * 12f
+            // Smooth single-knob compressor curve: at 0% the band is neutral;
+            // as COMP rises, compression ratio and make-up gain both increase
+            // continuously, reaching the tuned 3:1 / +12 dB setting at 100%.
+            // Attack, release and threshold remain fixed for consistent behavior.
+            val compLevel = (compMakeup.coerceIn(0f,100f) / 100f)
+            val compActive = compressorOn && compLevel > 0f
+            val compRatioNow = 1f + 2f * compLevel
+            val makeupDb = 12f * compLevel
             val compBand = DynamicsProcessing.MbcBand(
                 true,20000f,10f,150f,
-                if(compActive) 3f else 1f,
-                if(compActive) -18f else 0f,
+                if(compActive) compRatioNow else 1f,
+                -18f,
                 6f,-90f,1f,0f,
                 if(compActive) makeupDb else 0f
             )
