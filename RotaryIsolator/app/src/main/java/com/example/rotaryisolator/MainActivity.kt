@@ -458,8 +458,13 @@ class MainActivity : Activity() {
                 fx.setPostEqBandByChannelIndex(ch,2,DynamicsProcessing.EqBand(true,20000f,high+masterHigh))
             }
             fx.setInputGainAllChannelsTo(gain.coerceIn(-12f,12f))
-            val compBand = DynamicsProcessing.MbcBand(compressorOn,20000f,compAttack,compRelease,compRatio,compThreshold,6f,-90f,1f,0f,compMakeup)
-            fx.setMbcBandAllChannelsTo(0,compBand)
+            // Apply the compressor state explicitly to both stereo channels.
+            // Keeping the band configured while disabled makes the ON/OFF switch a true bypass.
+            val compBand = DynamicsProcessing.MbcBand(
+                compressorOn,20000f,compAttack,compRelease,compRatio,compThreshold,
+                6f,-90f,1f,0f,compMakeup
+            )
+            for(ch in 0..1) fx.setMbcBandByChannelIndex(ch,0,compBand)
             if(limiterOn){
                 val lim=DynamicsProcessing.Limiter(true,true,0,5f,80f,20f,-1f,0f)
                 fx.setLimiterAllChannelsTo(lim)
@@ -555,7 +560,13 @@ class MainActivity : Activity() {
             rotaryMode=!rotaryMode
             rebuildControls()
         }
-        state.setOnCheckedChangeListener{_,checked->compressorOn=checked;save();scheduleUpdate()}
+        state.setOnCheckedChangeListener{_,checked->
+            compressorOn=checked
+            save()
+            // Apply the bypass/enable change immediately instead of waiting in the DSP queue.
+            handler.removeCallbacks(dspUpdate)
+            applyDspNow()
+        }
         rebuildControls()
         val dialog=AlertDialog.Builder(this)
             .setTitle("COMPRESSOR • MASTER")
