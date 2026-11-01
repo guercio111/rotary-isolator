@@ -537,7 +537,10 @@ class MainActivity : Activity() {
                     })
                 }
             } else RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-            box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            // Reserve the same action-column width used by the other MASTER rows,
+            // so the GAIN dial shares their exact horizontal alignment.
+            val gainSpacer=View(this).apply{isClickable=false}
+            box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial,listOf(gainSpacer)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
             val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,gold,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
                 compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()
@@ -602,7 +605,7 @@ class MainActivity : Activity() {
         })
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)48 else 24)))
         col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
-            LinearLayout.LayoutParams(-1,masterDialHeight()))
+            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
         return col
     }
 
@@ -630,7 +633,8 @@ class MainActivity : Activity() {
         col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,gold,{v->
             compMakeup=v.coerceIn(0f,100f)
             scheduleUpdate()
-        },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
+        },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
+            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
         return col
     }
 
