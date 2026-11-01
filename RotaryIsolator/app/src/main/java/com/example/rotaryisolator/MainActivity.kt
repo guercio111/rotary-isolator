@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     private var gain = 0f
     private var resonance = 0f
     private var verticalLayout = false
+    private var layoutModeSet = false
     private var phonePortrait = false
     private var wideLayout = false
     private var masterMode = 0
@@ -87,6 +88,7 @@ class MainActivity : Activity() {
         appEnabled = prefs.getBoolean("app_enabled", true)
         compact = prefs.getBoolean("mini", false)
         verticalLayout = prefs.getBoolean("vertical_layout", false)
+        layoutModeSet = prefs.getBoolean("layout_mode_set", false)
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
         bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
         loudness = prefs.getFloat("loudness", 0f).coerceIn(0f,100f)
@@ -97,7 +99,8 @@ class MainActivity : Activity() {
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         val dm = resources.displayMetrics
         phonePortrait = (dm.widthPixels / dm.density) < 600f && dm.heightPixels > dm.widthPixels
-        wideLayout = !phonePortrait && dm.widthPixels > dm.heightPixels
+        wideLayout = if (layoutModeSet) !verticalLayout else dm.widthPixels > dm.heightPixels
+        verticalLayout = !wideLayout
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         mouseWheelAdjustOn = prefs.getBoolean("mouse_wheel_adjust_on", false)
         mouseWheelSensitivity = prefs.getFloat("mouse_wheel_sensitivity", 4f).coerceIn(1f,10f)
@@ -158,13 +161,41 @@ class MainActivity : Activity() {
         })
     }
 
-    // Recalculate after both the window and the complete mixer have been measured.
-    // Do not scale the whole mixer: it clips text and controls. Scroll the center instead.
+    // Fit the complete mixer to the available window. The same uniform scale is
+    // applied to labels, controls and buttons, including when a floating window resizes.
     private fun fitUiToWindow() {
-        if (!::root.isInitialized) return
-        root.scaleX = 1f
-        root.scaleY = 1f
-        root.translationX = 0f
+        if (!::root.isInitialized || !::container.isInitialized || container.width <= 0 || container.height <= 0) return
+        var requiredHeight = root.paddingTop + root.paddingBottom
+        if (wideLayout) {
+            var scaleLimit = 1f
+            for (section in sections.values) {
+                if (section.height <= 0) continue
+                var sectionContent = 0
+                for (i in 0 until section.childCount) sectionContent += section.getChildAt(i).measuredHeight
+                if (sectionContent > 0) scaleLimit = min(scaleLimit, section.height.toFloat() / sectionContent.toFloat())
+            }
+            requiredHeight = container.height
+            val scale = scaleLimit.coerceIn(0.55f, 1f)
+            root.pivotX = 0f
+            root.pivotY = 0f
+            root.scaleX = scale
+            root.scaleY = scale
+            root.translationX = (container.width - root.width * scale) / 2f
+            root.translationY = 0f
+            return
+        }
+        for (i in 0 until root.childCount) {
+            val child = root.getChildAt(i)
+            if (child === content) {
+                for (j in 0 until content.childCount) requiredHeight += content.getChildAt(j).measuredHeight
+            } else requiredHeight += child.measuredHeight
+        }
+        val scale = (container.height.toFloat() / requiredHeight.coerceAtLeast(1)).coerceIn(0.55f, 1f)
+        root.pivotX = 0f
+        root.pivotY = 0f
+        root.scaleX = scale
+        root.scaleY = scale
+        root.translationX = (container.width - root.width * scale) / 2f
         root.translationY = 0f
     }
 
@@ -216,7 +247,7 @@ class MainActivity : Activity() {
     }
 
     private fun save() {
-        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
+        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putBoolean("layout_mode_set",layoutModeSet).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
@@ -231,7 +262,23 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
-        val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+        val layoutButton=Button(this).apply {
+            text=if(wideLayout) "ORIZZONTALE" else "VERTICALE"
+            textSize=if(phonePortrait)9f else 10f;isAllCaps=false;setTextColor(Color.WHITE)
+            minHeight=dp(30);minimumHeight=dp(30);setPadding(dp(5),0,dp(5),0)
+            backgroundTintList=ColorStateList.valueOf(Color.rgb(65,72,84))
+            contentDescription="Cambia disposizione orizzontale o verticale"
+            setOnClickListener {
+                wideLayout=!wideLayout
+                verticalLayout=!wideLayout
+                layoutModeSet=true
+                save()
+                refreshUi()
+            }
+        }
+        titleBar.addView(layoutButton,LinearLayout.LayoutParams(dp(if(phonePortrait)108 else 124),dp(if(phonePortrait)30 else 34)))
+        titleBar.addView(View(this),LinearLayout.LayoutParams(0,1,1f))
         titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(phonePortrait)72 else 82),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(5)})
         titleBar.addView(TextView(this).apply { text="⚙"; textSize=23f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(46),dp(if(phonePortrait)30 else 36)))
         root.addView(titleBar)
