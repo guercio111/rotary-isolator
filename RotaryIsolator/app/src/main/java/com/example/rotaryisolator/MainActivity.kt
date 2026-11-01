@@ -319,7 +319,31 @@ class MainActivity : Activity() {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..2)values[i]=previous[i]
             save();refreshUi();scheduleUpdate()
-        },LinearLayout.LayoutParams(dp(28),dp(28)).apply{rightMargin=dp(8)})
+        },LinearLayout.LayoutParams(dp(28),dp(28)).apply{rightMargin=dp(5)})
+        val sectionPower = Button(this).apply {
+            fun paintState() {
+                val on = if(key=="EQ") eqOn else isoOn
+                text = if(on) "ON" else "OFF"
+                backgroundTintList = ColorStateList.valueOf(
+                    if(on) Color.rgb(25,150,65) else Color.rgb(190,35,42)
+                )
+            }
+            textSize=9f; isAllCaps=false; setTextColor(Color.WHITE)
+            minHeight=dp(27); minimumHeight=dp(27)
+            setPadding(dp(3),0,dp(3),0)
+            paintState()
+            contentDescription = "$key on/off"
+            setOnClickListener {
+                if(key=="EQ") eqOn=!eqOn else isoOn=!isoOn
+                paintState()
+                save(); scheduleUpdate()
+                val activeNow = if(key=="EQ") eqOn else isoOn
+                status.text = if(activeNow) "$key ON" else "$key OFF"
+                // Refresh band controls to reflect the section state.
+                refreshUi()
+            }
+        }
+        header.addView(sectionPower,LinearLayout.LayoutParams(dp(48),dp(28)).apply{rightMargin=dp(5)})
         header.addView(circleAction("F",38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..2){previous[i]=values[i];values[i]=0f}
@@ -538,17 +562,6 @@ class MainActivity : Activity() {
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
         }
-        val scaleLabel=label("SCALA INTERFACCIA  ${(uiScale*100).roundToInt()}%",12f,Color.WHITE)
-        panel.addView(scaleLabel,LinearLayout.LayoutParams(-1,dp(24)))
-        val scaleSeek=SeekBar(this).apply{
-            max=60;progress=((uiScale-.70f)*100).roundToInt().coerceIn(0,60)
-            setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){uiScale=.70f+p/100f;fitUiToWindow();scaleLabel.text="SCALA INTERFACCIA  ${(uiScale*100).roundToInt()}%"}}
-                override fun onStartTrackingTouch(b:SeekBar?){}
-                override fun onStopTrackingTouch(b:SeekBar?){save()}
-            })
-        }
-        panel.addView(scaleSeek,LinearLayout.LayoutParams(-1,dp(44)))
         val limiterRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(4))}
         limiterRow.addView(label("LIMITER",14f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
         val led=View(this).apply{background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(if(limiterOn)Color.rgb(40,220,90) else Color.rgb(75,75,75))}}
