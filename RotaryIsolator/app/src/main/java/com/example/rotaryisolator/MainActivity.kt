@@ -51,17 +51,18 @@ class MainActivity : Activity() {
     private var loudnessOn = false
     private var previousBassBoost = 0f
     private var previousLoudness = 0f
-    private val sectionPreviousEq = FloatArray(3)
+    private val sectionPreviousEq = FloatArray(4)
     private val sectionPreviousIso = FloatArray(3)
     private val sectionPreviousFilters = FloatArray(3)
-    private val previousEq = FloatArray(3)
+    private val previousEq = FloatArray(4)
     private val previousIso = FloatArray(3)
     private val previousFilters = FloatArray(3)
-    private val eq = FloatArray(3)
+    private val eq = FloatArray(4)
     private val iso = floatArrayOf(0f, 0f, 0f)
     // HPF, LPF intensity (0..100%)
     private val filters = floatArrayOf(0f, 0f)
-    private val eqControlOn = BooleanArray(3) { true }
+    private val eqControlOn = BooleanArray(4) { true }
+    private var eqDoubleMid = false
     private val isoControlOn = BooleanArray(3) { true }
     private val filterControlOn = BooleanArray(2) { true }
     private val handler = Handler(Looper.getMainLooper())
@@ -106,6 +107,7 @@ class MainActivity : Activity() {
         compMakeup = prefs.getFloat("comp_makeup", 0f).coerceIn(0f, 100f)
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
+        eqDoubleMid = prefs.getBoolean("eq_double_mid", false)
         // Keep the filter section enabled at every app start, regardless of
         // an OFF value saved by an older build/session.
         filtersOn = true
@@ -119,15 +121,15 @@ class MainActivity : Activity() {
             .apply()
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
+        eq[3] = prefs.getFloat("eq_3",0f)
         filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
-        for(i in 0..2){previousEq[i]=eq[i];previousIso[i]=iso[i];sectionPreviousEq[i]=eq[i];sectionPreviousIso[i]=iso[i]}
+        for(i in 0..3){previousEq[i]=eq[i];sectionPreviousEq[i]=eq[i]}
+        for(i in 0..2){previousIso[i]=iso[i];sectionPreviousIso[i]=iso[i]}
         previousFilters[0]=filters[0];previousFilters[1]=filters[1];previousFilters[2]=resonance
         sectionPreviousFilters[0]=filters[0];sectionPreviousFilters[1]=filters[1];sectionPreviousFilters[2]=resonance
         resonance = prefs.getFloat("resonance",0f).coerceIn(0f,1f)
-        for (i in 0..2) {
-            eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
-            isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
-        }
+        for (i in 0..3) eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
+        for (i in 0..2) isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
         for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
         for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", false)
         val filterRotaryDefaultApplied = prefs.getBoolean("filter_rotary_default_v1", false)
@@ -215,6 +217,7 @@ class MainActivity : Activity() {
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
+                putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
                 putFloat("hpf",filters[0]);putFloat("lpf",filters[1]);putFloat("resonance",resonance)
                 for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i])}
                 for(i in 0..1)putBoolean("filter_control_$i",filterControlOn[i])
@@ -274,8 +277,10 @@ class MainActivity : Activity() {
         box.addView(header)
         val useVerticalRows=false
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
-        val names=listOf("LOW","MID","HIGH")
-        for(i in 0..2){
+        val indices = if(key=="EQ" && eqDoubleMid) listOf(0,1,3,2) else listOf(0,1,2)
+        val names = if(key=="EQ" && eqDoubleMid) listOf("LOW","MID LOW","MID HIGH","HIGH") else listOf("LOW","MID","HIGH")
+        for(pos in indices.indices){
+            val i=indices[pos]
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val vLabel=label("${names[i]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
@@ -416,7 +421,7 @@ class MainActivity : Activity() {
         box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(20)))
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
         val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-        gainCol.addView(label("GAIN",if(phonePortrait)9f else 11f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(18)))
+        
         if(modes["GAIN"]==true){
             val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
                 override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;scheduleUpdate()}}
@@ -425,7 +430,7 @@ class MainActivity : Activity() {
             })}
             gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
         }else{
-            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"}),LinearLayout.LayoutParams(-1,masterDialHeight()))
+            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{"${fmt(gain)} dB"},titleInside=true),LinearLayout.LayoutParams(-1,masterDialHeight()))
         }
         row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
         row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
@@ -479,7 +484,7 @@ class MainActivity : Activity() {
     private fun connectAudio(){
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
-            val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,3,true,1,true,3,limiterOn).build()
+            val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
@@ -491,19 +496,25 @@ class MainActivity : Activity() {
         val fx=dpEffect?:return
         if(Build.VERSION.SDK_INT<28)return
         try{
-            val freqs=floatArrayOf(250f,4000f,20000f)
-            for(ch in 0..1)for(i in 0..2){
-                var eqGain=if(eqOn && eqControlOn[i])eq[i].coerceIn(-12f,12f) else 0f
-                if(filtersOn && filterControlOn[0] && i==0) eqGain -= filters[0]*36f
-                if(filtersOn && filterControlOn[1] && i==2) eqGain -= filters[1]*36f
-                if(filtersOn && resonance>0f){
-                    if(filterControlOn[0] && filters[0]>.01f && i==0) eqGain += resonance*12f
-                    if(filterControlOn[1] && filters[1]>.01f && i==2) eqGain += resonance*6f
+            val eqFreqs = if(eqDoubleMid) floatArrayOf(100f,250f,2500f,10000f) else floatArrayOf(250f,4000f,20000f)
+            val eqCount = if(eqDoubleMid) 4 else 3
+            for(ch in 0..1){
+                for(i in 0 until eqCount){
+                    val valueIndex = if(eqDoubleMid) listOf(0,1,3,2)[i] else i
+                    var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-12f,12f) else 0f
+                    if(filtersOn && filterControlOn[0] && valueIndex==0) eqGain -= filters[0]*36f
+                    if(filtersOn && filterControlOn[1] && valueIndex==2) eqGain -= filters[1]*36f
+                    if(filtersOn && resonance>0f){
+                        if(filterControlOn[0] && filters[0]>.01f && valueIndex==0) eqGain += resonance*12f
+                        if(filterControlOn[1] && filters[1]>.01f && valueIndex==2) eqGain += resonance*6f
+                    }
+                    fx.setPreEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,eqFreqs[i],eqGain.coerceIn(-36f,12f)))
                 }
-                val eqBand=DynamicsProcessing.EqBand(true,freqs[i],eqGain.coerceIn(-36f,12f))
-                fx.setPreEqBandByChannelIndex(ch,i,eqBand)
-                val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
-                fx.setPostEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,freqs[i],isoGain))
+                val isoFreqs=floatArrayOf(250f,4000f,20000f)
+                for(i in 0..2){
+                    val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
+                    fx.setPostEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,isoFreqs[i],isoGain))
+                }
             }
             // More pronounced, rounded tone curves. Bass boost adds weight and punch;
             // loudness adds bass body plus a restrained upper presence lift.
@@ -574,6 +585,10 @@ class MainActivity : Activity() {
             }
         }
         limiterRow.addView(toggle);panel.addView(limiterRow)
+        val doubleMidRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(4))}
+        doubleMidRow.addView(label("EQ • DOPPIO MEDIO (XONE 92)",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
+        val doubleMidSwitch=Switch(this).apply{isChecked=eqDoubleMid;setOnCheckedChangeListener{_,checked->eqDoubleMid=checked;save();refreshUi();applyDsp()}}
+        doubleMidRow.addView(doubleMidSwitch);panel.addView(doubleMidRow)
         AlertDialog.Builder(this).setTitle("OPTIONS").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
     }
     private fun rebuildEffect(){
@@ -597,7 +612,8 @@ private class RotaryControl(
     private val changed:(Float)->Unit,
     private val valueText:()->String,
     private val onStart:()->Unit = {},
-    private val onEnd:()->Unit = {}
+    private val onEnd:()->Unit = {},
+    private val titleInside:Boolean = false
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -639,7 +655,7 @@ private class RotaryControl(
         p.color=Color.WHITE;p.strokeWidth=dp(3f)
         c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
         p.textAlign=Paint.Align.CENTER;p.textSize=dp(11f);p.color=Color.WHITE
-        c.drawText(title,cx,height-dp(17f),p)
+        if(titleInside){p.textAlign=Paint.Align.CENTER;p.textSize=dp(11f);p.color=Color.WHITE;c.drawText(title,cx,cy+dp(4f),p)}else{c.drawText(title,cx,height-dp(17f),p)}
         p.color=accent;p.textSize=dp(10f);c.drawText(valueText(),cx,height-dp(4f),p)
     }
     private fun updateFromPoint(x:Float,y:Float){
