@@ -27,6 +27,12 @@ class MainActivity : Activity() {
     private var uiScale = 1.0f
     private var skin = 0
     private var limiterOn = true
+    private var compressorOn = false
+    private var compThreshold = -18f
+    private var compRatio = 3f
+    private var compAttack = 10f
+    private var compRelease = 150f
+    private var compMakeup = 2f
     private var eqOn = true
     private var isoOn = true
     private var filtersOn = false
@@ -86,6 +92,12 @@ class MainActivity : Activity() {
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
+        compressorOn = prefs.getBoolean("compressor_on", false)
+        compThreshold = prefs.getFloat("comp_threshold", -18f).coerceIn(-36f, 0f)
+        compRatio = prefs.getFloat("comp_ratio", 3f).coerceIn(1f, 12f)
+        compAttack = prefs.getFloat("comp_attack", 10f).coerceIn(1f, 100f)
+        compRelease = prefs.getFloat("comp_release", 150f).coerceIn(20f, 500f)
+        compMakeup = prefs.getFloat("comp_makeup", 2f).coerceIn(0f, 12f)
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
         // Keep the filter section enabled at every app start, regardless of
@@ -182,6 +194,7 @@ class MainActivity : Activity() {
     }
     private fun save() {
         prefs.edit().putBoolean("mini",compact).putBoolean("vertical_layout",verticalLayout).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn)
+            .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
@@ -196,6 +209,7 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         titleBar.addView(label("ROTARY ISOLATOR", if(phonePortrait)15f else if(compact) 16f else 20f,Color.WHITE),LinearLayout.LayoutParams(0,dp(if(phonePortrait)28 else 32),1f))
+        titleBar.addView(Button(this).apply { text="COMP"; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(compressorOn) Color.rgb(185,45,48) else Color.rgb(65,70,78)); setOnClickListener { showCompressor() } },LinearLayout.LayoutParams(dp(62),dp(if(phonePortrait)30 else 36)))
         titleBar.addView(TextView(this).apply { text="⚙"; textSize=23f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(46),dp(if(phonePortrait)30 else 36)))
         root.addView(titleBar)
         root.addView(label("MASTER PROCESSING  •  V10 / XONE CONCEPT",if(phonePortrait)7f else 8f,gold),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)12 else 17)))
@@ -405,7 +419,7 @@ class MainActivity : Activity() {
     private fun connectAudio(){
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
-            val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,3,false,0,true,3,limiterOn).build()
+            val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,3,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
@@ -444,13 +458,44 @@ class MainActivity : Activity() {
                 fx.setPostEqBandByChannelIndex(ch,2,DynamicsProcessing.EqBand(true,20000f,high+masterHigh))
             }
             fx.setInputGainAllChannelsTo(gain.coerceIn(-12f,12f))
+            val compBand = DynamicsProcessing.MbcBand(compressorOn,20000f,compAttack,compRelease,compRatio,compThreshold,6f,-90f,1f,0f,compMakeup)
+            fx.setMbcBandAllChannelsTo(0,compBand)
             if(limiterOn){
                 val lim=DynamicsProcessing.Limiter(true,true,0,5f,80f,20f,-1f,0f)
                 fx.setLimiterAllChannelsTo(lim)
             }
-            fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn
-            status.text=if(fx.enabled)"Processing ON • EQ / ISO / Gain" else "BYPASS"
+            fx.enabled=eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn
+            status.text=if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
         }catch(t:Throwable){status.text="Audio DSP non supportato dal driver del dispositivo"}
+    }
+
+    private fun showCompressor(){
+        val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(8))}
+        val state=Switch(this).apply{text="COMPRESSOR";isChecked=compressorOn}
+        panel.addView(state,LinearLayout.LayoutParams(-1,dp(48)))
+        fun addControl(title:String,min:Int,max:Int,initial:Int,format:(Int)->String,onChange:(Int)->Unit){
+            val line=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+            val value=label(title+"  "+format(initial),12f,Color.WHITE)
+            line.addView(value,LinearLayout.LayoutParams(-1,dp(24)))
+            val seek=SeekBar(this).apply{
+                this.max=max-min
+                progress=(initial-min).coerceIn(0,this.max)
+                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                    override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){val v=min+p;value.text=title+"  "+format(v);onChange(v);scheduleUpdate()}}
+                    override fun onStartTrackingTouch(b:SeekBar?){}
+                    override fun onStopTrackingTouch(b:SeekBar?){save()}
+                })
+            }
+            line.addView(seek,LinearLayout.LayoutParams(-1,dp(42)))
+            panel.addView(line)
+        }
+        addControl("THRESHOLD", -36, 0, compThreshold.roundToInt(), {"$it dB"}){compThreshold=it.toFloat()}
+        addControl("RATIO", 1, 12, compRatio.roundToInt(), {"$it:1"}){compRatio=it.toFloat()}
+        addControl("ATTACK", 1, 100, compAttack.roundToInt(), {"$it ms"}){compAttack=it.toFloat()}
+        addControl("RELEASE", 20, 500, compRelease.roundToInt(), {"$it ms"}){compRelease=it.toFloat()}
+        addControl("MAKE-UP", 0, 12, compMakeup.roundToInt(), {"+$it dB"}){compMakeup=it.toFloat()}
+        state.setOnCheckedChangeListener{_,checked->compressorOn=checked;save();scheduleUpdate()}
+        AlertDialog.Builder(this).setTitle("COMPRESSOR • MASTER").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
     }
 
     private fun showOptions(){
