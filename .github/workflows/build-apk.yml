@@ -32,6 +32,25 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
+      - name: Rename app to FREQUALIZER
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          manifests = list(Path("extracted").rglob("AndroidManifest.xml"))
+          if not manifests:
+              raise SystemExit("AndroidManifest.xml not found")
+          for p in manifests:
+              s = p.read_text()
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER"', s, count=1)
+              if n:
+                  p.write_text(s)
+                  print(f"Updated app label in {p}")
+                  break
+          else:
+              raise SystemExit("android:label not found in manifest")
+          PY
+
       - name: Generate EQ launcher icon
         run: |
           sudo apt-get update
