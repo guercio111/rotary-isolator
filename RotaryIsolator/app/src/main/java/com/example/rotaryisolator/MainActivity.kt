@@ -315,7 +315,7 @@ class MainActivity : Activity() {
         for(pos in indices.indices){
             val i=indices[pos]
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-            val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compact)10f else 12f,Color.WHITE)
+            val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             controlHeader.addView(vLabel,LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 28),1f))
             col.addView(controlHeader,LinearLayout.LayoutParams(-1,dp(if(compactHeader)30 else 24)))
@@ -406,14 +406,15 @@ class MainActivity : Activity() {
         for(i in 0..2){
             val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==2) resonance else filters[i]
-            val l=label(names[i]+"  "+(current*100).roundToInt()+"%",10f,Color.WHITE)
+            val compactFilter = phonePortrait && !wideLayout
+            val l=label(names[i]+"  "+(current*100).roundToInt()+"%",if(compactFilter)8f else 10f,Color.WHITE)
             val controlEnabled=filtersOn && (if(i==2) true else filterControlOn[i])
-            val filterHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-            filterHeader.addView(l,LinearLayout.LayoutParams(0,dp(24),1f))
+            val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            filterHeader.addView(l,if(compactFilter)LinearLayout.LayoutParams(-1,dp(16)) else LinearLayout.LayoutParams(0,dp(24),1f))
             if(i<2) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
                 filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
             })
-            col.addView(filterHeader,LinearLayout.LayoutParams(-1,dp(24)))
+            col.addView(filterHeader,LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
