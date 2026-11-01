@@ -496,39 +496,93 @@ class MainActivity : Activity() {
     }
 
     private fun addGainSection(parent:LinearLayout=content){
+        val tabletPortrait = !phonePortrait && !wideLayout
         val compactMaster = phonePortrait && !wideLayout
-        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(2))}
-        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(compactMaster)7.5f else if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(if(compactMaster)18 else 20)))
-        val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-        val gainValueLabel=label("${fmt(gain)} dB",if(phonePortrait)9f else 10f,Color.WHITE)
-        gainCol.addView(gainValueLabel,LinearLayout.LayoutParams(-1,dp(16)))
-        gainCol.addView(LinearLayout(this),LinearLayout.LayoutParams(-1,dp(24)))
-        if(modes["GAIN"]==true){
-            val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()}}
-                override fun onStartTrackingTouch(b:SeekBar?){}
-                override fun onStopTrackingTouch(b:SeekBar?){}
-            })}
-            gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 3),dp(1),dp(if(phonePortrait)1 else 3),dp(1))}
+        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(tabletPortrait)9f else if(compactMaster)7.5f else if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(if(compactMaster)18 else 20)))
+        if(tabletPortrait){
+            // Portrait tablet: one full-width MASTER strip per control.
+            // Keep the existing rotary controls and DSP callbacks; only the layout changes.
+            val rowHeight = ((windowHeightDp()/2f-28f)/4f).roundToInt().coerceIn(54,90)
+            fun masterRow(title:String, value:String, dial:View, actionViews:List<View> = emptyList()):View {
+                return LinearLayout(this).apply {
+                    orientation=LinearLayout.HORIZONTAL
+                    gravity=Gravity.CENTER_VERTICAL
+                    setPadding(dp(2),dp(1),dp(2),dp(1))
+                    val info=LinearLayout(this@MainActivity).apply {
+                        orientation=LinearLayout.VERTICAL
+                        gravity=Gravity.CENTER_VERTICAL
+                        addView(label(title,8.5f,gold),LinearLayout.LayoutParams(-1,dp(20)))
+                        addView(label(value,9f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(18)))
+                    }
+                    addView(info,LinearLayout.LayoutParams(dp(78),-1))
+                    if(actionViews.isNotEmpty()){
+                        val actions=LinearLayout(this@MainActivity).apply {
+                            orientation=LinearLayout.VERTICAL
+                            gravity=Gravity.CENTER
+                            actionViews.forEach { addView(it,LinearLayout.LayoutParams(-1,dp(22))) }
+                        }
+                        addView(actions,LinearLayout.LayoutParams(dp(78),-1))
+                    }
+                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-4),1f))
+                }.also { it.minimumHeight=dp(rowHeight) }
+            }
+            val gainDial:View = if(modes["GAIN"]==true){
+                SeekBar(this).apply {
+                    max=240;progress=((gain+12)*10).roundToInt()
+                    setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;scheduleUpdate()}}
+                        override fun onStartTrackingTouch(b:SeekBar?){}
+                        override fun onStopTrackingTouch(b:SeekBar?){save()}
+                    })
+                }
+            } else RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,gold,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
+                compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()
+            }
+            box.addView(masterRow("COMP",compMakeup.roundToInt().toString()+"%",compDial,listOf(compToggle)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val bassDial=RotaryControl(this,"BASS BOOST",bassBoost,0f,100f,gold,{v->bassBoost=v;scheduleUpdate()},{bassBoost.roundToInt().toString()+"%"},onStart={previousBassBoost=bassBoost},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val bassToggle=roundAction("",if(bassBoostOn)"ON" else "OFF",bassBoostOn){bassBoostOn=!bassBoostOn;save();refreshUi();scheduleUpdate()}
+            val bassReturn=roundAction("↶","RETURN",true){bassBoost=previousBassBoost;save();refreshUi();scheduleUpdate()}
+            box.addView(masterRow("BASS BOOST",bassBoost.roundToInt().toString()+"%",bassDial,listOf(bassToggle,bassReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,gold,{v->loudness=v;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},onStart={previousLoudness=loudness},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val loudToggle=roundAction("",if(loudnessOn)"ON" else "OFF",loudnessOn){loudnessOn=!loudnessOn;save();refreshUi();scheduleUpdate()}
+            val loudReturn=roundAction("↶","RETURN",true){loudness=previousLoudness;save();refreshUi();scheduleUpdate()}
+            box.addView(masterRow("LOUDNESS",loudness.roundToInt().toString()+"%",loudDial,listOf(loudToggle,loudReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
         }else{
-            gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;gainValueLabel.text="${fmt(gain)} dB";scheduleUpdate()},{"${fmt(gain)} dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
-        }
-        if(compactMaster){
-            val top=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            top.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
-            top.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
-            val bottom=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            bottom.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost},true),LinearLayout.LayoutParams(0,-2,1f))
-            bottom.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness},true),LinearLayout.LayoutParams(0,-2,1f))
-            box.addView(top,LinearLayout.LayoutParams(-1,-2))
-            box.addView(bottom,LinearLayout.LayoutParams(-1,-2))
-        }else{
-            val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
-            row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
-            row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
-            row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
-            row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
-            box.addView(row)
+            val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val gainValueLabel=label(fmt(gain)+" dB",if(phonePortrait)9f else 10f,Color.WHITE)
+            gainCol.addView(gainValueLabel,LinearLayout.LayoutParams(-1,dp(16)))
+            gainCol.addView(LinearLayout(this),LinearLayout.LayoutParams(-1,dp(24)))
+            if(modes["GAIN"]==true){
+                val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                    override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;gainValueLabel.text=fmt(gain)+" dB";scheduleUpdate()}}
+                    override fun onStartTrackingTouch(b:SeekBar?){}
+                    override fun onStopTrackingTouch(b:SeekBar?){}
+                })}
+                gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
+            }else{
+                gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;gainValueLabel.text=fmt(gain)+" dB";scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
+            }
+            if(compactMaster){
+                val top=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+                top.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
+                top.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
+                val bottom=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+                bottom.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost},true),LinearLayout.LayoutParams(0,-2,1f))
+                bottom.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness},true),LinearLayout.LayoutParams(0,-2,1f))
+                box.addView(top,LinearLayout.LayoutParams(-1,-2))
+                box.addView(bottom,LinearLayout.LayoutParams(-1,-2))
+            }else{
+                val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=4f}
+                row.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
+                row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
+                row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
+                row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
+                box.addView(row)
+            }
         }
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
     }
