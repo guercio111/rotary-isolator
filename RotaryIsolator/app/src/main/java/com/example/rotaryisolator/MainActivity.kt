@@ -153,7 +153,6 @@ class MainActivity : Activity() {
         for(i in 0..2){previousIso[i]=iso[i];sectionPreviousIso[i]=iso[i]}
         previousFilters[0]=filters[0];previousFilters[1]=filters[1];previousFilters[2]=resonance
         sectionPreviousFilters[0]=filters[0];sectionPreviousFilters[1]=filters[1];sectionPreviousFilters[2]=resonance
-        resonance = 0f
         for (i in 0..3) eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
         for (i in 0..2) isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
         for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
