@@ -98,7 +98,7 @@ class MainActivity : Activity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
-        compact = prefs.getBoolean("mini", false)
+        compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
         bassBoost = 0f
         loudness = 0f
@@ -119,8 +119,10 @@ class MainActivity : Activity() {
         colorMaster = prefs.getInt("color_master", Color.rgb(214,179,106))
         colorButtons = prefs.getInt("color_buttons", Color.rgb(255,205,0))
         colorBackground = prefs.getInt("color_background", Color.rgb(17,19,23))
-        mouseWheelAdjustOn = prefs.getBoolean("mouse_wheel_adjust_on", false)
-        mouseWheelSensitivity = prefs.getFloat("mouse_wheel_sensitivity", 4f).coerceIn(1f,10f)
+        val mouseDefaultsApplied = prefs.getBoolean("mouse_defaults_v1", false)
+        mouseWheelAdjustOn = if (mouseDefaultsApplied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
+        mouseWheelSensitivity = if (mouseDefaultsApplied) prefs.getFloat("mouse_wheel_sensitivity", 5f).coerceIn(1f,10f) else 5f
+        if (!mouseDefaultsApplied) prefs.edit().putBoolean("mouse_defaults_v1", true).putBoolean("mouse_wheel_adjust_on", true).putFloat("mouse_wheel_sensitivity", 5f).putBoolean("mini", false).apply()
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
         compressorOn = false
@@ -131,7 +133,9 @@ class MainActivity : Activity() {
         compMakeup = 0f
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
         eqOn = true; isoOn = true
-        eqDoubleMid = prefs.getBoolean("eq_double_mid", false)
+        val doubleMidDefaultApplied = prefs.getBoolean("double_mid_default_v1", false)
+        eqDoubleMid = if (doubleMidDefaultApplied) prefs.getBoolean("eq_double_mid", true) else true
+        if (!doubleMidDefaultApplied) prefs.edit().putBoolean("double_mid_default_v1", true).putBoolean("eq_double_mid", true).apply()
         // Keep the filter section enabled at every app start, regardless of
         // an OFF value saved by an older build/session.
         filtersOn = true
@@ -293,7 +297,6 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(phonePortrait)72 else 82),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(5)})
-        titleBar.addView(Button(this).apply { text="RESET"; textSize=9f; isAllCaps=false; setTextColor(Color.BLACK); backgroundTintList=ColorStateList.valueOf(colorButtons); setOnClickListener { resetAllControls() } },LinearLayout.LayoutParams(dp(if(phonePortrait)54 else 66),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(4)})
         titleBar.addView(TextView(this).apply { text="⚙"; textSize=23f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(46),dp(if(phonePortrait)30 else 36)))
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
@@ -306,7 +309,7 @@ class MainActivity : Activity() {
         val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
         content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
         content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
-        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-14f..12f,{eqOn},upper)
+        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-14f..14f,{eqOn},upper)
         addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso,-24f..24f,{isoOn},upper)
         addFilterSection(lower)
         addGainSection(lower)
@@ -359,7 +362,6 @@ class MainActivity : Activity() {
         val actionGap=if(compactHeader)1 else if(phonePortrait)3 else 8
         val actionHeight=if(compactHeader)24 else if(phonePortrait)36 else 58
         val header=LinearLayout(this).apply{orientation=if(compactHeader)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        header.addView(label(title,if(phonePortrait)9f else 10f,sectionAccent),if(compactHeader)LinearLayout.LayoutParams(-1,dp(20)) else LinearLayout.LayoutParams(0,dp(20),1f))
         val headerControls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         box.addView(header)
         // In tablet portrait, stack LOW / MID / HIGH as full-width mixer strips.
@@ -455,7 +457,6 @@ class MainActivity : Activity() {
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         val filterAccent = accentFor("FILTERS")
-        filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,filterAccent),LinearLayout.LayoutParams(0,dp(28),1f))
         filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         })
@@ -717,7 +718,7 @@ class MainActivity : Activity() {
             for(ch in 0..1){
                 for(i in 0 until eqCount){
                     val valueIndex = if(eqDoubleMid) listOf(0,1,3,2)[i] else i
-                    var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-14f,12f) else 0f
+                    var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-14f,14f) else 0f
                     val hpfActive = filtersOn && filterControlOn[0] && filters[0]>.01f
                     val lpfActive = filtersOn && filterControlOn[1] && filters[1]>.01f
                     if(hpfActive && valueIndex==0) {
@@ -781,7 +782,7 @@ class MainActivity : Activity() {
 
     private fun showOptions(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
-        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Xone","Personalizza colori")
+        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Personalizza colori")
         names.forEachIndexed{index,name->
             val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
                 when(index){
@@ -790,9 +791,7 @@ class MainActivity : Activity() {
                         val opts=arrayOf("Manopole rotative","Slider")
                         AlertDialog.Builder(this@MainActivity).setTitle(key+" • tipo controllo").setSingleChoiceItems(opts,if(modes[key]==true)1 else 0){a,c->modes[key]=c==1;save();refreshUi();applyDsp();a.dismiss()}.setNegativeButton("Annulla",null).show()
                     }
-                    4->{compact=!compact;save();refreshUi();applyDsp()}
-                    5->{colorEq=Color.rgb(100,190,210);colorIso=Color.rgb(100,190,210);colorFilters=Color.rgb(100,190,210);colorMaster=Color.rgb(100,190,210);colorButtons=Color.rgb(255,205,0);colorBackground=Color.rgb(12,24,31);save();refreshUi()}
-                    6->showColorOptions()
+                    4->showColorOptions()
                 }
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
@@ -836,7 +835,7 @@ class MainActivity : Activity() {
             mouseWheelAdjustOn=checked;wheelSeek.isEnabled=checked;save()
         }
         val doubleMidRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(8),dp(8),dp(4))}
-        doubleMidRow.addView(label("EQ • DOPPIO MEDIO (XONE 92)",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
+        doubleMidRow.addView(label("EQ • DOPPIO MEDIO",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
         val doubleMidSwitch=Switch(this).apply{isChecked=eqDoubleMid;setOnCheckedChangeListener{_,checked->eqDoubleMid=checked;save();refreshUi();applyDsp()}}
         doubleMidRow.addView(doubleMidSwitch);panel.addView(doubleMidRow)
         AlertDialog.Builder(this).setTitle("OPTIONS").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
