@@ -100,12 +100,12 @@ class MainActivity : Activity() {
         appEnabled = prefs.getBoolean("app_enabled", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
-        bassBoost = 0f
-        loudness = 0f
-        bassBoostOn = false
-        loudnessOn = false
-        previousBassBoost = 0f
-        previousLoudness = 0f
+        bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
+        loudness = prefs.getFloat("loudness", 0f).coerceIn(0f,100f)
+        bassBoostOn = prefs.getBoolean("bass_boost_on", false)
+        loudnessOn = prefs.getBoolean("loudness_on", false)
+        previousBassBoost = prefs.getFloat("previous_bass_boost", 0f).coerceIn(0f,100f)
+        previousLoudness = prefs.getFloat("previous_loudness", 0f).coerceIn(0f,100f)
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         val dm = resources.displayMetrics
         val cfg = resources.configuration
@@ -125,32 +125,30 @@ class MainActivity : Activity() {
         if (!mouseDefaultsApplied) prefs.edit().putBoolean("mouse_defaults_v1", true).putBoolean("mouse_wheel_adjust_on", true).putFloat("mouse_wheel_sensitivity", 5f).putBoolean("mini", false).apply()
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
-        compressorOn = false
+        compressorOn = prefs.getBoolean("compressor_on", false)
         compThreshold = prefs.getFloat("comp_threshold", -18f).coerceIn(-36f, 0f)
         compRatio = prefs.getFloat("comp_ratio", 3f).coerceIn(1f, 12f)
         compAttack = prefs.getFloat("comp_attack", 10f).coerceIn(1f, 100f)
         compRelease = prefs.getFloat("comp_release", 150f).coerceIn(20f, 500f)
-        compMakeup = 0f
+        compMakeup = prefs.getFloat("comp_makeup", 0f).coerceIn(0f,100f)
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
-        eqOn = true; isoOn = true
+        eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
         val doubleMidDefaultApplied = prefs.getBoolean("double_mid_default_v1", false)
         eqDoubleMid = if (doubleMidDefaultApplied) prefs.getBoolean("eq_double_mid", true) else true
         if (!doubleMidDefaultApplied) prefs.edit().putBoolean("double_mid_default_v1", true).putBoolean("eq_double_mid", true).apply()
         // Keep the filter section enabled at every app start, regardless of
         // an OFF value saved by an older build/session.
-        filtersOn = true
-        filterControlOn[0] = true
-        filterControlOn[1] = true
-        prefs.edit()
-            .putBoolean("filters_on", true)
-            .putBoolean("filter_control_0", true)
-            .putBoolean("filter_control_1", true)
-            .putBoolean("filter_master_default_v3", true)
-            .apply()
-        gain = 0f
-        for (i in 0..2) { eq[i] = 0f; iso[i] = 0f }
-        eq[3] = 0f
-        filters[0] = 0f; filters[1] = 0f
+        filtersOn = prefs.getBoolean("filters_on", true)
+        filterControlOn[0] = prefs.getBoolean("filter_control_0", true)
+        filterControlOn[1] = prefs.getBoolean("filter_control_1", true)
+        gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
+        for (i in 0..2) {
+            eq[i] = prefs.getFloat("eq_$i", 0f).coerceIn(-14f,14f)
+            iso[i] = prefs.getFloat("iso_$i", 0f).coerceIn(-24f,24f)
+        }
+        eq[3] = prefs.getFloat("eq_3", 0f).coerceIn(-14f,14f)
+        filters[0] = prefs.getFloat("hpf", 0f).coerceIn(0f,1f); filters[1] = 0f
+        resonance = prefs.getFloat("resonance", 0f).coerceIn(0f,1f)
         for(i in 0..3){previousEq[i]=eq[i];sectionPreviousEq[i]=eq[i]}
         for(i in 0..2){previousIso[i]=iso[i];sectionPreviousIso[i]=iso[i]}
         previousFilters[0]=filters[0];previousFilters[1]=filters[1];previousFilters[2]=resonance
@@ -160,10 +158,20 @@ class MainActivity : Activity() {
         for (i in 0..2) isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
         for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
         for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", false)
-        for(i in 0..3){previousEq[i]=0f;sectionPreviousEq[i]=0f}
-        for(i in 0..2){previousIso[i]=0f;sectionPreviousIso[i]=0f}
-        for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
-        save()
+        for(i in 0..3){
+            previousEq[i]=prefs.getFloat("previous_eq_$i",eq[i])
+            sectionPreviousEq[i]=prefs.getFloat("section_previous_eq_$i",eq[i])
+        }
+        for(i in 0..2){
+            previousIso[i]=prefs.getFloat("previous_iso_$i",iso[i])
+            sectionPreviousIso[i]=prefs.getFloat("section_previous_iso_$i",iso[i])
+        }
+        previousFilters[0]=prefs.getFloat("previous_hpf",filters[0])
+        previousFilters[1]=0f
+        previousFilters[2]=prefs.getFloat("previous_resonance",resonance)
+        sectionPreviousFilters[0]=prefs.getFloat("section_previous_hpf",filters[0])
+        sectionPreviousFilters[1]=0f
+        sectionPreviousFilters[2]=prefs.getFloat("section_previous_resonance",resonance)
         val filterRotaryDefaultApplied = prefs.getBoolean("filter_rotary_default_v1", false)
         if (!filterRotaryDefaultApplied) {
             modes["FILTERS"] = false
@@ -171,6 +179,13 @@ class MainActivity : Activity() {
         }
         buildUi()
         connectAudio()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        // Android recreates this Activity on rotation. Persist the live mixer
+        // values before teardown so the next orientation restores the exact state.
+        save()
+        super.onSaveInstanceState(outState)
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density).roundToInt()
@@ -289,6 +304,10 @@ class MainActivity : Activity() {
                 putFloat("hpf",filters[0]);putFloat("resonance",resonance)
                                 for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i])}
                 for(i in 0..1)putBoolean("filter_control_$i",filterControlOn[i])
+                for(i in 0..3){putFloat("previous_eq_$i",previousEq[i]);putFloat("section_previous_eq_$i",sectionPreviousEq[i])}
+                for(i in 0..2){putFloat("previous_iso_$i",previousIso[i]);putFloat("section_previous_iso_$i",sectionPreviousIso[i])}
+                putFloat("previous_hpf",previousFilters[0]).putFloat("previous_resonance",previousFilters[2])
+                putFloat("section_previous_hpf",sectionPreviousFilters[0]).putFloat("section_previous_resonance",sectionPreviousFilters[2])
                 modes.forEach{(k,v)->putBoolean("mode_$k",v)}
             }.apply()
     }
@@ -946,3 +965,4 @@ private class RotaryControl(
 }
 
 // Experimental master compressor prototype: Android DynamicsProcessing MBC.
+
