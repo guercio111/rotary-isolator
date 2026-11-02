@@ -1,4 +1,5 @@
 name: Build Rotary Isolator APK
+# Rebuild requested after preserving mixer state across orientation changes
 
 on:
   push:
