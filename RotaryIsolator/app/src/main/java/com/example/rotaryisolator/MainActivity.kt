@@ -500,14 +500,14 @@ class MainActivity : Activity() {
                     if(i==1)resonance=v else filters[0]=v
                     l.text=names[i]+"  "+(v*100).roundToInt()+"%"
                     scheduleUpdate()
-                },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==2)resonance else filters[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+                },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=controlEnabled
                 controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
             }
             col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(dialHeight(),-1) else LinearLayout.LayoutParams(-1,dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterActions.addView(circleAction("↶",filterReturnSize){
-                val old=previousFilters[i]; previousFilters[i]=if(i==2)resonance else filters[i]
+                val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
                 if(i==1)resonance=old else filters[0]=old
                 save();refreshUi();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
