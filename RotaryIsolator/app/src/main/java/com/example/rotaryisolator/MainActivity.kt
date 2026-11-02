@@ -361,6 +361,7 @@ class MainActivity : Activity() {
         val actionFlatSize=if(compactHeader)22 else if(phonePortrait)32 else 56
         val actionGap=if(compactHeader)1 else if(phonePortrait)3 else 8
         val actionHeight=if(compactHeader)24 else if(phonePortrait)36 else 58
+        box.addView(label(title,if(phonePortrait)9f else 11f,sectionAccent),LinearLayout.LayoutParams(-1,dp(if(compactHeader)16 else 22)))
         val header=LinearLayout(this).apply{orientation=if(compactHeader)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         val headerControls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         box.addView(header)
@@ -379,7 +380,6 @@ class MainActivity : Activity() {
             val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             controlHeader.addView(vLabel,if(useVerticalRows)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 28),1f))
-            col.addView(controlHeader,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dp(if(compactHeader)30 else 24)))
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
@@ -457,6 +457,7 @@ class MainActivity : Activity() {
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         val filterAccent = accentFor("FILTERS")
+        filterTitle.addView(label("FILTERS",if(phonePortrait)9f else 11f,filterAccent),LinearLayout.LayoutParams(0,dp(24),1f))
         filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         })
@@ -477,7 +478,6 @@ class MainActivity : Activity() {
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",if(compactFilter)8f else 10f,Color.WHITE)
             val controlEnabled=filtersOn && (if(i==2) true else filterControlOn[i])
             val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterHeader.addView(l,if(useVerticalRows)LinearLayout.LayoutParams(-1,-1) else if(compactFilter)LinearLayout.LayoutParams(-1,dp(16)) else LinearLayout.LayoutParams(0,dp(24),1f))
             if(i<2) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
                 filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
             })
@@ -600,8 +600,8 @@ class MainActivity : Activity() {
                 top.addView(gainCol,LinearLayout.LayoutParams(0,-2,1f))
                 top.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
                 val bottom=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-                bottom.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost},true),LinearLayout.LayoutParams(0,-2,1f))
-                bottom.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness},true),LinearLayout.LayoutParams(0,-2,1f))
+                bottom.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost},true),LinearLayout.LayoutParams(0,-2,1f).apply{leftMargin=dp(4);rightMargin=dp(4)})
+                bottom.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness},true),LinearLayout.LayoutParams(0,-2,1f).apply{leftMargin=dp(4);rightMargin=dp(4)})
                 box.addView(top,LinearLayout.LayoutParams(-1,-2))
                 box.addView(bottom,LinearLayout.LayoutParams(-1,-2))
             }else{
