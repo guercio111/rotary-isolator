@@ -562,7 +562,7 @@ class MainActivity : Activity() {
             // Reserve the same action-column width used by the other MASTER rows,
             // so the GAIN dial shares their exact horizontal alignment.
             val gainSpacer=View(this).apply{isClickable=false}
-            box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial,listOf(gainSpacer)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial,listOf(gainSpacer)),LinearLayout.LayoutParams(-1,dp(rowHeight)).apply{topMargin=dp(7)})
             val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
                 compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()
