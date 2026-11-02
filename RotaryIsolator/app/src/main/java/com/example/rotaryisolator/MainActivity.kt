@@ -87,9 +87,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Explicitly follow the physical sensor in both portrait and landscape.
-        // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        // This S25 build is landscape-only. The tablet build remains unchanged.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         compact = prefs.getBoolean("mini", false)
@@ -105,7 +104,9 @@ class MainActivity : Activity() {
         val cfg = resources.configuration
         val windowWidthDp = if (cfg.screenWidthDp > 0) cfg.screenWidthDp else (dm.widthPixels / dm.density).roundToInt()
         val windowHeightDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else (dm.heightPixels / dm.density).roundToInt()
-        phonePortrait = min(windowWidthDp, windowHeightDp) < 600
+        // Use the tablet-landscape layout metrics on the S25, then scale the
+        // complete interface uniformly to fit its smaller physical display.
+        phonePortrait = min(windowWidthDp, windowHeightDp) < 600 && windowHeightDp > windowWidthDp
         wideLayout = windowWidthDp > windowHeightDp
         skin = prefs.getInt("skin", 0).coerceIn(0,2)
         mouseWheelAdjustOn = prefs.getBoolean("mouse_wheel_adjust_on", false)
@@ -320,7 +321,8 @@ class MainActivity : Activity() {
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
             if (view.width > 0 && view.height > 0) {
                 val newWide = view.width > view.height
-                val newPhone = min(view.width,view.height) / resources.displayMetrics.density < 600f
+                // In landscape, use the same control sizes and spacing as tablet landscape.
+                val newPhone = min(view.width,view.height) / resources.displayMetrics.density < 600f && view.height > view.width
                 val resized = lastWindowWidthPx > 0 &&
                     (abs(view.width-lastWindowWidthPx) > dp(12) || abs(view.height-lastWindowHeightPx) > dp(12))
                 lastWindowWidthPx=view.width
