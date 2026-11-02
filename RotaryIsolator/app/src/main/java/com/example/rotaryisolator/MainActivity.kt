@@ -361,7 +361,7 @@ class MainActivity : Activity() {
         val actionFlatSize=if(compactHeader)22 else if(phonePortrait)32 else 56
         val actionGap=if(compactHeader)1 else if(phonePortrait)3 else 8
         val actionHeight=if(compactHeader)24 else if(phonePortrait)36 else 58
-        box.addView(label(title,if(phonePortrait)9f else 11f,sectionAccent),LinearLayout.LayoutParams(-1,dp(if(compactHeader)16 else 22)))
+        box.addView(label(title,if(phonePortrait)9f else 11f,sectionAccent),LinearLayout.LayoutParams(-1,dp(if(compactHeader)18 else 26)))
         val header=LinearLayout(this).apply{orientation=if(compactHeader)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         val headerControls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         box.addView(header)
@@ -414,7 +414,7 @@ class MainActivity : Activity() {
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(verticalRowHeight)) else LinearLayout.LayoutParams(0,-2,1f))
         }
-        box.addView(row)
+        box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(compactHeader)4 else 7)})
         val sectionPower = Button(this).apply {
             fun paintState() {
                 val on = if(key=="EQ") eqOn else isoOn
@@ -444,19 +444,19 @@ class MainActivity : Activity() {
             for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
             scheduleUpdate();refreshUi()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
-        header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(30)) else LinearLayout.LayoutParams(-2,dp(38)))
+        header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(28)) else LinearLayout.LayoutParams(-1,dp(32)))
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
     }
 
     private fun addFilterSection(parent:LinearLayout=content){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
-        val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         val filterAccent = accentFor("FILTERS")
-        filterTitle.addView(label("FILTERS",if(phonePortrait)9f else 11f,filterAccent),LinearLayout.LayoutParams(0,dp(24),1f))
+        box.addView(label("FILTERS",if(phonePortrait)9f else 11f,filterAccent),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)18 else 26)))
+        val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         })
-        box.addView(filterTitle)
+        box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)28 else 32)))
         val useVerticalRows=!wideLayout && !phonePortrait
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()/2f-42f)/2f).roundToInt().coerceIn(96,140)
@@ -509,7 +509,7 @@ class MainActivity : Activity() {
             col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(verticalRowHeight)) else LinearLayout.LayoutParams(0,-2,1f))
         }
-        box.addView(row);parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
+        box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(phonePortrait)4 else 7)});parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
     }
 
     private fun addGainSection(parent:LinearLayout=content){
@@ -517,7 +517,7 @@ class MainActivity : Activity() {
         val tabletPortrait = !phonePortrait && !wideLayout
         val compactMaster = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 3),dp(1),dp(if(phonePortrait)1 else 3),dp(1))}
-        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(tabletPortrait)9f else if(compactMaster)7.5f else if(phonePortrait)9f else 10f,masterAccent),LinearLayout.LayoutParams(-1,dp(if(compactMaster)18 else 20)))
+        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(tabletPortrait)11f else if(compactMaster)7.5f else if(phonePortrait)9f else 11f,masterAccent),LinearLayout.LayoutParams(-1,dp(if(compactMaster)18 else 26)))
         if(tabletPortrait){
             // Portrait tablet: one full-width MASTER strip per control.
             // Keep the existing rotary controls and DSP callbacks; only the layout changes.
@@ -606,7 +606,7 @@ class MainActivity : Activity() {
                 row.addView(masterCompControl(),LinearLayout.LayoutParams(0,-2,1f))
                 row.addView(masterToneControl("BASS BOOST",bassBoost,bassBoostOn,{bassBoost=it},{bassBoostOn=it},{previousBassBoost=bassBoost},{bassBoost=previousBassBoost}),LinearLayout.LayoutParams(0,-2,1f))
                 row.addView(masterToneControl("LOUDNESS",loudness,loudnessOn,{loudness=it},{loudnessOn=it},{previousLoudness=loudness},{loudness=previousLoudness}),LinearLayout.LayoutParams(0,-2,1f))
-                box.addView(row)
+                box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(7)})
             }
         }
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
