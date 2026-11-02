@@ -30,7 +30,12 @@ class MainActivity : Activity() {
     private var appEnabled = true
     private var compact = false
     private var uiScale = 1.0f
-    private var skin = 0
+    private var colorEq = Color.rgb(214,179,106)
+    private var colorIso = Color.rgb(100,190,210)
+    private var colorFilters = Color.rgb(220,130,80)
+    private var colorMaster = Color.rgb(214,179,106)
+    private var colorButtons = Color.rgb(255,205,0)
+    private var colorBackground = Color.rgb(17,19,23)
     private var limiterOn = true
     private var mouseWheelAdjustOn = false
     private var mouseWheelSensitivity = 4f
@@ -82,8 +87,9 @@ class MainActivity : Activity() {
     private lateinit var container: FrameLayout
     private lateinit var status: TextView
     private val sections = mutableMapOf<String, LinearLayout>()
-    private val gold get() = when(skin) { 1 -> Color.rgb(100,190,210); 2 -> Color.rgb(220,130,80); else -> Color.rgb(214,179,106) }
-    private val bg get() = when(skin) { 1 -> Color.rgb(12,24,31); 2 -> Color.rgb(28,18,15); else -> Color.rgb(17,19,23) }
+    private val gold get() = colorEq
+    private val bg get() = colorBackground
+    private fun accentFor(key:String) = when(key) { "EQ" -> colorEq; "ISOLATOR" -> colorIso; "FILTERS" -> colorFilters; else -> colorMaster }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,12 +100,12 @@ class MainActivity : Activity() {
         appEnabled = prefs.getBoolean("app_enabled", true)
         compact = prefs.getBoolean("mini", false)
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
-        bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
-        loudness = prefs.getFloat("loudness", 0f).coerceIn(0f,100f)
-        bassBoostOn = prefs.getBoolean("bass_boost_on", false)
-        loudnessOn = prefs.getBoolean("loudness_on", false)
-        previousBassBoost = prefs.getFloat("previous_bass_boost", bassBoost)
-        previousLoudness = prefs.getFloat("previous_loudness", loudness)
+        bassBoost = 0f
+        loudness = 0f
+        bassBoostOn = false
+        loudnessOn = false
+        previousBassBoost = 0f
+        previousLoudness = 0f
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         val dm = resources.displayMetrics
         val cfg = resources.configuration
@@ -107,19 +113,24 @@ class MainActivity : Activity() {
         val windowHeightDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else (dm.heightPixels / dm.density).roundToInt()
         phonePortrait = min(windowWidthDp, windowHeightDp) < 600
         wideLayout = windowWidthDp > windowHeightDp
-        skin = prefs.getInt("skin", 0).coerceIn(0,2)
+        colorEq = prefs.getInt("color_eq", Color.rgb(214,179,106))
+        colorIso = prefs.getInt("color_iso", Color.rgb(100,190,210))
+        colorFilters = prefs.getInt("color_filters", Color.rgb(220,130,80))
+        colorMaster = prefs.getInt("color_master", Color.rgb(214,179,106))
+        colorButtons = prefs.getInt("color_buttons", Color.rgb(255,205,0))
+        colorBackground = prefs.getInt("color_background", Color.rgb(17,19,23))
         mouseWheelAdjustOn = prefs.getBoolean("mouse_wheel_adjust_on", false)
         mouseWheelSensitivity = prefs.getFloat("mouse_wheel_sensitivity", 4f).coerceIn(1f,10f)
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
-        compressorOn = prefs.getBoolean("compressor_on", false)
+        compressorOn = false
         compThreshold = prefs.getFloat("comp_threshold", -18f).coerceIn(-36f, 0f)
         compRatio = prefs.getFloat("comp_ratio", 3f).coerceIn(1f, 12f)
         compAttack = prefs.getFloat("comp_attack", 10f).coerceIn(1f, 100f)
         compRelease = prefs.getFloat("comp_release", 150f).coerceIn(20f, 500f)
-        compMakeup = prefs.getFloat("comp_makeup", 0f).coerceIn(0f, 100f)
+        compMakeup = 0f
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
-        eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
+        eqOn = true; isoOn = true
         eqDoubleMid = prefs.getBoolean("eq_double_mid", false)
         // Keep the filter section enabled at every app start, regardless of
         // an OFF value saved by an older build/session.
@@ -132,19 +143,23 @@ class MainActivity : Activity() {
             .putBoolean("filter_control_1", true)
             .putBoolean("filter_master_default_v3", true)
             .apply()
-        gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
-        for (i in 0..2) { eq[i] = prefs.getFloat("eq_$i",0f); iso[i] = prefs.getFloat("iso_$i",0f) }
-        eq[3] = prefs.getFloat("eq_3",0f)
-        filters[0] = prefs.getFloat("hpf",0f); filters[1] = prefs.getFloat("lpf",0f)
+        gain = 0f
+        for (i in 0..2) { eq[i] = 0f; iso[i] = 0f }
+        eq[3] = 0f
+        filters[0] = 0f; filters[1] = 0f
         for(i in 0..3){previousEq[i]=eq[i];sectionPreviousEq[i]=eq[i]}
         for(i in 0..2){previousIso[i]=iso[i];sectionPreviousIso[i]=iso[i]}
         previousFilters[0]=filters[0];previousFilters[1]=filters[1];previousFilters[2]=resonance
         sectionPreviousFilters[0]=filters[0];sectionPreviousFilters[1]=filters[1];sectionPreviousFilters[2]=resonance
-        resonance = prefs.getFloat("resonance",0f).coerceIn(0f,1f)
+        resonance = 0f
         for (i in 0..3) eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
         for (i in 0..2) isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
         for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
         for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", false)
+        for(i in 0..3){previousEq[i]=0f;sectionPreviousEq[i]=0f}
+        for(i in 0..2){previousIso[i]=0f;sectionPreviousIso[i]=0f}
+        for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
+        save()
         val filterRotaryDefaultApplied = prefs.getBoolean("filter_rotary_default_v1", false)
         if (!filterRotaryDefaultApplied) {
             modes["FILTERS"] = false
@@ -218,10 +233,10 @@ class MainActivity : Activity() {
     private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
     private fun circleAction(symbol:String, diameter:Int, action:()->Unit):View = TextView(this).apply {
         text=symbol; textSize=if(diameter>=48)16f else 11f; setTextColor(Color.WHITE)
-        gravity=Gravity.CENTER; contentDescription=if(symbol=="F")"Flat" else "Return"
+        gravity=Gravity.CENTER; contentDescription=when(symbol){"F"->"Flat";"0"->"Reset";else->"Return"}
         background=android.graphics.drawable.GradientDrawable().apply {
             shape=android.graphics.drawable.GradientDrawable.OVAL
-            setColor(Color.rgb(255,205,0)); setStroke(dp(1),Color.rgb(255,235,100))
+            setColor(colorButtons); setStroke(dp(1),Color.rgb(255,235,100))
         }
         setTextColor(Color.BLACK)
         setOnClickListener{action()}
@@ -260,8 +275,9 @@ class MainActivity : Activity() {
     }
 
     private fun save() {
-        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putInt("skin",skin).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
+        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
+            .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
@@ -277,6 +293,7 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(phonePortrait)72 else 82),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(5)})
+        titleBar.addView(Button(this).apply { text="RESET"; textSize=9f; isAllCaps=false; setTextColor(Color.BLACK); backgroundTintList=ColorStateList.valueOf(colorButtons); setOnClickListener { resetAllControls() } },LinearLayout.LayoutParams(dp(if(phonePortrait)54 else 66),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(4)})
         titleBar.addView(TextView(this).apply { text="⚙"; textSize=23f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(46),dp(if(phonePortrait)30 else 36)))
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
@@ -289,7 +306,7 @@ class MainActivity : Activity() {
         val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
         content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
         content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
-        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-12f..12f,{eqOn},upper)
+        addSection("EQ","EQUALIZER  •  LOW / MID / HIGH",eq,-14f..12f,{eqOn},upper)
         addSection("ISOLATOR","ISOLATOR  •  LOW / MID / HIGH",iso,-24f..24f,{isoOn},upper)
         addFilterSection(lower)
         addGainSection(lower)
@@ -334,6 +351,7 @@ class MainActivity : Activity() {
 
     private fun addSection(key:String,title:String,values:FloatArray,range:ClosedFloatingPointRange<Float>,enabled:()->Boolean,parent:LinearLayout=content) {
         val active = if(key=="EQ") eqControlOn else isoControlOn
+        val sectionAccent = accentFor(key)
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)1 else 4),dp(1))}
         val compactHeader = phonePortrait && !wideLayout
         val actionReturnSize=if(compactHeader)18 else if(phonePortrait)24 else 42
@@ -341,7 +359,7 @@ class MainActivity : Activity() {
         val actionGap=if(compactHeader)1 else if(phonePortrait)3 else 8
         val actionHeight=if(compactHeader)24 else if(phonePortrait)36 else 58
         val header=LinearLayout(this).apply{orientation=if(compactHeader)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        header.addView(label(title,if(phonePortrait)9f else 10f,gold),if(compactHeader)LinearLayout.LayoutParams(-1,dp(20)) else LinearLayout.LayoutParams(0,dp(20),1f))
+        header.addView(label(title,if(phonePortrait)9f else 10f,sectionAccent),if(compactHeader)LinearLayout.LayoutParams(-1,dp(20)) else LinearLayout.LayoutParams(0,dp(20),1f))
         val headerControls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         box.addView(header)
         // In tablet portrait, stack LOW / MID / HIGH as full-width mixer strips.
@@ -374,7 +392,7 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,gold,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=active[i]
                 val midBand = key=="EQ" && eqDoubleMid && (i==1 || i==3)
                 val knobParams = if(midBand) LinearLayout.LayoutParams((dialHeight()*0.78f).toInt(),dialHeight()) else LinearLayout.LayoutParams(-1,dialHeight())
@@ -397,7 +415,7 @@ class MainActivity : Activity() {
         box.addView(row)
         headerControls.addView(circleAction("↶",if(compactHeader)22 else 26) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
-            for(i in 0..2)values[i]=previous[i]
+            for(i in 0..(if(key=="EQ")3 else 2))values[i]=previous[i]
             save();refreshUi();scheduleUpdate()
         },LinearLayout.LayoutParams(dp(if(compactHeader)24 else 28),dp(if(compactHeader)24 else 28)).apply{rightMargin=dp(5)})
         val sectionPower = Button(this).apply {
@@ -426,7 +444,7 @@ class MainActivity : Activity() {
         headerControls.addView(sectionPower,LinearLayout.LayoutParams(dp(if(compactHeader)38 else 48),dp(if(compactHeader)24 else 28)).apply{rightMargin=dp(5)})
         headerControls.addView(circleAction("F",if(compactHeader)28 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
-            for(i in 0..2){previous[i]=values[i];values[i]=0f}
+            for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
             scheduleUpdate();refreshUi()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(30)) else LinearLayout.LayoutParams(-2,dp(38)))
@@ -436,7 +454,8 @@ class MainActivity : Activity() {
     private fun addFilterSection(parent:LinearLayout=content){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-        filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(0,dp(28),1f))
+        val filterAccent = accentFor("FILTERS")
+        filterTitle.addView(label("FILTERS  •  HPF / LPF",if(phonePortrait)9f else 10f,filterAccent),LinearLayout.LayoutParams(0,dp(28),1f))
         filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         })
@@ -474,7 +493,7 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             }else{
-                val knob=RotaryControl(this,names[i],current,0f,1f,gold,{v->
+                val knob=RotaryControl(this,names[i],current,0f,1f,filterAccent,{v->
                     if(i==2)resonance=v else filters[i]=v
                     l.text=names[i]+"  "+(v*100).roundToInt()+"%"
                     scheduleUpdate()
@@ -489,7 +508,7 @@ class MainActivity : Activity() {
                 if(i==2)resonance=old else filters[i]=old
                 save();refreshUi();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
-            filterActions.addView(circleAction("F",filterFlatSize){
+            filterActions.addView(circleAction("0",filterFlatSize){
                 previousFilters[i]=if(i==2)resonance else filters[i]
                 if(i==2)resonance=0f else filters[i]=0f
                 scheduleUpdate();refreshUi()
@@ -501,10 +520,11 @@ class MainActivity : Activity() {
     }
 
     private fun addGainSection(parent:LinearLayout=content){
+        val masterAccent = accentFor("MASTER")
         val tabletPortrait = !phonePortrait && !wideLayout
         val compactMaster = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 3),dp(1),dp(if(phonePortrait)1 else 3),dp(1))}
-        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(tabletPortrait)9f else if(compactMaster)7.5f else if(phonePortrait)9f else 10f,gold),LinearLayout.LayoutParams(-1,dp(if(compactMaster)18 else 20)))
+        box.addView(label("MASTER  •  GAIN / COMP / BASS BOOST / LOUDNESS",if(tabletPortrait)9f else if(compactMaster)7.5f else if(phonePortrait)9f else 10f,masterAccent),LinearLayout.LayoutParams(-1,dp(if(compactMaster)18 else 20)))
         if(tabletPortrait){
             // Portrait tablet: one full-width MASTER strip per control.
             // Keep the existing rotary controls and DSP callbacks; only the layout changes.
@@ -541,21 +561,21 @@ class MainActivity : Activity() {
                         override fun onStopTrackingTouch(b:SeekBar?){save()}
                     })
                 }
-            } else RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             // Reserve the same action-column width used by the other MASTER rows,
             // so the GAIN dial shares their exact horizontal alignment.
             val gainSpacer=View(this).apply{isClickable=false}
             box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial,listOf(gainSpacer)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
-            val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,gold,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
                 compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()
             }
             box.addView(masterRow("COMP",compMakeup.roundToInt().toString()+"%",compDial,listOf(compToggle)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
-            val bassDial=RotaryControl(this,"BASS BOOST",bassBoost,0f,100f,gold,{v->bassBoost=v;scheduleUpdate()},{bassBoost.roundToInt().toString()+"%"},onStart={previousBassBoost=bassBoost},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val bassDial=RotaryControl(this,"BASS BOOST",bassBoost,0f,100f,masterAccent,{v->bassBoost=v;scheduleUpdate()},{bassBoost.roundToInt().toString()+"%"},onStart={previousBassBoost=bassBoost},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val bassToggle=roundAction("",if(bassBoostOn)"ON" else "OFF",bassBoostOn){bassBoostOn=!bassBoostOn;save();refreshUi();scheduleUpdate()}
             val bassReturn=roundAction("↶","RETURN",true){bassBoost=previousBassBoost;save();refreshUi();scheduleUpdate()}
             box.addView(masterRow("BASS BOOST",bassBoost.roundToInt().toString()+"%",bassDial,listOf(bassToggle,bassReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
-            val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,gold,{v->loudness=v;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},onStart={previousLoudness=loudness},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,masterAccent,{v->loudness=v;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},onStart={previousLoudness=loudness},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val loudToggle=roundAction("",if(loudnessOn)"ON" else "OFF",loudnessOn){loudnessOn=!loudnessOn;save();refreshUi();scheduleUpdate()}
             val loudReturn=roundAction("↶","RETURN",true){loudness=previousLoudness;save();refreshUi();scheduleUpdate()}
             box.addView(masterRow("LOUDNESS",loudness.roundToInt().toString()+"%",loudDial,listOf(loudToggle,loudReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
@@ -572,7 +592,7 @@ class MainActivity : Activity() {
                 })}
                 gainCol.addView(s,LinearLayout.LayoutParams(-1,dp(48)))
             }else{
-                gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,gold,{v->gain=v;gainValueLabel.text=fmt(gain)+" dB";scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
+                gainCol.addView(RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;gainValueLabel.text=fmt(gain)+" dB";scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,masterDialHeight()))
             }
             if(compactMaster){
                 val top=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
@@ -609,7 +629,7 @@ class MainActivity : Activity() {
             restore();save();refreshUi();scheduleUpdate()
         })
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)48 else 24)))
-        col.addView(RotaryControl(this,title,value,0f,100f,gold,{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
+        col.addView(RotaryControl(this,title,value,0f,100f,accentFor("MASTER"),{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
             LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
         return col
     }
@@ -635,7 +655,7 @@ class MainActivity : Activity() {
             scheduleUpdate()
         })
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
-        col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,gold,{v->
+        col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->
             compMakeup=v.coerceIn(0f,100f)
             scheduleUpdate()
         },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
@@ -644,6 +664,38 @@ class MainActivity : Activity() {
     }
 
     private fun refreshUi(){ buildUi() }
+
+    private fun resetAllControls(){
+        for(i in 0..3){eq[i]=0f;previousEq[i]=0f;sectionPreviousEq[i]=0f}
+        for(i in 0..2){iso[i]=0f;previousIso[i]=0f;sectionPreviousIso[i]=0f}
+        filters[0]=0f;filters[1]=0f;resonance=0f
+        for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
+        gain=0f;compMakeup=0f;compressorOn=false
+        bassBoost=0f;loudness=0f;bassBoostOn=false;loudnessOn=false
+        eqOn=true;isoOn=true;filtersOn=true
+        for(i in 0..3)eqControlOn[i]=true
+        for(i in 0..2)isoControlOn[i]=true
+        for(i in 0..1)filterControlOn[i]=true
+        save();refreshUi();scheduleUpdate()
+    }
+
+    private fun showColorOptions(){
+        val categories=arrayOf("EQ","ISOLATOR","FILTRI","MASTER / MANOPOLE","PULSANTI","SFONDO")
+        AlertDialog.Builder(this).setTitle("PERSONALIZZA COLORI")
+            .setItems(categories){_,which->
+                val key=arrayOf("EQ","ISOLATOR","FILTERS","MASTER","BUTTONS","BACKGROUND")[which]
+                val names=arrayOf("Giallo oro","Azzurro","Arancione","Verde","Rosso","Viola","Bianco","Grigio")
+                val colors=intArrayOf(Color.rgb(214,179,106),Color.rgb(80,180,220),Color.rgb(230,135,70),Color.rgb(70,190,120),Color.rgb(220,70,75),Color.rgb(165,115,220),Color.WHITE,Color.rgb(105,115,130))
+                val current=when(key){"EQ"->colorEq;"ISOLATOR"->colorIso;"FILTERS"->colorFilters;"MASTER"->colorMaster;"BUTTONS"->colorButtons;else->colorBackground}
+                val selected=colors.indexOf(current).coerceAtLeast(0)
+                AlertDialog.Builder(this).setTitle("COLORE • ${categories[which]}")
+                    .setSingleChoiceItems(names,selected){dialog,index->
+                        when(key){"EQ"->colorEq=colors[index];"ISOLATOR"->colorIso=colors[index];"FILTERS"->colorFilters=colors[index];"MASTER"->colorMaster=colors[index];"BUTTONS"->colorButtons=colors[index];"BACKGROUND"->colorBackground=colors[index]}
+                        save();refreshUi();dialog.dismiss()
+                    }.setNegativeButton("ANNULLA",null).show()
+            }.setNegativeButton("CHIUDI",null).show()
+    }
+
 
     private fun connectAudio(){
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
@@ -665,7 +717,7 @@ class MainActivity : Activity() {
             for(ch in 0..1){
                 for(i in 0 until eqCount){
                     val valueIndex = if(eqDoubleMid) listOf(0,1,3,2)[i] else i
-                    var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-12f,12f) else 0f
+                    var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-14f,12f) else 0f
                     val hpfActive = filtersOn && filterControlOn[0] && filters[0]>.01f
                     val lpfActive = filtersOn && filterControlOn[1] && filters[1]>.01f
                     if(hpfActive && valueIndex==0) {
@@ -673,7 +725,7 @@ class MainActivity : Activity() {
                         // a cutoff-tracking resonant peak while HPF resonance is raised.
                         // The boost offsets the HPF attenuation so the kick remains audible.
                         eqGain -= filters[0]*36f
-                        eqGain += resonance * resonance * 4f
+                        eqGain += 3.2f * resonance.coerceIn(0f,1f).pow(1.8f)
                     }
                     if(lpfActive && valueIndex==2) eqGain -= filters[1]*36f
                     val bandFrequency = if(hpfActive && resonance>.001f && valueIndex==0)
@@ -689,7 +741,8 @@ class MainActivity : Activity() {
             }
             // More pronounced, rounded tone curves. Bass boost adds weight and punch;
             // loudness adds bass body plus a restrained upper presence lift.
-            val masterLow=(if(bassBoostOn)bassBoost/100f*15f else 0f)+(if(loudnessOn)loudness/100f*12f else 0f)
+            val bassBoostDb = 8f * (bassBoost.coerceIn(0f,100f)/100f).pow(1.4f)
+            val masterLow=(if(bassBoostOn)bassBoostDb else 0f)+(if(loudnessOn)loudness/100f*12f else 0f)
             val masterHigh=if(loudnessOn)loudness/100f*8f else 0f
             for(ch in 0..1){
                 val low=if(isoOn && isoControlOn[0])iso[0].coerceIn(-24f,24f) else 0f
@@ -728,7 +781,7 @@ class MainActivity : Activity() {
 
     private fun showOptions(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
-        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Pioneer V10","Tema Xone","Tema Rotativo classico")
+        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Interfaccia MINI / EXTENDED","Tema Xone","Personalizza colori")
         names.forEachIndexed{index,name->
             val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
                 when(index){
@@ -738,7 +791,8 @@ class MainActivity : Activity() {
                         AlertDialog.Builder(this@MainActivity).setTitle(key+" • tipo controllo").setSingleChoiceItems(opts,if(modes[key]==true)1 else 0){a,c->modes[key]=c==1;save();refreshUi();applyDsp();a.dismiss()}.setNegativeButton("Annulla",null).show()
                     }
                     4->{compact=!compact;save();refreshUi();applyDsp()}
-                    in 5..7->{skin=index-5;save();refreshUi();applyDsp()}
+                    5->{colorEq=Color.rgb(100,190,210);colorIso=Color.rgb(100,190,210);colorFilters=Color.rgb(100,190,210);colorMaster=Color.rgb(100,190,210);colorButtons=Color.rgb(255,205,0);colorBackground=Color.rgb(12,24,31);save();refreshUi()}
+                    6->showColorOptions()
                 }
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
