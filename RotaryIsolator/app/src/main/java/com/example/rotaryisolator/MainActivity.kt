@@ -415,11 +415,6 @@ class MainActivity : Activity() {
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(verticalRowHeight)) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row)
-        headerControls.addView(circleAction("↶",if(compactHeader)22 else 26) {
-            val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
-            for(i in 0..(if(key=="EQ")3 else 2))values[i]=previous[i]
-            save();refreshUi();scheduleUpdate()
-        },LinearLayout.LayoutParams(dp(if(compactHeader)24 else 28),dp(if(compactHeader)24 else 28)).apply{rightMargin=dp(5)})
         val sectionPower = Button(this).apply {
             fun paintState() {
                 val on = if(key=="EQ") eqOn else isoOn
@@ -457,7 +452,7 @@ class MainActivity : Activity() {
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
         val filterAccent = accentFor("FILTERS")
-        filterTitle.addView(label("FILTERS",if(phonePortrait)9f else 11f,filterAccent),LinearLayout.LayoutParams(0,dp(24),1f))
+        filterTitle.addView(label("FILTER",if(phonePortrait)9f else 11f,filterAccent),LinearLayout.LayoutParams(0,dp(24),1f))
         filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         })
@@ -477,7 +472,7 @@ class MainActivity : Activity() {
             val filterActionHeight=if(compactFilter)24 else if(phonePortrait)36 else 58
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",if(compactFilter)8f else 10f,Color.WHITE)
             val controlEnabled=filtersOn && (if(i==2) true else filterControlOn[i])
-            val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL or Gravity.END;setPadding(0,0,dp(if(compactFilter)8 else 10),0)}
             if(i<2) filterHeader.addView(roundAction("",if(controlEnabled)"ON" else "OFF",controlEnabled){
                 filterControlOn[i]=!filterControlOn[i];save();refreshUi();scheduleUpdate()
             })
