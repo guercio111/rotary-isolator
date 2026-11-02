@@ -74,7 +74,7 @@ class MainActivity : Activity() {
     private val previousFilters = FloatArray(3)
     private val eq = FloatArray(4)
     private val iso = floatArrayOf(0f, 0f, 0f)
-    // HPF, LPF intensity (0..100%)
+    // HPF intensity (0..100%)
     private val filters = floatArrayOf(0f, 0f)
     private val eqControlOn = BooleanArray(4) { true }
     private var eqDoubleMid = false
@@ -407,7 +407,7 @@ class MainActivity : Activity() {
                 val knobParams = if(midBand) LinearLayout.LayoutParams((dialHeight()*0.78f).toInt(),dialHeight()) else LinearLayout.LayoutParams(-1,dialHeight())
                 controlRow.addView(knob,knobParams)
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(dialHeight(),-1) else LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(dp(if(i==1)dialHeight()*2 else dialHeight()),-1) else LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
@@ -467,7 +467,7 @@ class MainActivity : Activity() {
         val useVerticalRows=!wideLayout && !phonePortrait
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()/2f-42f)/2f).roundToInt().coerceIn(96,140)
-        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
+        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
         val names=listOf("HPF","RESONANCE","REVERB")
         for(i in 0..(if(useVerticalRows)1 else 2)){
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
@@ -735,7 +735,7 @@ class MainActivity : Activity() {
                 for(i in 0 until eqCount){
                     val valueIndex = if(eqDoubleMid) listOf(0,1,3,2)[i] else i
                     var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-14f,14f) else 0f
-                    val hpfActive = filtersOn && filterControlOn[0] && filters[0]>.01f
+                    val hpfActive = filtersOn && filters[0]>.01f
                     if(hpfActive && valueIndex==0) {
                         // Keep the original EQ layout, but turn its LOW band into
                         // a cutoff-tracking resonant peak while HPF resonance is raised.
