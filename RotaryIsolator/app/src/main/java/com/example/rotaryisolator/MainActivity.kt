@@ -9,7 +9,6 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.content.res.ColorStateList
 import android.media.audiofx.DynamicsProcessing
-import android.media.audiofx.PresetReverb
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -27,9 +26,6 @@ import kotlin.math.*
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
-    private var masterReverb: PresetReverb? = null
-    private var reverbLevel = 0f
-    private var reverbOn = false
     private var audioReady = false
     private var appEnabled = true
     private var compact = false
@@ -102,8 +98,6 @@ class MainActivity : Activity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
-        reverbLevel = prefs.getFloat("master_reverb_level", 0f).coerceIn(0f,100f)
-        reverbOn = prefs.getBoolean("master_reverb_on", false)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
         bassBoost = 0f
@@ -293,8 +287,7 @@ class MainActivity : Activity() {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
                 putFloat("hpf",filters[0]);putFloat("resonance",resonance)
-                putFloat("master_reverb_level",reverbLevel);putBoolean("master_reverb_on",reverbOn)
-                for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i])}
+                                for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i])}
                 for(i in 0..1)putBoolean("filter_control_$i",filterControlOn[i])
                 modes.forEach{(k,v)->putBoolean("mode_$k",v)}
             }.apply()
@@ -407,7 +400,7 @@ class MainActivity : Activity() {
                 val knobParams = if(midBand) LinearLayout.LayoutParams((dialHeight()*0.78f).toInt(),dialHeight()) else LinearLayout.LayoutParams(-1,dialHeight())
                 controlRow.addView(knob,knobParams)
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(dp(if(i==1)dialHeight()*2 else dialHeight()),-1) else LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(dialHeight(),-1) else LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
@@ -467,11 +460,11 @@ class MainActivity : Activity() {
         val useVerticalRows=!wideLayout && !phonePortrait
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()/2f-42f)/2f).roundToInt().coerceIn(96,140)
-        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 3f}
-        val names=listOf("HPF","RESONANCE","REVERB")
-        for(i in 0..(if(useVerticalRows)1 else 2)){
+        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
+        val names=listOf("HPF","RESONANCE")
+        for(i in 0..1){
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-            val current=when(i){1->resonance;2->reverbLevel/100f;else->filters[0]}
+            val current=if(i==1)resonance else filters[0]
             val compactFilter = phonePortrait && !wideLayout
             val filterReturnSize=if(compactFilter)18 else if(phonePortrait)24 else 42
             val filterFlatSize=if(compactFilter)22 else if(phonePortrait)32 else 56
@@ -480,48 +473,37 @@ class MainActivity : Activity() {
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",if(compactFilter)8f else 10f,Color.WHITE)
             val controlEnabled=filtersOn
             val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL or Gravity.END;setPadding(0,0,dp(if(compactFilter)8 else 10),0)}
-            if(i==2) filterHeader.addView(roundAction("",if(reverbOn)"ON" else "OFF",reverbOn){
-                reverbOn=!reverbOn;save();refreshUi();scheduleUpdate()
-            })
             col.addView(filterHeader,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){when(i){1->resonance=p/100f;2->reverbLevel=p.toFloat();else->filters[0]=p/100f};l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
-                        override fun onStartTrackingTouch(b:SeekBar?){previousFilters[i]=when(i){1->resonance;2->reverbLevel/100f;else->filters[0]}}
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==1)resonance=p/100f else filters[0]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
+                        override fun onStartTrackingTouch(b:SeekBar?){previousFilters[i]=if(i==1)resonance else filters[0]}
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             }else{
                 val knob=RotaryControl(this,names[i],current,0f,1f,filterAccent,{v->
-                    when(i){1->resonance=v;2->reverbLevel=v*100f;else->filters[0]=v}
+                    if(i==1)resonance=v else filters[0]=v
                     l.text=names[i]+"  "+(v*100).roundToInt()+"%"
                     scheduleUpdate()
-                },{(when(i){1->resonance;2->reverbLevel/100f;else->filters[0]}*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=when(i){1->resonance;2->reverbLevel/100f;else->filters[0]}},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+                },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=controlEnabled
-                if(useVerticalRows && i==1){
-                    controlRow.addView(knob,LinearLayout.LayoutParams(0,-1,1f))
-                    val reverbCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-                    reverbCol.addView(roundAction("",if(reverbOn)"ON" else "OFF",reverbOn){reverbOn=!reverbOn;save();refreshUi();scheduleUpdate()},LinearLayout.LayoutParams(-1,dp(24)))
-                    reverbCol.addView(RotaryControl(this,"REVERB",reverbLevel,0f,100f,filterAccent,{v->reverbLevel=v.coerceIn(0f,100f);scheduleUpdate()},{reverbLevel.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),LinearLayout.LayoutParams(-1,0,1f))
-                    controlRow.addView(reverbCol,LinearLayout.LayoutParams(0,-1,1f))
-                }else{
-                    controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
-                }
+                controlRow.addView(knob,LinearLayout.LayoutParams(0,dialHeight(),1f))
             }
             col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(dialHeight(),-1) else LinearLayout.LayoutParams(-1,dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterActions.addView(circleAction("↶",filterReturnSize){
-                val old=previousFilters[i]; previousFilters[i]=when(i){1->resonance;2->reverbLevel/100f;else->filters[0]}
-                when(i){1->resonance=old;2->reverbLevel=old*100f;else->filters[0]=old}
+                val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
+                if(i==1)resonance=old else filters[0]=old
                 save();refreshUi();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
             filterActions.addView(circleAction("0",filterFlatSize){
-                previousFilters[i]=when(i){1->resonance;2->reverbLevel/100f;else->filters[0]}
-                when(i){1->resonance=0f;2->reverbLevel=0f;else->filters[0]=0f}
+                previousFilters[i]=if(i==1)resonance else filters[0]
+                if(i==1)resonance=0f else filters[0]=0f
                 scheduleUpdate();refreshUi()
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
             col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
@@ -684,7 +666,6 @@ class MainActivity : Activity() {
         for(i in 0..3){eq[i]=0f;previousEq[i]=0f;sectionPreviousEq[i]=0f}
         for(i in 0..2){iso[i]=0f;previousIso[i]=0f;sectionPreviousIso[i]=0f}
         filters[0]=0f;filters[1]=0f;resonance=0f
-        reverbLevel=0f;reverbOn=false
         for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
         gain=0f;compMakeup=0f;compressorOn=false
         bassBoost=0f;loudness=0f;bassBoostOn=false;loudnessOn=false
@@ -718,7 +699,6 @@ class MainActivity : Activity() {
         try{
             val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
-            try { masterReverb=PresetReverb(0,0).also{it.enabled=false} } catch(_:Throwable) { masterReverb=null }
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
     }
@@ -789,23 +769,8 @@ class MainActivity : Activity() {
                 fx.setLimiterAllChannelsTo(lim)
             }
             fx.enabled=appEnabled && (eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn)
-            try {
-                val rv=masterReverb
-                if(rv!=null){
-                    val amount=reverbLevel.coerceIn(0f,100f)/100f
-                    val preset=when {
-                        amount<0.17f -> PresetReverb.PRESET_SMALLROOM
-                        amount<0.34f -> PresetReverb.PRESET_MEDIUMROOM
-                        amount<0.51f -> PresetReverb.PRESET_LARGEROOM
-                        amount<0.68f -> PresetReverb.PRESET_MEDIUMHALL
-                        amount<0.85f -> PresetReverb.PRESET_LARGEHALL
-                        else -> PresetReverb.PRESET_PLATE
-                    }
-                    rv.preset=preset
-                    rv.enabled=appEnabled && reverbOn && amount>0.001f
-                }
-            }catch(_:Throwable){}
-            val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled || (reverbOn && reverbLevel>0f))"Processing ON • EQ / ISO / REVERB" else "BYPASS"
+
+            val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
             runOnUiThread { if(::status.isInitialized) status.text=message }
         }catch(t:Throwable){runOnUiThread { if(::status.isInitialized) status.text="Audio DSP non supportato dal driver del dispositivo" }}
     }
@@ -871,12 +836,12 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle("OPTIONS").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
     }
     private fun rebuildEffect(){
-        try{dpEffect?.release();masterReverb?.release()}catch(_:Throwable){}
-        dpEffect=null;masterReverb=null;connectAudio()
+        try{dpEffect?.release()}catch(_:Throwable){}
+        dpEffect=null;connectAudio()
     }
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
-        try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release();masterReverb?.enabled=false;masterReverb?.release()}catch(_:Throwable){}
+        try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
 }
