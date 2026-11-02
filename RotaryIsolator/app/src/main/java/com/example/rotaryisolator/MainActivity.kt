@@ -545,7 +545,11 @@ class MainActivity : Activity() {
                         }
                         addView(actions,LinearLayout.LayoutParams(dp(78),-1))
                     }
-                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-4),1f))
+                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-4),1f).apply {
+                        // In portrait MASTER, leave breathing room between the
+                        // BASS BOOST / LOUDNESS action buttons and their rotary dials.
+                        if(actionViews.size > 1) leftMargin=dp(12)
+                    })
                 }.also { it.minimumHeight=dp(rowHeight) }
             }
             val gainDial:View = if(modes["GAIN"]==true){
