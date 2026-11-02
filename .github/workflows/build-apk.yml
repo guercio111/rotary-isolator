@@ -42,7 +42,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
@@ -71,8 +71,13 @@ jobs:
           s = p.read_text()
           if p.name.endswith(".kts"):
               block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test"'
           else:
               block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test"'
+          if "defaultConfig {" not in s:
+              raise SystemExit("defaultConfig block not found")
+          s = s.replace("defaultConfig {", app_id_suffix, 1)
           s = s.replace("android {", "android {\n" + block, 1)
           p.write_text(s)
           PY
