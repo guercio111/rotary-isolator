@@ -616,14 +616,9 @@ class MainActivity : Activity() {
                     orientation=LinearLayout.HORIZONTAL
                     gravity=Gravity.CENTER_VERTICAL
                     setPadding(dp(2),dp(1),dp(2),dp(1))
-                    val info=LinearLayout(this@MainActivity).apply {
-                        orientation=LinearLayout.VERTICAL
-                        gravity=Gravity.CENTER_VERTICAL
-                        addView(label(title,8.5f,titleTint(gold)),LinearLayout.LayoutParams(-1,dp(20)))
-                        // Percentage label removed; master values remain adjustable.
-                    }
-                    addView(info,LinearLayout.LayoutParams(0,-1,1f))
-                    addView(dial,LinearLayout.LayoutParams(dialHeight().coerceAtMost(dp(116)),dp(rowHeight-4)))
+                    // No left-side text: keep every MASTER dial on the same
+                    // centered axis and give the four controls equal space.
+                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-4),1f))
                     if(actionViews.isNotEmpty()){
                         val actions=LinearLayout(this@MainActivity).apply {
                             orientation=LinearLayout.VERTICAL
