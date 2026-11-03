@@ -197,18 +197,22 @@ class MainActivity : Activity() {
             modes["FILTERS"] = false
             prefs.edit().putBoolean("mode_FILTERS", false).putBoolean("filter_rotary_default_v1", true).apply()
         }
-        // Startup defaults apply only to a genuine fresh launch. Android also calls
-        // onCreate when recreating the Activity after rotation; in that case the
-        // saved mixer values must always win, even when startup defaults are enabled.
-        if (defaultSettingsOnStart && savedInstanceState == null) applyStartupDefaults()
+        // Startup defaults apply only to a genuinely new app session. If Android
+        // recreates the process after suspending/killing the app in background,
+        // restore the last mixer state instead of resetting it to defaults.
+        val returningFromBackground = prefs.getBoolean("session_in_background", false)
+        if (defaultSettingsOnStart && savedInstanceState == null && !returningFromBackground) applyStartupDefaults()
+        prefs.edit().putBoolean("session_in_background", false).apply()
         buildUi()
         connectAudio()
     }
 
     override fun onPause() {
-        // Persist the live mixer before the app goes to the background. This also
-        // protects the current values if Android later reclaims the Activity.
+        // Persist the live mixer and mark the session as backgrounded. If Android
+        // later reclaims the process for battery/memory management, the next
+        // Activity instance knows to restore the saved controls, not startup defaults.
         save()
+        prefs.edit().putBoolean("session_in_background", true).apply()
         super.onPause()
     }
 
@@ -970,6 +974,9 @@ class MainActivity : Activity() {
     }
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
+        // Clear the background marker only for an intentional Activity finish.
+        // Do not clear it when Android destroys a background process or rotates the device.
+        if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
         try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
