@@ -432,11 +432,13 @@ class MainActivity : Activity() {
         // In tablet portrait, stack LOW / MID / HIGH as full-width mixer strips.
         // Phone layouts keep their compact three-column arrangement.
         val useVerticalRows=!wideLayout && !phonePortrait
-        // On tablet portrait, size the three strips from the real quadrant height.
-        // This avoids oversized fixed rows forcing the whole interface to shrink.
-        val verticalRowHeight = ((windowHeightDp()/2f-88f)/3f).roundToInt().coerceIn(80,140)
-        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
+        // Size portrait strips from their actual count: EQ has four rows in
+        // double-mid mode, while the Isolator has three. This prevents the last
+        // strip from being clipped by the quadrant boundary.
         val indices = if(key=="EQ" && eqDoubleMid) listOf(0,1,3,2) else listOf(0,1,2)
+        val verticalRowHeight = ((windowHeightDp()/2f-88f)/indices.size).roundToInt().coerceIn(80,140)
+        val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-8).coerceAtLeast(60)) else dialHeight()
+        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
         val names = if(key=="EQ" && eqDoubleMid) listOf("LOW","MID LOW","MID HIGH","HIGH") else listOf("LOW","MID","HIGH")
         for(pos in indices.indices){
             val i=indices[pos]
@@ -462,10 +464,10 @@ class MainActivity : Activity() {
                 val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=active[i]
                 val midBand = key=="EQ" && eqDoubleMid && (i==1 || i==3)
-                val knobParams = if(midBand) LinearLayout.LayoutParams((dialHeight()*0.78f).toInt(),dialHeight()) else LinearLayout.LayoutParams(-1,dialHeight())
+                val knobParams = if(midBand) LinearLayout.LayoutParams((verticalDialHeight*0.78f).toInt(),verticalDialHeight) else LinearLayout.LayoutParams(-1,verticalDialHeight)
                 controlRow.addView(knob,knobParams)
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(dialHeight(),-1) else LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(verticalDialHeight,-1) else LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
@@ -516,13 +518,22 @@ class MainActivity : Activity() {
     private fun addFilterSection(parent:LinearLayout=content){
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(4),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterAccent = accentFor("FILTERS")
-        box.addView(sectionLabel("FILTERS",if(phonePortrait)11f else 13f,filterAccent),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)24 else 32)))
-        val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
-            filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
-        })
-        box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
         val useVerticalRows=!wideLayout && !phonePortrait
+        val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
+            filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
+        }
+        if(useVerticalRows) {
+            // Tablet portrait: keep FILTERS on the same header line as EQ/ISOLATOR.
+            val header=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+            header.addView(sectionLabel("FILTERS",13f,filterAccent),LinearLayout.LayoutParams(0,dp(32),1f))
+            header.addView(filterPower,LinearLayout.LayoutParams(-2,dp(32)))
+            box.addView(header,LinearLayout.LayoutParams(-1,dp(32)))
+        } else {
+            box.addView(sectionLabel("FILTERS",if(phonePortrait)11f else 13f,filterAccent),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)24 else 32)))
+            val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            filterTitle.addView(filterPower)
+            box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
+        }
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()/2f-42f)/2f).roundToInt().coerceIn(96,140)
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
