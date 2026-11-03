@@ -197,9 +197,19 @@ class MainActivity : Activity() {
             modes["FILTERS"] = false
             prefs.edit().putBoolean("mode_FILTERS", false).putBoolean("filter_rotary_default_v1", true).apply()
         }
-        if (defaultSettingsOnStart) applyStartupDefaults()
+        // Startup defaults apply only to a genuine fresh launch. Android also calls
+        // onCreate when recreating the Activity after rotation; in that case the
+        // saved mixer values must always win, even when startup defaults are enabled.
+        if (defaultSettingsOnStart && savedInstanceState == null) applyStartupDefaults()
         buildUi()
         connectAudio()
+    }
+
+    override fun onPause() {
+        // Persist the live mixer before the app goes to the background. This also
+        // protects the current values if Android later reclaims the Activity.
+        save()
+        super.onPause()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
