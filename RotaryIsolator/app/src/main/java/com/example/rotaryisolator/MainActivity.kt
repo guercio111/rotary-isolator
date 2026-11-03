@@ -531,13 +531,13 @@ class MainActivity : Activity() {
         if(useVerticalRows) {
             // Tablet portrait: center the section title and reserve the same
             // 44dp control lane used by EQ and ISOLATOR.
-            box.addView(sectionLabel("FILTERS",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(32)))
+            box.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(32)))
             val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterTitle.addView(filterPower)
             box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
         } else {
             // Preserve the established phone and landscape presentation.
-            box.addView(sectionLabel("FILTERS",if(phonePortrait)11f else 13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)24 else 32)))
+            box.addView(sectionLabel("HPF",if(phonePortrait)11f else 13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)24 else 32)))
             val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterTitle.addView(filterPower)
             box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
