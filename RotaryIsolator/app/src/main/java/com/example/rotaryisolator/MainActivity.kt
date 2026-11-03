@@ -1009,7 +1009,12 @@ private class RotaryControl(
     private var downV=initial
     private var dragged=false
     private val density get()=resources.displayMetrics.density
-    private fun dp(x:Float)=x*density*phoneUiScale
+    private val layoutScale:Float get() {
+        val cfg=resources.configuration
+        val w=cfg.screenWidthDp.toFloat(); val h=cfg.screenHeightDp.toFloat()
+        return if(min(w,h)<600f && w>h) min(w/1280f,h/800f).coerceIn(0.42f,1f) else 1f
+    }
+    private fun dp(x:Float)=x*density*layoutScale
     private val rect get()={
         // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
         // for title and value. The dial itself is sized from the remaining square
