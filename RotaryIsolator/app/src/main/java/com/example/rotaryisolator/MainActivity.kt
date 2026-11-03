@@ -436,8 +436,10 @@ class MainActivity : Activity() {
         // double-mid mode, while the Isolator has three. This prevents the last
         // strip from being clipped by the quadrant boundary.
         val indices = if(key=="EQ" && eqDoubleMid) listOf(0,1,3,2) else listOf(0,1,2)
+        // Tablet portrait uses measured, weighted rows instead of guessed dp heights.
+        // Every band receives exactly the same share of the real section height.
         val verticalRowHeight = ((windowHeightDp()/2f-96f)/indices.size).roundToInt().coerceIn(52,140)
-        val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-(if(key=="EQ" && eqDoubleMid) 2 else 6)).coerceAtLeast(44)) else dialHeight()
+        val verticalDialHeight = if(useVerticalRows) dp(verticalRowHeight) else dialHeight()
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
         val names = if(key=="EQ" && eqDoubleMid) listOf("LOW","MID LOW","MID HIGH","HIGH") else listOf("LOW","MID","HIGH")
         for(pos in indices.indices){
@@ -461,13 +463,14 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows && key=="EQ" && eqDoubleMid)
+                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
                 knob.isEnabled=active[i]
-                val midBand = key=="EQ" && eqDoubleMid && (i==1 || i==3)
-                val knobParams = if(midBand) LinearLayout.LayoutParams((verticalDialHeight*0.78f).toInt(),verticalDialHeight) else LinearLayout.LayoutParams(-1,verticalDialHeight)
+                // In portrait each dial occupies the same flexible column; the
+                // control measures itself from its row, never from a guessed width.
+                val knobParams = if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(-1,verticalDialHeight)
                 controlRow.addView(knob,knobParams)
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(verticalDialHeight,-1) else LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
@@ -479,9 +482,9 @@ class MainActivity : Activity() {
                 values[i]=0f; scheduleUpdate(); refreshUi()
             },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
-            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(verticalRowHeight)) else LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
         }
-        box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(compactHeader)4 else 7)})
+        box.addView(row,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=dp(4)} else LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(compactHeader)4 else 7)})
         val sectionPower = Button(this).apply {
             fun paintState() {
                 val on = if(key=="EQ") eqOn else isoOn
@@ -974,9 +977,9 @@ private class RotaryControl(
         // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
         // for title and value. The dial itself is sized from the remaining square
         // area, so the LOW face cannot be squeezed into an oval or cut by its labels.
-        val dialTextReserve=if(portraitDialFit) dp(30f) else dp(18f)
-        val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .96f
-        val cy=if(portraitDialFit) (height-dp(30f))/2f else (height-dp(26f))/2f
+        val dialTextReserve=if(portraitDialFit) dp(27f) else dp(18f)
+        val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .94f
+        val cy=if(portraitDialFit) (height-dp(27f))/2f else (height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
     init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
