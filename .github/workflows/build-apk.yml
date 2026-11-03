@@ -1,5 +1,5 @@
-name: Build Rotary Isolator APK
-# Rebuild requested after preserving mixer state across orientation changes
+name: Build FREQUALIZER Smartphone Test APK
+# Dedicated phone test build from Stable 165. Mixer source and audio behavior remain unchanged.
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
-      - name: Rename app to FREQUALIZER
+      - name: Rename app to FREQUALIZER SMARTPHONE TEST
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -43,7 +43,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER SMARTPHONE TEST"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
@@ -58,11 +58,11 @@ jobs:
           sudo apt-get install -y python3-pil
           /usr/bin/python3 .github/scripts/generate_app_icon.py extracted/RotaryIsolator
 
-      - name: Use maintained Kotlin source
+      - name: Use Stable 165 Kotlin source
         run: |
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
 
-      - name: Set Java compatibility to 17
+      - name: Set Java compatibility to 17 and isolate test installation
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -90,5 +90,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rotary-isolator-debug-apk
+          name: frequalizer-smartphone-test-apk
           path: extracted/RotaryIsolator/app/build/outputs/apk/debug/app-debug.apk
