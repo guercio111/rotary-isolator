@@ -522,10 +522,20 @@ class MainActivity : Activity() {
         val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         }
-        box.addView(sectionLabel("FILTERS",if(phonePortrait)11f else 13f,filterAccent),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)24 else 32)))
-        val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        filterTitle.addView(filterPower)
-        box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
+        if(useVerticalRows) {
+            // Tablet portrait: center the section title and reserve the same
+            // 44dp control lane used by EQ and ISOLATOR.
+            box.addView(sectionLabel("FILTERS",13f,filterAccent),LinearLayout.LayoutParams(-1,dp(32)))
+            val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            filterTitle.addView(filterPower)
+            box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
+        } else {
+            // Preserve the established phone and landscape presentation.
+            box.addView(sectionLabel("FILTERS",if(phonePortrait)11f else 13f,filterAccent),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)24 else 32)))
+            val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+            filterTitle.addView(filterPower)
+            box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
+        }
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()/2f-96f)/2f).roundToInt().coerceIn(52,140)
         val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else dialHeight()
