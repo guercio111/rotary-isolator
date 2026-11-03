@@ -473,7 +473,7 @@ class MainActivity : Activity() {
                 val knobParams = if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(-1,verticalDialHeight)
                 controlRow.addView(knob,knobParams)
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout && !phonePortrait) filterLandscapeDialHeight else dialHeight()))
+            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
@@ -584,7 +584,7 @@ class MainActivity : Activity() {
                 knob.isEnabled=controlEnabled
                 controlRow.addView(knob,if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout && !phonePortrait) filterLandscapeDialHeight else verticalDialHeight,1f))
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout && !phonePortrait) filterLandscapeDialHeight else dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterActions.addView(circleAction("↶",filterReturnSize){
                 val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
