@@ -437,7 +437,7 @@ class MainActivity : Activity() {
         // strip from being clipped by the quadrant boundary.
         val indices = if(key=="EQ" && eqDoubleMid) listOf(0,1,3,2) else listOf(0,1,2)
         val verticalRowHeight = ((windowHeightDp()/2f-96f)/indices.size).roundToInt().coerceIn(52,140)
-        val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else dialHeight()
+        val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-(if(key=="EQ" && eqDoubleMid) 2 else 6)).coerceAtLeast(44)) else dialHeight()
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
         val names = if(key=="EQ" && eqDoubleMid) listOf("LOW","MID LOW","MID HIGH","HIGH") else listOf("LOW","MID","HIGH")
         for(pos in indices.indices){
@@ -461,7 +461,7 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows && key=="EQ" && eqDoubleMid)
                 knob.isEnabled=active[i]
                 val midBand = key=="EQ" && eqDoubleMid && (i==1 || i==3)
                 val knobParams = if(midBand) LinearLayout.LayoutParams((verticalDialHeight*0.78f).toInt(),verticalDialHeight) else LinearLayout.LayoutParams(-1,verticalDialHeight)
@@ -960,7 +960,8 @@ private class RotaryControl(
     private val onStart:()->Unit = {},
     private val onEnd:()->Unit = {},
     private val titleInside:Boolean = false,
-    private val wheelMultiplier:()->Float = {1f}
+    private val wheelMultiplier:()->Float = {1f},
+    private val portraitDialFit:Boolean = false
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -971,7 +972,9 @@ private class RotaryControl(
     private fun dp(x:Float)=x*density
     private val rect get()={
         val side=min(width.toFloat(),(height.toFloat()-dp(18f)).coerceAtLeast(1f))* .96f
-        val cy=(height-dp(26f))/2f
+        // In tablet portrait with four EQ bands, use the full dial lane and
+        // shift the face down slightly so its circular outline is never clipped.
+        val cy=if(portraitDialFit) (height-dp(18f))/2f else (height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
     init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
