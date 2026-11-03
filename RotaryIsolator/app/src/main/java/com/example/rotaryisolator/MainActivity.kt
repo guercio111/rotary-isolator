@@ -546,7 +546,7 @@ class MainActivity : Activity() {
         val verticalRowHeight = ((windowHeightDp()/2f-96f)/2f).roundToInt().coerceIn(52,140)
         val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else dialHeight()
         // Enlarge only the two FILTER dials on tablet landscape; leave every other control unchanged.
-        val filterLandscapeDialHeight = if(wideLayout && !phonePortrait) dp(190) else dialHeight()
+        val filterLandscapeDialHeight = if(wideLayout && !phonePortrait) dp(210) else dialHeight()
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
         val names=listOf("HPF","RESONANCE")
         for(i in 0..1){
@@ -562,7 +562,7 @@ class MainActivity : Activity() {
             // on the section's vertical axis. Do not add a blank label lane here:
             // it would shift FILTER dials to the right and break vertical alignment.
             if(!useVerticalRows) {
-                col.addView(View(this),LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
+                col.addView(View(this),LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else if(wideLayout)10 else 24)))
             }
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes["FILTERS"]==true){
