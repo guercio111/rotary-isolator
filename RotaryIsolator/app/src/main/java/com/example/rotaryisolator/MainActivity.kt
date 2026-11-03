@@ -556,12 +556,10 @@ class MainActivity : Activity() {
             val filterActionGap=if(compactFilter)1 else if(phonePortrait)3 else 8
             val filterActionHeight=if(compactFilter)24 else if(phonePortrait)36 else 58
             val controlEnabled=filtersOn
-            // Reserve the same label column as EQ/ISOLATOR, but keep it blank:
-            // HPF and RESONANCE are already drawn beneath their rotary controls.
-            if(useVerticalRows) {
-                // Match EQ's left label lane and right dial lane exactly.
-                col.addView(View(this),LinearLayout.LayoutParams(0,-1,1f))
-            } else {
+            // Tablet portrait: EQ dials use the full row width and are centered
+            // on the section's vertical axis. Do not add a blank label lane here:
+            // it would shift FILTER dials to the right and break vertical alignment.
+            if(!useVerticalRows) {
                 col.addView(View(this),LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
             }
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
