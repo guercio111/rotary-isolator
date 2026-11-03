@@ -298,7 +298,7 @@ class MainActivity : Activity() {
     private fun button(t:String, action:()->Unit)=Button(this).apply { text=t; setOnClickListener { action() } }
     private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
     private fun circleAction(symbol:String, diameter:Int, action:()->Unit):View = TextView(this).apply {
-        text=symbol; textSize=(if(diameter>=dp(48))16f else 11f)*phoneUiScale; setTextColor(Color.WHITE)
+        text=symbol; textSize=(if(diameter>=48)16f else 11f)*phoneUiScale; setTextColor(Color.WHITE)
         gravity=Gravity.CENTER; contentDescription=when(symbol){"F"->"Flat";"0"->"Reset";else->"Return"}
         background=android.graphics.drawable.GradientDrawable().apply {
             shape=android.graphics.drawable.GradientDrawable.OVAL
@@ -313,7 +313,7 @@ class MainActivity : Activity() {
         return LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
             val dot=TextView(this@MainActivity).apply {
-                text=symbol;gravity=Gravity.CENTER;textSize=if(symbol=="F")9f else 11f
+                text=symbol;gravity=Gravity.CENTER;textSize=(if(symbol=="F")9f else 11f)*phoneUiScale
                 setTextColor(Color.WHITE)
                 background=android.graphics.drawable.GradientDrawable().apply {
                     shape=android.graphics.drawable.GradientDrawable.OVAL
@@ -364,7 +364,7 @@ class MainActivity : Activity() {
             text=if(appEnabled)"● ON" else "● OFF"
             backgroundTintList=ColorStateList.valueOf(if(appEnabled)Color.rgb(25,150,65) else Color.rgb(190,35,42))
         }
-        textSize=11f;isAllCaps=false;setTextColor(Color.WHITE);minHeight=dp(30);minimumHeight=dp(30)
+        textSize=11f*phoneUiScale;isAllCaps=false;setTextColor(Color.WHITE);minHeight=dp(30);minimumHeight=dp(30)
         setPadding(dp(3),0,dp(3),0);paintState();contentDescription="Interruttore generale audio"
         setOnClickListener { appEnabled=!appEnabled;paintState();save();scheduleUpdate() }
     }
@@ -530,7 +530,7 @@ class MainActivity : Activity() {
                     if(on) Color.rgb(25,150,65) else Color.rgb(190,35,42)
                 )
             }
-            textSize=if(compactHeader)8f else 9f; isAllCaps=false; setTextColor(Color.WHITE)
+            textSize=(if(compactHeader)8f else 9f)*phoneUiScale; isAllCaps=false; setTextColor(Color.WHITE)
             minHeight=dp(if(compactHeader)24 else 27); minimumHeight=dp(if(compactHeader)24 else 27)
             setPadding(dp(3),0,dp(3),0)
             paintState()
