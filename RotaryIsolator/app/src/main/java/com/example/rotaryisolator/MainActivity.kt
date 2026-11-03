@@ -33,9 +33,9 @@ class MainActivity : Activity() {
     private var compact = false
     private var uiScale = 1.0f
     private var colorEq = Color.rgb(70,190,120)
-    private var colorIso = Color.rgb(100,190,210)
-    private var colorFilters = Color.rgb(220,130,80)
-    private var colorMaster = Color.rgb(214,179,106)
+    private var colorIso = Color.rgb(70,190,120)
+    private var colorFilters = Color.rgb(70,190,120)
+    private var colorMaster = Color.rgb(70,190,120)
     private var colorButtons = Color.rgb(255,205,0)
     private var colorBackground = Color.rgb(17,19,23)
     private var colorTitles = Color.rgb(220,70,75)
@@ -120,20 +120,25 @@ class MainActivity : Activity() {
         phonePortrait = min(windowWidthDp, windowHeightDp) < 600
         wideLayout = windowWidthDp > windowHeightDp
         colorEq = prefs.getInt("color_eq", Color.rgb(70,190,120))
-        colorIso = prefs.getInt("color_iso", Color.rgb(100,190,210))
-        colorFilters = prefs.getInt("color_filters", Color.rgb(220,130,80))
-        colorMaster = prefs.getInt("color_master", Color.rgb(214,179,106))
+        colorIso = prefs.getInt("color_iso", Color.rgb(70,190,120))
+        colorFilters = prefs.getInt("color_filters", Color.rgb(70,190,120))
+        colorMaster = prefs.getInt("color_master", Color.rgb(70,190,120))
         colorButtons = prefs.getInt("color_buttons", Color.rgb(255,205,0))
         colorBackground = prefs.getInt("color_background", Color.rgb(17,19,23))
         colorTitles = prefs.getInt("color_titles", Color.rgb(220,70,75))
         colorOptions = prefs.getInt("color_options", Color.rgb(255,205,0))
-        val colorDefaultsApplied = prefs.getBoolean("color_defaults_v2", false)
+        val colorDefaultsApplied = prefs.getBoolean("color_defaults_v3", false)
         if (!colorDefaultsApplied) {
             colorEq = Color.rgb(70,190,120)
+            colorIso = Color.rgb(70,190,120)
+            colorFilters = Color.rgb(70,190,120)
+            colorMaster = Color.rgb(70,190,120)
             colorTitles = Color.rgb(220,70,75)
             colorOptions = Color.rgb(255,205,0)
-            prefs.edit().putInt("color_eq", colorEq).putInt("color_titles", colorTitles)
-                .putInt("color_options", colorOptions).putBoolean("color_defaults_v2", true).apply()
+            prefs.edit().putInt("color_eq", colorEq).putInt("color_iso", colorIso)
+                .putInt("color_filters", colorFilters).putInt("color_master", colorMaster)
+                .putInt("color_titles", colorTitles).putInt("color_options", colorOptions)
+                .putBoolean("color_defaults_v3", true).apply()
         }
         val mouseDefaultsApplied = prefs.getBoolean("mouse_defaults_v1", false)
         mouseWheelAdjustOn = if (mouseDefaultsApplied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
