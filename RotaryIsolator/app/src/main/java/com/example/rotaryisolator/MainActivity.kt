@@ -559,6 +559,7 @@ class MainActivity : Activity() {
             // Reserve the same label column as EQ/ISOLATOR, but keep it blank:
             // HPF and RESONANCE are already drawn beneath their rotary controls.
             if(useVerticalRows) {
+                // Match EQ's left label lane and right dial lane exactly.
                 col.addView(View(this),LinearLayout.LayoutParams(0,-1,1f))
             } else {
                 col.addView(View(this),LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
@@ -579,7 +580,7 @@ class MainActivity : Activity() {
                     if(i==1)resonance=v else filters[0]=v
                     
                     scheduleUpdate()
-                },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+                },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
                 knob.isEnabled=controlEnabled
                 controlRow.addView(knob,if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,verticalDialHeight,1f))
             }
