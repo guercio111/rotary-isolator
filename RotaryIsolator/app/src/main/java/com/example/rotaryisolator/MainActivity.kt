@@ -298,6 +298,35 @@ class MainActivity : Activity() {
             addView(txt,LinearLayout.LayoutParams(-2,dp(24)))
         }
     }
+    private fun gearButton():View = object : View(this) {
+        private val gearPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = gold; style = Paint.Style.FILL }
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val cx = width / 2f
+            val cy = height / 2f
+            val outer = min(width, height) * 0.43f
+            val root = outer * 0.76f
+            val path = android.graphics.Path()
+            for (i in 0 until 32) {
+                val radius = if (i % 4 == 0 || i % 4 == 1) outer else root
+                val angle = Math.toRadians((-90.0 + i * 360.0 / 32.0))
+                val x = cx + cos(angle).toFloat() * radius
+                val y = cy + sin(angle).toFloat() * radius
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            path.close()
+            canvas.drawPath(path, gearPaint)
+            gearPaint.color = bg
+            canvas.drawCircle(cx, cy, outer * 0.37f, gearPaint)
+            gearPaint.color = gold
+            canvas.drawCircle(cx, cy, outer * 0.17f, gearPaint)
+        }
+        init {
+            contentDescription = "Impostazioni"
+            setOnClickListener { showOptions() }
+        }
+    }
+
     private fun appPowerControl():Button = Button(this).apply {
         fun paintState(){
             text=if(appEnabled)"● ON" else "● OFF"
@@ -332,7 +361,7 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(phonePortrait)72 else 82),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(5)})
-        titleBar.addView(TextView(this).apply { text="⚙"; textSize=30f; gravity=Gravity.CENTER; setTextColor(gold); contentDescription="Impostazioni"; setOnClickListener { showOptions() } },LinearLayout.LayoutParams(dp(54),dp(if(phonePortrait)36 else 42)).apply{leftMargin=dp(5)})
+        titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(phonePortrait)36 else 42)).apply{leftMargin=dp(5)})
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
         // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
@@ -405,7 +434,7 @@ class MainActivity : Activity() {
         val useVerticalRows=!wideLayout && !phonePortrait
         // On tablet portrait, size the three strips from the real quadrant height.
         // This avoids oversized fixed rows forcing the whole interface to shrink.
-        val verticalRowHeight = ((windowHeightDp()/2f-42f)/3f).roundToInt().coerceIn(96,140)
+        val verticalRowHeight = ((windowHeightDp()/2f-88f)/3f).roundToInt().coerceIn(80,140)
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
         val indices = if(key=="EQ" && eqDoubleMid) listOf(0,1,3,2) else listOf(0,1,2)
         val names = if(key=="EQ" && eqDoubleMid) listOf("LOW","MID LOW","MID HIGH","HIGH") else listOf("LOW","MID","HIGH")
@@ -485,14 +514,14 @@ class MainActivity : Activity() {
     }
 
     private fun addFilterSection(parent:LinearLayout=content){
-        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(1),dp(if(phonePortrait)1 else 4),dp(1))}
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(4),dp(if(phonePortrait)1 else 4),dp(1))}
         val filterAccent = accentFor("FILTERS")
         box.addView(sectionLabel("FILTERS",if(phonePortrait)11f else 13f,filterAccent),LinearLayout.LayoutParams(-1,dp(if(phonePortrait)24 else 32)))
         val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         filterTitle.addView(roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         })
-        box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(if(phonePortrait)28 else 32)))
+        box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
         val useVerticalRows=!wideLayout && !phonePortrait
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()/2f-42f)/2f).roundToInt().coerceIn(96,140)
@@ -506,17 +535,20 @@ class MainActivity : Activity() {
             val filterFlatSize=if(compactFilter)22 else if(phonePortrait)32 else 56
             val filterActionGap=if(compactFilter)1 else if(phonePortrait)3 else 8
             val filterActionHeight=if(compactFilter)24 else if(phonePortrait)36 else 58
-            val l=label(names[i]+"  "+(current*100).roundToInt()+"%",if(compactFilter)8f else 10f,Color.WHITE)
             val controlEnabled=filtersOn
-            val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER;setPadding(0,0,dp(if(compactFilter)8 else 10),0)}
-            filterHeader.addView(l,if(useVerticalRows)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(-1,-1))
-            col.addView(filterHeader,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
+            // Reserve the same label column as EQ/ISOLATOR, but keep it blank:
+            // HPF and RESONANCE are already drawn beneath their rotary controls.
+            if(useVerticalRows) {
+                col.addView(View(this),LinearLayout.LayoutParams(0,-1,1f))
+            } else {
+                col.addView(View(this),LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
+            }
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==1)resonance=p/100f else filters[0]=p/100f;l.text=names[i]+"  "+p+"%";scheduleUpdate()}}
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==1)resonance=p/100f else filters[0]=p/100f;;scheduleUpdate()}}
                         override fun onStartTrackingTouch(b:SeekBar?){previousFilters[i]=if(i==1)resonance else filters[0]}
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
@@ -525,7 +557,7 @@ class MainActivity : Activity() {
             }else{
                 val knob=RotaryControl(this,names[i],current,0f,1f,filterAccent,{v->
                     if(i==1)resonance=v else filters[0]=v
-                    l.text=names[i]+"  "+(v*100).roundToInt()+"%"
+                    
                     scheduleUpdate()
                 },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=controlEnabled
@@ -553,12 +585,12 @@ class MainActivity : Activity() {
         val masterAccent = accentFor("MASTER")
         val tabletPortrait = !phonePortrait && !wideLayout
         val compactMaster = phonePortrait && !wideLayout
-        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 3),dp(1),dp(if(phonePortrait)1 else 3),dp(1))}
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=if(!phonePortrait && !wideLayout) Gravity.CENTER_VERTICAL else Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(4),dp(if(phonePortrait)1 else 4),dp(1))}
         box.addView(sectionLabel("MASTER",if(phonePortrait)11f else 13f,masterAccent),LinearLayout.LayoutParams(-1,dp(if(compactMaster)24 else 32)))
         if(tabletPortrait){
             // Portrait tablet: one full-width MASTER strip per control.
             // Keep the existing rotary controls and DSP callbacks; only the layout changes.
-            val rowHeight = ((windowHeightDp()/2f-28f)/5f).roundToInt().coerceIn(64,92)
+            val rowHeight = ((windowHeightDp()/2f-84f)/4f).roundToInt().coerceIn(54,92)
             fun masterRow(title:String, value:String, dial:View, actionViews:List<View> = emptyList()):View {
                 return LinearLayout(this).apply {
                     orientation=LinearLayout.HORIZONTAL
@@ -570,7 +602,8 @@ class MainActivity : Activity() {
                         addView(label(title,8.5f,gold),LinearLayout.LayoutParams(-1,dp(20)))
                         addView(label(value,9f,Color.WHITE),LinearLayout.LayoutParams(-1,dp(18)))
                     }
-                    addView(info,LinearLayout.LayoutParams(dp(78),-1))
+                    addView(info,LinearLayout.LayoutParams(0,-1,1f))
+                    addView(dial,LinearLayout.LayoutParams(dp(dialHeight().coerceAtMost(dp(116))),dp(rowHeight-4)))
                     if(actionViews.isNotEmpty()){
                         val actions=LinearLayout(this@MainActivity).apply {
                             orientation=LinearLayout.VERTICAL
@@ -582,13 +615,8 @@ class MainActivity : Activity() {
                                 })
                             }
                         }
-                        addView(actions,LinearLayout.LayoutParams(dp(82),-1))
+                        addView(actions,LinearLayout.LayoutParams(dp(106),-1))
                     }
-                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-4),1f).apply {
-                        // In portrait MASTER, leave breathing room between the
-                        // BASS BOOST / LOUDNESS action buttons and their rotary dials.
-                        if(actionViews.size > 1) leftMargin=dp(26)
-                    })
                 }.also { it.minimumHeight=dp(rowHeight) }
             }
             val gainDial:View = if(modes["GAIN"]==true){
@@ -601,8 +629,9 @@ class MainActivity : Activity() {
                     })
                 }
             } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-            // Reserve the same action-column width used by the other MASTER rows,
-            // so the GAIN dial shares their exact horizontal alignment.
+            // Match the common section header height: all four sections start
+            // their rotary rows on the same baseline.
+            box.addView(View(this),LinearLayout.LayoutParams(-1,dp(44)))
             val gainSpacer=View(this).apply{isClickable=false}
             box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial,listOf(gainSpacer)),LinearLayout.LayoutParams(-1,dp(rowHeight)).apply{topMargin=dp(7)})
             val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
