@@ -548,7 +548,7 @@ class MainActivity : Activity() {
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==1)resonance=p/100f else filters[0]=p/100f;;scheduleUpdate()}}
+                        override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==1)resonance=p/100f else filters[0]=p/100f;scheduleUpdate()}}
                         override fun onStartTrackingTouch(b:SeekBar?){previousFilters[i]=if(i==1)resonance else filters[0]}
                         override fun onStopTrackingTouch(b:SeekBar?){scheduleUpdate()}
                     })
