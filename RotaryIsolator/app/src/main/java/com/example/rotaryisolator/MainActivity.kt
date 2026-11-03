@@ -580,7 +580,7 @@ class MainActivity : Activity() {
                     if(i==1)resonance=v else filters[0]=v
                     
                     scheduleUpdate()
-                },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
+                },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,bottomTextLift=if(useVerticalRows)8f else 0f)
                 knob.isEnabled=controlEnabled
                 controlRow.addView(knob,if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout && !phonePortrait) filterLandscapeDialHeight else verticalDialHeight,1f))
             }
@@ -963,7 +963,8 @@ private class RotaryControl(
     private val onEnd:()->Unit = {},
     private val titleInside:Boolean = false,
     private val wheelMultiplier:()->Float = {1f},
-    private val portraitDialFit:Boolean = false
+    private val portraitDialFit:Boolean = false,
+    private val bottomTextLift:Float = 0f
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -1011,9 +1012,9 @@ private class RotaryControl(
         p.textAlign=Paint.Align.CENTER
         val titleSize=min(dp(11f),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
         p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
-        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp(17f),p)}
+        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp(17f+bottomTextLift),p)}
         val value=valueText()
-        p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp(4f),p)
+        p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp(4f+bottomTextLift),p)
     }
     private fun updateFromPoint(x:Float,y:Float){
         val r=rect;val cx=r.centerX();val cy=r.centerY()
