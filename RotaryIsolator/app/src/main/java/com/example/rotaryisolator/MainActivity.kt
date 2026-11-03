@@ -611,7 +611,7 @@ class MainActivity : Activity() {
         if(tabletPortrait){
             // Portrait tablet: one full-width MASTER strip per control.
             // Keep the existing rotary controls and DSP callbacks; only the layout changes.
-            val rowHeight = ((windowHeightDp()/2f-84f)/4f).roundToInt().coerceIn(54,92)
+            val rowHeight = ((windowHeightDp()/2f-96f)/4f).roundToInt().coerceIn(52,140)
             fun masterRow(title:String, value:String, dial:View, actionViews:List<View> = emptyList()):View {
                 return LinearLayout(this).apply {
                     orientation=LinearLayout.HORIZONTAL
@@ -619,19 +619,19 @@ class MainActivity : Activity() {
                     setPadding(dp(2),dp(1),dp(2),dp(1))
                     // No left-side text: keep every MASTER dial on the same
                     // centered axis and give the four controls equal space.
-                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-4),1f))
+                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-2),1f))
                     if(actionViews.isNotEmpty()){
                         val actions=LinearLayout(this@MainActivity).apply {
                             orientation=LinearLayout.VERTICAL
                             gravity=Gravity.CENTER
                             actionViews.forEachIndexed { index, action ->
-                                addView(action,LinearLayout.LayoutParams(-1,dp(24)).apply {
+                                addView(action,LinearLayout.LayoutParams(-1,dp(28)).apply {
                                     topMargin=if(index==0)0 else dp(4)
                                     bottomMargin=dp(2)
                                 })
                             }
                         }
-                        addView(actions,LinearLayout.LayoutParams(dp(106),-1))
+                        addView(actions,LinearLayout.LayoutParams(dp(112),-1))
                     }
                 }.also { it.minimumHeight=dp(rowHeight) }
             }
