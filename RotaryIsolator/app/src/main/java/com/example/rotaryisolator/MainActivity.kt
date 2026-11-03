@@ -971,10 +971,12 @@ private class RotaryControl(
     private val density get()=resources.displayMetrics.density
     private fun dp(x:Float)=x*density
     private val rect get()={
-        val side=min(width.toFloat(),(height.toFloat()-dp(18f)).coerceAtLeast(1f))* .96f
-        // In tablet portrait with four EQ bands, use the full dial lane and
-        // shift the face down slightly so its circular outline is never clipped.
-        val cy=if(portraitDialFit) (height-dp(18f))/2f else (height-dp(26f))/2f
+        // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
+        // for title and value. The dial itself is sized from the remaining square
+        // area, so the LOW face cannot be squeezed into an oval or cut by its labels.
+        val dialTextReserve=if(portraitDialFit) dp(30f) else dp(18f)
+        val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .96f
+        val cy=if(portraitDialFit) (height-dp(30f))/2f else (height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
     init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
