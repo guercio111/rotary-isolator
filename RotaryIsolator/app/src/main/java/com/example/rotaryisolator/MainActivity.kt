@@ -508,7 +508,8 @@ class MainActivity : Activity() {
             val filterActionHeight=if(compactFilter)24 else if(phonePortrait)36 else 58
             val l=label(names[i]+"  "+(current*100).roundToInt()+"%",if(compactFilter)8f else 10f,Color.WHITE)
             val controlEnabled=filtersOn
-            val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL or Gravity.END;setPadding(0,0,dp(if(compactFilter)8 else 10),0)}
+            val filterHeader=LinearLayout(this).apply{orientation=if(compactFilter)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER;setPadding(0,0,dp(if(compactFilter)8 else 10),0)}
+            filterHeader.addView(l,if(useVerticalRows)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(-1,-1))
             col.addView(filterHeader,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dp(if(compactFilter)38 else 24)))
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes["FILTERS"]==true){
