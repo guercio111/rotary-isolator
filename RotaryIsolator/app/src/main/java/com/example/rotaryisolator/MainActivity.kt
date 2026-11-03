@@ -414,7 +414,8 @@ class MainActivity : Activity() {
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-            controlHeader.addView(vLabel,if(useVerticalRows)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 28),1f))
+            if(useVerticalRows) vLabel.gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
+            controlHeader.addView(vLabel,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(0,dp(if(phonePortrait)19 else 28),1f))
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
@@ -669,10 +670,10 @@ class MainActivity : Activity() {
             actions.addView(onAction,LinearLayout.LayoutParams(-1,dp(24)).apply{bottomMargin=dp(5)})
             actions.addView(returnAction,LinearLayout.LayoutParams(-1,dp(24)))
         }else{
-            actions.addView(onAction)
-            actions.addView(returnAction)
+            actions.addView(onAction,LinearLayout.LayoutParams(-2,dp(24)).apply{rightMargin=dp(8)})
+            actions.addView(returnAction,LinearLayout.LayoutParams(-2,dp(24)).apply{leftMargin=dp(8)})
         }
-        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)56 else 24)))
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)56 else 28)))
         col.addView(RotaryControl(this,title,value,0f,100f,accentFor("MASTER"),{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
             LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
         return col
@@ -685,7 +686,9 @@ class MainActivity : Activity() {
             val row=(section-18f)/2f
             return dp((row-64f).roundToInt().coerceIn(24,88))
         }
-        return (dialHeight()*0.82f).roundToInt()
+        // Give MASTER dials a little more vertical room so their faces sit
+        // centrally in each control column without changing the four-column layout.
+        return (dialHeight()*0.94f).roundToInt()
     }
 
     private fun masterCompControl():View{
