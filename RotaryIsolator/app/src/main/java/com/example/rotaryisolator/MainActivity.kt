@@ -581,9 +581,9 @@ class MainActivity : Activity() {
                     scheduleUpdate()
                 },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
                 knob.isEnabled=controlEnabled
-                controlRow.addView(knob,LinearLayout.LayoutParams(0,verticalDialHeight,1f))
+                controlRow.addView(knob,if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,verticalDialHeight,1f))
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(verticalDialHeight,-1) else LinearLayout.LayoutParams(-1,dialHeight()))
+            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterActions.addView(circleAction("↶",filterReturnSize){
                 val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
@@ -596,9 +596,9 @@ class MainActivity : Activity() {
                 scheduleUpdate();refreshUi()
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
             col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
-            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,dp(verticalRowHeight)) else LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
         }
-        box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(phonePortrait)4 else 7)});parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
+        box.addView(row,if(useVerticalRows) LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=dp(4)} else LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(phonePortrait)4 else 7)});parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
     }
 
     private fun addGainSection(parent:LinearLayout=content){
