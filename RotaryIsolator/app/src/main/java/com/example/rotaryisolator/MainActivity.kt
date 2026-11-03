@@ -32,13 +32,14 @@ class MainActivity : Activity() {
     private var defaultSettingsOnStart = true
     private var compact = false
     private var uiScale = 1.0f
-    private var colorEq = Color.rgb(214,179,106)
+    private var colorEq = Color.rgb(70,190,120)
     private var colorIso = Color.rgb(100,190,210)
     private var colorFilters = Color.rgb(220,130,80)
     private var colorMaster = Color.rgb(214,179,106)
     private var colorButtons = Color.rgb(255,205,0)
     private var colorBackground = Color.rgb(17,19,23)
-    private var colorTitles = Color.TRANSPARENT
+    private var colorTitles = Color.rgb(220,70,75)
+    private var colorOptions = Color.rgb(255,205,0)
     private var limiterOn = true
     private var mouseWheelAdjustOn = false
     private var mouseWheelSensitivity = 4f
@@ -118,13 +119,22 @@ class MainActivity : Activity() {
         val windowHeightDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else (dm.heightPixels / dm.density).roundToInt()
         phonePortrait = min(windowWidthDp, windowHeightDp) < 600
         wideLayout = windowWidthDp > windowHeightDp
-        colorEq = prefs.getInt("color_eq", Color.rgb(214,179,106))
+        colorEq = prefs.getInt("color_eq", Color.rgb(70,190,120))
         colorIso = prefs.getInt("color_iso", Color.rgb(100,190,210))
         colorFilters = prefs.getInt("color_filters", Color.rgb(220,130,80))
         colorMaster = prefs.getInt("color_master", Color.rgb(214,179,106))
         colorButtons = prefs.getInt("color_buttons", Color.rgb(255,205,0))
         colorBackground = prefs.getInt("color_background", Color.rgb(17,19,23))
-        colorTitles = prefs.getInt("color_titles", Color.TRANSPARENT)
+        colorTitles = prefs.getInt("color_titles", Color.rgb(220,70,75))
+        colorOptions = prefs.getInt("color_options", Color.rgb(255,205,0))
+        val colorDefaultsApplied = prefs.getBoolean("color_defaults_v2", false)
+        if (!colorDefaultsApplied) {
+            colorEq = Color.rgb(70,190,120)
+            colorTitles = Color.rgb(220,70,75)
+            colorOptions = Color.rgb(255,205,0)
+            prefs.edit().putInt("color_eq", colorEq).putInt("color_titles", colorTitles)
+                .putInt("color_options", colorOptions).putBoolean("color_defaults_v2", true).apply()
+        }
         val mouseDefaultsApplied = prefs.getBoolean("mouse_defaults_v1", false)
         mouseWheelAdjustOn = if (mouseDefaultsApplied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
         mouseWheelSensitivity = if (mouseDefaultsApplied) prefs.getFloat("mouse_wheel_sensitivity", 5f).coerceIn(1f,10f) else 5f
@@ -302,7 +312,7 @@ class MainActivity : Activity() {
         }
     }
     private fun gearButton():View = object : View(this) {
-        private val gearPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = gold; style = Paint.Style.FILL }
+        private val gearPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorOptions; style = Paint.Style.FILL }
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             val cx = width / 2f
@@ -321,7 +331,7 @@ class MainActivity : Activity() {
             canvas.drawPath(path, gearPaint)
             gearPaint.color = bg
             canvas.drawCircle(cx, cy, outer * 0.37f, gearPaint)
-            gearPaint.color = gold
+            gearPaint.color = colorOptions
             canvas.drawCircle(cx, cy, outer * 0.17f, gearPaint)
         }
         init {
@@ -343,7 +353,7 @@ class MainActivity : Activity() {
     private fun save() {
         prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
-            .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles)
+            .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
             .apply {
@@ -773,17 +783,17 @@ class MainActivity : Activity() {
     }
 
     private fun showColorOptions(){
-        val categories=arrayOf("EQ","ISOLATOR","FILTRI","MASTER / MANOPOLE","PULSANTI","SFONDO","TITOLI")
+        val categories=arrayOf("EQ","ISOLATOR","FILTRI","MASTER / MANOPOLE","PULSANTI","SFONDO","TITOLI","OPZIONI")
         AlertDialog.Builder(this).setTitle("PERSONALIZZA COLORI")
             .setItems(categories){_,which->
-                val key=arrayOf("EQ","ISOLATOR","FILTERS","MASTER","BUTTONS","BACKGROUND","TITLES")[which]
+                val key=arrayOf("EQ","ISOLATOR","FILTERS","MASTER","BUTTONS","BACKGROUND","TITLES","OPTIONS")[which]
                 val names=arrayOf("Giallo oro","Azzurro","Arancione","Verde","Rosso","Viola","Bianco","Grigio","Nero","Antracite","Blu notte","Blu elettrico","Turchese","Rosa","Magenta","Verde lime","Ambra")
                 val colors=intArrayOf(Color.rgb(214,179,106),Color.rgb(80,180,220),Color.rgb(230,135,70),Color.rgb(70,190,120),Color.rgb(220,70,75),Color.rgb(165,115,220),Color.WHITE,Color.rgb(105,115,130),Color.BLACK,Color.rgb(17,19,23),Color.rgb(20,30,55),Color.rgb(35,90,210),Color.rgb(35,190,180),Color.rgb(235,125,170),Color.rgb(190,55,175),Color.rgb(145,205,55),Color.rgb(235,175,45))
-                val current=when(key){"EQ"->colorEq;"ISOLATOR"->colorIso;"FILTERS"->colorFilters;"MASTER"->colorMaster;"BUTTONS"->colorButtons;"TITLES"->colorTitles;else->colorBackground}
+                val current=when(key){"EQ"->colorEq;"ISOLATOR"->colorIso;"FILTERS"->colorFilters;"MASTER"->colorMaster;"BUTTONS"->colorButtons;"TITLES"->colorTitles;"OPTIONS"->colorOptions;else->colorBackground}
                 val selected=colors.indexOf(current).coerceAtLeast(0)
                 AlertDialog.Builder(this).setTitle("COLORE • ${categories[which]}")
                     .setSingleChoiceItems(names,selected){dialog,index->
-                        when(key){"EQ"->colorEq=colors[index];"ISOLATOR"->colorIso=colors[index];"FILTERS"->colorFilters=colors[index];"MASTER"->colorMaster=colors[index];"BUTTONS"->colorButtons=colors[index];"BACKGROUND"->colorBackground=colors[index];"TITLES"->colorTitles=colors[index]}
+                        when(key){"EQ"->colorEq=colors[index];"ISOLATOR"->colorIso=colors[index];"FILTERS"->colorFilters=colors[index];"MASTER"->colorMaster=colors[index];"BUTTONS"->colorButtons=colors[index];"BACKGROUND"->colorBackground=colors[index];"TITLES"->colorTitles=colors[index];"OPTIONS"->colorOptions=colors[index]}
                         save();refreshUi();dialog.dismiss()
                     }.setNegativeButton("ANNULLA",null).show()
             }.setNegativeButton("CHIUDI",null).show()
