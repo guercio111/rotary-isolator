@@ -428,7 +428,7 @@ class MainActivity : Activity() {
         val actionFlatSize=if(compactHeader)22 else if(phonePortrait)32 else 56
         val actionGap=if(compactHeader)1 else if(phonePortrait)3 else 8
         val actionHeight=if(compactHeader)24 else if(phonePortrait)36 else 58
-        box.addView(sectionLabel(title,if(phonePortrait)11f else 13f,titleTint(sectionAccent)),LinearLayout.LayoutParams(-1,dp(if(compactHeader)24 else 32)))
+        box.addView(sectionLabel(title,if(phonePortrait)11f else 13f,titleTint(sectionAccent)),LinearLayout.LayoutParams(-1,dp(if(compactHeader)24 else 32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
         val header=LinearLayout(this).apply{orientation=if(compactHeader)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         val headerControls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         box.addView(header)
@@ -517,7 +517,7 @@ class MainActivity : Activity() {
             for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
             scheduleUpdate();refreshUi()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
-        header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else LinearLayout.LayoutParams(-1,dp(44)))
+        header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
     }
 
@@ -531,7 +531,7 @@ class MainActivity : Activity() {
         if(useVerticalRows) {
             // Tablet portrait: center the section title and reserve the same
             // 44dp control lane used by EQ and ISOLATOR.
-            box.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(32)))
+            box.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
             val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterTitle.addView(filterPower)
             box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
@@ -607,7 +607,7 @@ class MainActivity : Activity() {
         val tabletPortrait = !phonePortrait && !wideLayout
         val compactMaster = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(phonePortrait)1 else 4),dp(4),dp(if(phonePortrait)1 else 4),dp(1))}
-        box.addView(sectionLabel("MASTER",if(phonePortrait)11f else 13f,titleTint(masterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactMaster)24 else 32)))
+        box.addView(sectionLabel("MASTER",if(phonePortrait)11f else 13f,titleTint(masterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactMaster)24 else 32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
         if(tabletPortrait){
             // Portrait tablet: one full-width MASTER strip per control.
             // Keep the existing rotary controls and DSP callbacks; only the layout changes.
