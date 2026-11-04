@@ -982,17 +982,24 @@ class MainActivity : Activity() {
 
     private fun startInsertReverbTest() {
         stopInsertReverbTest()
+        var stage = "inizializzazione"
         try {
+            stage = "lettura UUID effetto"
             val type = java.util.UUID.fromString("c2e5d5f0-94bd-4763-9cac-4e234d06839e")
             val implementation = java.util.UUID.fromString("c7a511a0-a3bc-11df-860e-0002a5d5c51b")
+
+            stage = "accesso al costruttore AudioEffect (API nascosta)"
             val constructor = android.media.audiofx.AudioEffect::class.java.getDeclaredConstructor(
                 java.util.UUID::class.java, java.util.UUID::class.java,
                 Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
             )
             constructor.isAccessible = true
+
+            stage = "creazione effetto sulla sessione globale 0"
             val effect = constructor.newInstance(type, implementation, 100, 0) as android.media.audiofx.AudioEffect
             insertReverbTest = effect
 
+            stage = "accesso ai metodi setParameter (API nascosta)"
             val setShort = android.media.audiofx.AudioEffect::class.java.getDeclaredMethod(
                 "setParameter", Int::class.javaPrimitiveType, Short::class.javaPrimitiveType
             ).apply { isAccessible = true }
@@ -1001,27 +1008,30 @@ class MainActivity : Activity() {
             ).apply { isAccessible = true }
 
             fun putShort(id: Int, value: Int) {
+                stage = "scrittura parametro short $id"
                 val result = setShort.invoke(effect, id, value.toShort()) as Int
-                if (result < 0) throw IllegalStateException("Parametro $id rifiutato ($result)")
+                if (result < 0) throw IllegalStateException("Parametro $id rifiutato dal driver ($result)")
             }
             fun putInt(id: Int, value: Int) {
+                stage = "scrittura parametro int $id"
                 val result = setInt.invoke(effect, id, value) as Int
-                if (result < 0) throw IllegalStateException("Parametro $id rifiutato ($result)")
+                if (result < 0) throw IllegalStateException("Parametro $id rifiutato dal driver ($result)")
             }
 
-            putShort(0, -1000)       // room level
-            putShort(1, -1500)       // room HF level
-            putInt(2, 1800)          // decay time, ms
-            putShort(3, 550)         // decay HF ratio
-            putShort(4, -3000)       // early reflections level
-            putInt(5, 10)            // reflections delay, ms
-            putShort(6, -2500)       // reverb level
-            putInt(7, 20)            // reverb delay, ms
-            putShort(8, 650)         // diffusion
-            putShort(9, 650)         // density
+            putShort(0, -1000)
+            putShort(1, -1500)
+            putInt(2, 1800)
+            putShort(3, 550)
+            putShort(4, -3000)
+            putInt(5, 10)
+            putShort(6, -2500)
+            putInt(7, 20)
+            putShort(8, 650)
+            putShort(9, 650)
 
+            stage = "attivazione dell'effetto"
             effect.enabled = true
-            val state = "INSERT REVERB CREATED\nID=${effect.id}\nENABLED=${effect.enabled}\nHAS CONTROL=${effect.hasControl()}\nIMPLEMENTATION=${implementation}\nSESSION=0 (OUTPUT MIX)"
+            val state = "INSERT REVERB CREATED\nID=\${effect.id}\nENABLED=\${effect.enabled}\nHAS CONTROL=\${effect.hasControl()}\nIMPLEMENTATION=\${implementation}\nSESSION=0 (OUTPUT MIX)"
             AlertDialog.Builder(this)
                 .setTitle("TEST INSERT REVERB ATTIVO")
                 .setMessage(state + "\n\nLascia riprodurre YouTube Morphe e ascolta. Premi STOP per disattivare.")
@@ -1030,12 +1040,29 @@ class MainActivity : Activity() {
                 .show()
             Toast.makeText(this, "Test Insert Reverb avviato", Toast.LENGTH_LONG).show()
         } catch (t: Throwable) {
+            val error = buildString {
+                append("FASE: ").append(stage).append("\n")
+                append("ANDROID: ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")
+                append("DEVICE: ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n\n")
+                append(android.util.Log.getStackTraceString(t))
+            }
             stopInsertReverbTest()
-            val cause = t.cause ?: t
+            val errorView = TextView(this).apply {
+                text = error
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setTextIsSelectable(true)
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+            }
             AlertDialog.Builder(this)
-                .setTitle("INSERT REVERB NON AVVIATO")
-                .setMessage("${cause.javaClass.simpleName}: ${cause.message}")
-                .setPositiveButton("OK", null)
+                .setTitle("ERRORE INSERT REVERB • DETTAGLI")
+                .setView(ScrollView(this).apply { addView(errorView) })
+                .setPositiveButton("CHIUDI", null)
+                .setNeutralButton("COPIA ERRORE") { _, _ ->
+                    val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Insert Reverb error", error))
+                    Toast.makeText(this, "Errore completo copiato", Toast.LENGTH_SHORT).show()
+                }
                 .show()
         }
     }
