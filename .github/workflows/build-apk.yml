@@ -1,6 +1,6 @@
 # Tablet stable APK rebuild trigger
 name: Build Rotary Isolator APK
-# Rebuild requested for experimental master reverb controls
+# Build isolated tablet insert reverb output-mix test
 
 on:
   push:
