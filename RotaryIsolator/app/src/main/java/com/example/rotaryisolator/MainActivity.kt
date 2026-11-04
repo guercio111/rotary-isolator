@@ -39,6 +39,8 @@ class MainActivity : Activity() {
     private var reverbDecay = 1800
     private var reverbSize = 650
     private var reverbDamping = 550
+    private var reverbLowCutHz = 160
+    private var reverbPopup: android.widget.PopupWindow? = null
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
     private var captureRecord: android.media.AudioRecord? = null
@@ -159,6 +161,7 @@ class MainActivity : Activity() {
         reverbDecay = prefs.getInt("reverb_decay", 1800).coerceIn(100,8000)
         reverbSize = prefs.getInt("reverb_size", 650).coerceIn(0,1000)
         reverbDamping = prefs.getInt("reverb_damping", 550).coerceIn(100,1000)
+        reverbLowCutHz = prefs.getInt("reverb_low_cut_hz", 160).coerceIn(60,500)
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -431,7 +434,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_mix",reverbMix).putInt("reverb_decay",reverbDecay).putInt("reverb_size",reverbSize).putInt("reverb_damping",reverbDamping)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_mix",reverbMix).putInt("reverb_decay",reverbDecay).putInt("reverb_size",reverbSize).putInt("reverb_damping",reverbDamping).putInt("reverb_low_cut_hz",reverbLowCutHz)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -893,9 +896,10 @@ class MainActivity : Activity() {
 
 
     private fun showReverbPopup(){
+        reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), dp(4))
+            setPadding(dp(14), dp(8), dp(14), dp(4))
         }
         val enabledSwitch = Switch(this).apply {
             text = "REVERB ON"
@@ -929,6 +933,7 @@ class MainActivity : Activity() {
         addReverbSlider("DECAY",100,8000,reverbDecay," ms"){reverbDecay=it}
         addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
         addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
+        addReverbSlider("LOW CUT",60,500,reverbLowCutHz," Hz"){reverbLowCutHz=it}
         val diagnosticButton = Button(this).apply {
             text = "VERIFICA COMPATIBILITÀ AUDIO"
             textSize = 12f
@@ -945,17 +950,39 @@ class MainActivity : Activity() {
         panel.addView(captureButton, LinearLayout.LayoutParams(-1, dp(48)).apply {
             topMargin = dp(8)
         })
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("REVERB • EXPERIMENTAL")
-            .setView(ScrollView(this).apply { addView(panel) })
-            .setNegativeButton("CHIUDI") { _, _ -> save(); scheduleUpdate() }
-            .create()
+        val closeButton = Button(this).apply {
+            text = "CHIUDI"
+            textSize = 12f
+            setOnClickListener { reverbPopup?.dismiss() }
+        }
+        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(4) })
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(panel)
+            setBackgroundColor(Color.rgb(25, 28, 34))
+        }
+        val popupWidth = minOf(dp(340), (container.width / 2 - dp(12)).coerceAtLeast(dp(240)))
+        val popupHeight = minOf(dp(430), (container.height * 0.43f).toInt().coerceAtLeast(dp(210)))
+        val popup = android.widget.PopupWindow(scroll, popupWidth, popupHeight, false).apply {
+            isOutsideTouchable = true
+            isTouchable = true
+            setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(25, 28, 34))
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), colorMaster)
+            })
+            elevation = dp(12).toFloat()
+            setOnDismissListener { save(); scheduleUpdate(); reverbPopup = null }
+        }
         enabledSwitch.setOnCheckedChangeListener { _, checked ->
             reverbOn = checked
             save()
             scheduleUpdate()
         }
-        dialog.show()
+        reverbPopup = popup
+        // Non-modal overlay in the lower-right MASTER quadrant. The EQ, ISOLATOR
+        // and FILTERS controls remain visible and touchable outside the popup.
+        popup.showAtLocation(container, Gravity.BOTTOM or Gravity.END, dp(12), dp(42))
     }
     private fun startAudioCaptureTest() {
         // Keep the current MediaProjection session alive when the meter dialog is
@@ -1112,7 +1139,7 @@ class MainActivity : Activity() {
                             }
                             processor.process(
                                 buffer, wetBuffer, count,
-                                reverbMix, reverbDecay, reverbSize, reverbDamping
+                                reverbMix, reverbDecay, reverbSize, reverbDamping, reverbLowCutHz
                             )
                             var written = 0
                             while (written < count && captureRunning) {
