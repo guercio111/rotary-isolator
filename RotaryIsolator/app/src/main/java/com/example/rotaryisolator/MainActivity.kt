@@ -36,10 +36,10 @@ class MainActivity : Activity() {
     private var reverbEffect: EnvironmentalReverb? = null
     @Volatile private var reverbOn = false
     @Volatile private var reverbMix = 28
-    @Volatile private var reverbDecay = 1800
-    @Volatile private var reverbSize = 650
-    @Volatile private var reverbDamping = 550
-    @Volatile private var reverbLowCutHz = 160
+    @Volatile private var reverbSize = 550
+    @Volatile private var reverbHpHz = 180
+    @Volatile private var reverbLpHz = 9000
+    @Volatile private var reverbFreeze = false
     private var reverbPopup: android.widget.PopupWindow? = null
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
@@ -158,10 +158,10 @@ class MainActivity : Activity() {
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
         reverbMix = prefs.getInt("reverb_mix", 28).coerceIn(0,100)
-        reverbDecay = prefs.getInt("reverb_decay", 1800).coerceIn(100,8000)
-        reverbSize = prefs.getInt("reverb_size", 650).coerceIn(0,1000)
-        reverbDamping = prefs.getInt("reverb_damping", 550).coerceIn(100,1000)
-        reverbLowCutHz = prefs.getInt("reverb_low_cut_hz", 160).coerceIn(60,500)
+        reverbSize = prefs.getInt("reverb_size_t2", 550).coerceIn(0,1000)
+        reverbHpHz = prefs.getInt("reverb_hp_hz", 180).coerceIn(20,1200)
+        reverbLpHz = prefs.getInt("reverb_lp_hz", 9000).coerceIn(1000,20000)
+        reverbFreeze = false
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -434,7 +434,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_mix",reverbMix).putInt("reverb_decay",reverbDecay).putInt("reverb_size",reverbSize).putInt("reverb_damping",reverbDamping).putInt("reverb_low_cut_hz",reverbLowCutHz)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -906,114 +906,84 @@ class MainActivity : Activity() {
             textSize = 14f
             isChecked = reverbOn
         }
-        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(48)))
-        val reverbSliders = mutableMapOf<String, Pair<SeekBar, TextView>>()
-        fun addReverbSlider(title:String, min:Int, max:Int, initial:Int, suffix:String, changed:(Int)->Unit) {
-            val valueLabel = label("$title  $initial$suffix", 13f, colorMaster)
+        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(44)))
+        val controls = mutableMapOf<String, Pair<SeekBar, TextView>>()
+        fun addControl(title:String,min:Int,max:Int,initial:Int,suffix:String,changed:(Int)->Unit) {
+            val valueLabel = label("$title  $initial$suffix",13f,colorMaster)
             valueLabel.gravity = Gravity.CENTER_VERTICAL
-            panel.addView(valueLabel, LinearLayout.LayoutParams(-1, dp(30)))
-            val seek = SeekBar(this).apply {
-                this.max = max-min
-                progress = (initial-min).coerceIn(0,max-min)
+            panel.addView(valueLabel,LinearLayout.LayoutParams(-1,dp(27)))
+            val seek=SeekBar(this).apply {
+                this.max=max-min
+                progress=(initial-min).coerceIn(0,max-min)
                 setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(bar:SeekBar?, progress:Int, fromUser:Boolean) {
+                    override fun onProgressChanged(bar:SeekBar?,progress:Int,fromUser:Boolean) {
                         if(fromUser) {
-                            val value = min+progress
-                            valueLabel.text = "$title  $value$suffix"
-                            changed(value)
-                            scheduleUpdate()
+                            val v=min+progress
+                            valueLabel.text="$title  $v$suffix"
+                            changed(v); scheduleUpdate()
                         }
                     }
                     override fun onStartTrackingTouch(bar:SeekBar?){}
-                    override fun onStopTrackingTouch(bar:SeekBar?){ save() }
+                    override fun onStopTrackingTouch(bar:SeekBar?){save()}
                 })
             }
-            reverbSliders[title] = seek to valueLabel
-            panel.addView(seek, LinearLayout.LayoutParams(-1, dp(42)))
+            controls[title]=seek to valueLabel
+            panel.addView(seek,LinearLayout.LayoutParams(-1,dp(36)))
         }
-        addReverbSlider("MIX",0,100,reverbMix,"%"){reverbMix=it}
-        addReverbSlider("DECAY",100,8000,reverbDecay," ms"){reverbDecay=it}
-        addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
-        addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
-        addReverbSlider("LOW CUT",60,500,reverbLowCutHz," Hz"){reverbLowCutHz=it}
-        val v10PresetButton = Button(this).apply {
-            text = "CARICA PRESET V10 STYLE"
-            textSize = 12f
-            setOnClickListener {
-                // Approximation of the DJM-V10's balanced, filtered reverb character.
-                reverbMix = 24
-                reverbDecay = 2600
-                reverbSize = 720
-                reverbDamping = 680
-                reverbLowCutHz = 220
-                val presetValues = mapOf(
-                    "MIX" to (reverbMix to "%"),
-                    "DECAY" to (reverbDecay to " ms"),
-                    "ROOM SIZE" to (reverbSize to "%"),
-                    "DAMPING" to (reverbDamping to "%"),
-                    "LOW CUT" to (reverbLowCutHz to " Hz")
-                )
-                val ranges = mapOf("MIX" to 0, "DECAY" to 100, "ROOM SIZE" to 0, "DAMPING" to 100, "LOW CUT" to 60)
-                for ((name, pair) in presetValues) {
-                    reverbSliders[name]?.let { (seek, valueLabel) ->
-                        seek.progress = pair.first - (ranges[name] ?: 0)
-                        valueLabel.text = "$name  ${pair.first}${pair.second}"
-                    }
-                }
-                save()
-                scheduleUpdate()
-            }
+        addControl("MIX",0,100,reverbMix,"%"){reverbMix=it}
+        addControl("SIZE",0,1000,reverbSize,"%"){reverbSize=it}
+        addControl("HP",20,1200,reverbHpHz," Hz"){reverbHpHz=it}
+        addControl("LP",1000,20000,reverbLpHz," Hz"){reverbLpHz=it}
+        val freezeSwitch=Switch(this).apply {
+            text="FRZ  •  FREEZE"
+            textSize=13f
+            isChecked=reverbFreeze
         }
-        panel.addView(v10PresetButton, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(5) })
-        val diagnosticButton = Button(this).apply {
-            text = "VERIFICA COMPATIBILITÀ AUDIO"
-            textSize = 12f
-            setOnClickListener { showAudioDiagnostics() }
-        }
-        panel.addView(diagnosticButton, LinearLayout.LayoutParams(-1, dp(44)).apply {
-            topMargin = dp(8)
-        })
-        val captureButton = Button(this).apply {
-            text = "PROVA REVERB PARALLELO (MORPHE)"
-            textSize = 12f
-            setOnClickListener { startAudioCaptureTest() }
-        }
-        panel.addView(captureButton, LinearLayout.LayoutParams(-1, dp(48)).apply {
-            topMargin = dp(8)
-        })
-        val closeButton = Button(this).apply {
-            text = "CHIUDI"
-            textSize = 12f
-            setOnClickListener { reverbPopup?.dismiss() }
-        }
-        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(4) })
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            addView(panel)
-            setBackgroundColor(Color.rgb(25, 28, 34))
-        }
-        val popupWidth = minOf(dp(340), (container.width / 2 - dp(12)).coerceAtLeast(dp(240)))
-        val popupHeight = minOf(dp(430), (container.height * 0.43f).toInt().coerceAtLeast(dp(210)))
-        val popup = android.widget.PopupWindow(scroll, popupWidth, popupHeight, false).apply {
-            isOutsideTouchable = true
-            isTouchable = true
-            setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
-                setColor(Color.rgb(25, 28, 34))
-                cornerRadius = dp(12).toFloat()
-                setStroke(dp(1), colorMaster)
-            })
-            elevation = dp(12).toFloat()
-            setOnDismissListener { save(); scheduleUpdate(); reverbPopup = null }
-        }
-        enabledSwitch.setOnCheckedChangeListener { _, checked ->
-            reverbOn = checked
-            save()
+        panel.addView(freezeSwitch,LinearLayout.LayoutParams(-1,dp(42)))
+        freezeSwitch.setOnCheckedChangeListener { _,checked ->
+            reverbFreeze=checked
             scheduleUpdate()
+            save()
         }
-        reverbPopup = popup
-        // Non-modal overlay in the lower-right MASTER quadrant. The EQ, ISOLATOR
-        // and FILTERS controls remain visible and touchable outside the popup.
-        popup.showAtLocation(container, Gravity.BOTTOM or Gravity.END, dp(12), dp(42))
+        val info=label("HP/LP filtrano solo il ritorno. FRZ congela la coda; disattivalo per riprendere il decadimento.",11f,colorMaster)
+        panel.addView(info,LinearLayout.LayoutParams(-1,-2))
+        val diagnosticButton=Button(this).apply {
+            text="VERIFICA COMPATIBILITÀ AUDIO"; textSize=11f
+            setOnClickListener{showAudioDiagnostics()}
+        }
+        panel.addView(diagnosticButton,LinearLayout.LayoutParams(-1,dp(38)).apply{topMargin=dp(5)})
+        val captureButton=Button(this).apply {
+            text="AVVIA / MOSTRA TEST MORPHE"; textSize=11f
+            setOnClickListener{startAudioCaptureTest()}
+        }
+        panel.addView(captureButton,LinearLayout.LayoutParams(-1,dp(40)))
+        val closeButton=Button(this).apply {
+            text="CHIUDI"; textSize=11f
+            setOnClickListener{reverbPopup?.dismiss()}
+        }
+        panel.addView(closeButton,LinearLayout.LayoutParams(-1,dp(36)))
+        val scroll=ScrollView(this).apply {
+            isFillViewport=true; addView(panel); setBackgroundColor(Color.rgb(25,28,34))
+        }
+        val popupWidth=minOf(dp(340),(container.width/2-dp(12)).coerceAtLeast(dp(240)))
+        val popupHeight=minOf(dp(430),(container.height*0.43f).toInt().coerceAtLeast(dp(210)))
+        val popup=android.widget.PopupWindow(scroll,popupWidth,popupHeight,false).apply {
+            isOutsideTouchable=true; isTouchable=true
+            setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(25,28,34)); cornerRadius=dp(12).toFloat()
+                setStroke(dp(1),colorMaster)
+            })
+            elevation=dp(12).toFloat()
+            setOnDismissListener{save();scheduleUpdate();reverbPopup=null}
+        }
+        enabledSwitch.setOnCheckedChangeListener{_,checked->
+            reverbOn=checked
+            if(!checked) reverbFreeze=false
+            freezeSwitch.isChecked=reverbFreeze
+            save();scheduleUpdate()
+        }
+        reverbPopup=popup
+        popup.showAtLocation(container,Gravity.BOTTOM or Gravity.END,dp(12),dp(42))
     }
     private fun startAudioCaptureTest() {
         // Keep the current MediaProjection session alive when the meter dialog is
@@ -1173,7 +1143,7 @@ class MainActivity : Activity() {
                             if (effectEnabled) {
                                 processor.process(
                                     buffer, wetBuffer, count,
-                                    reverbMix, reverbDecay, reverbSize, reverbDamping, reverbLowCutHz
+                                    reverbMix, reverbSize, reverbHpHz, reverbLpHz, reverbFreeze
                                 )
                             } else {
                                 if (previousReverbState) processor.clear()
