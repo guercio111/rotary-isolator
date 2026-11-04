@@ -1156,6 +1156,7 @@ class MainActivity : Activity() {
                 val wetBuffer = ShortArray(buffer.size)
                 val processor = parallelReverbProcessor ?: return@Thread
                 var lastUi = 0L
+                var previousReverbState = false
                 try {
                     while (captureRunning) {
                         val count = record.read(buffer, 0, buffer.size)
@@ -1168,10 +1169,17 @@ class MainActivity : Activity() {
                                 if (absolute > peak) peak = absolute
                                 sum += sample.toDouble() * sample.toDouble()
                             }
-                            processor.process(
-                                buffer, wetBuffer, count,
-                                reverbMix, reverbDecay, reverbSize, reverbDamping, reverbLowCutHz
-                            )
+                            val effectEnabled = reverbOn
+                            if (effectEnabled) {
+                                processor.process(
+                                    buffer, wetBuffer, count,
+                                    reverbMix, reverbDecay, reverbSize, reverbDamping, reverbLowCutHz
+                                )
+                            } else {
+                                if (previousReverbState) processor.clear()
+                                wetBuffer.fill(0, 0, count)
+                            }
+                            previousReverbState = effectEnabled
                             var written = 0
                             while (written < count && captureRunning) {
                                 val n = track.write(wetBuffer, written, count - written, android.media.AudioTrack.WRITE_BLOCKING)
