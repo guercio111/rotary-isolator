@@ -47,19 +47,20 @@ internal class SchroederReverb(sampleRate: Int) {
         input: ShortArray, output: ShortArray, count: Int,
         mixPercent: Int, decayMs: Int, roomSize: Int, dampingPercent: Int
     ) {
-        val mix = (mixPercent.coerceIn(0, 100) / 100f) * 0.90f
+        val mix = (mixPercent.coerceIn(0, 100) / 100f)
         val decay = decayMs.coerceIn(100, 8000) / 8000f
         val size = roomSize.coerceIn(0, 1000) / 1000f
         val feedback = (0.48f + decay * 0.43f + size * 0.06f).coerceIn(0.48f, 0.94f)
         val damping = (dampingPercent.coerceIn(100, 1000) / 1000f * 0.82f).coerceIn(0.08f, 0.82f)
         for (i in 0 until count) {
             val x = input[i].toFloat() / 32768f
-            val send = x * 0.22f
+            val send = x * 0.55f
             var wet = 0f
             for (comb in combs) wet += comb.tick(send, feedback, damping)
             wet *= 0.25f
             wet = allPassB.tick(allPassA.tick(wet))
-            val sample = (wet * mix * 32767f).toInt().coerceIn(-32768, 32767)
+            // Raise the wet return so the parallel effect is clearly audible over the untouched dry track.
+            val sample = (wet * mix * 1.55f * 32767f).toInt().coerceIn(-32768, 32767)
             output[i] = sample.toShort()
         }
     }
