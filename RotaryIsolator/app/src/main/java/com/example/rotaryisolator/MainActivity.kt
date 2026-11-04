@@ -1008,7 +1008,7 @@ class MainActivity : Activity() {
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER audio diagnostics", report))
                 Toast.makeText(this, "Report copiato", Toast.LENGTH_SHORT).show()
             }
-            .setNeutralButton("PROVA INSERT REVERB") { _, _ -> startInsertReverbTest() }
+            .setNeutralButton("PROVA REVERB CON SHIZUKU") { _, _ -> startInsertReverbTest() }
             .setNegativeButton("CHIUDI", null)
             .show()
     }
