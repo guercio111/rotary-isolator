@@ -44,7 +44,7 @@ class MainActivity : Activity() {
     private val shizukuRequestCode = 7419
     private val shizukuUserServiceArgs by lazy {
         Shizuku.UserServiceArgs(ComponentName(packageName, ShizukuReverbUserService::class.java.name))
-            .daemon(false).processNameSuffix("frequalizer_reverb").debuggable(BuildConfig.DEBUG).version(1)
+            .daemon(false).processNameSuffix("frequalizer_reverb").version(1)
     }
     private val shizukuServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
