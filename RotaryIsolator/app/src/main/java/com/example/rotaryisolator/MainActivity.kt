@@ -1,6 +1,11 @@
 package com.example.rotaryisolator
 
 import android.app.Activity
+import rikka.shizuku.Shizuku
+import android.content.pm.PackageManager
+import android.os.IBinder
+import android.content.ServiceConnection
+import android.content.ComponentName
 import android.app.AlertDialog
 import android.content.pm.ActivityInfo
 import android.graphics.Canvas
@@ -35,6 +40,33 @@ class MainActivity : Activity() {
     private var reverbSize = 650
     private var reverbDamping = 550
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
+    private var shizukuReverbService: IShizukuReverbService? = null
+    private val shizukuRequestCode = 7419
+    private val shizukuUserServiceArgs by lazy {
+        Shizuku.UserServiceArgs(ComponentName(packageName, ShizukuReverbUserService::class.java.name))
+            .daemon(false).processNameSuffix("frequalizer_reverb").debuggable(BuildConfig.DEBUG).version(1)
+    }
+    private val shizukuServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            shizukuReverbService = IShizukuReverbService.Stub.asInterface(service)
+            try {
+                val result = shizukuReverbService?.startReverb(reverbMix, reverbDecay, reverbSize, reverbDamping)
+                    ?: "ERRORE: servizio Shizuku senza binder"
+                showShizukuReverbResult(result)
+            } catch (t: Throwable) {
+                showShizukuReverbResult("ERRORE CHIAMATA SERVIZIO SHIZUKU\\n" + android.util.Log.getStackTraceString(t))
+            }
+        }
+        override fun onServiceDisconnected(name: ComponentName?) {
+            shizukuReverbService = null
+        }
+    }
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == shizukuRequestCode) {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) bindShizukuReverbService()
+            else showShizukuReverbResult("Autorizzazione Shizuku negata. Concedi FREQUALIZER TEST nell'app Shizuku e riprova.")
+        }
+    }
     private var audioReady = false
     private var appEnabled = true
     private var defaultSettingsOnStart = true
@@ -105,6 +137,7 @@ class MainActivity : Activity() {
     private fun titleTint(default:Int) = if(colorTitles == Color.TRANSPARENT) default else colorTitles
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         super.onCreate(savedInstanceState)
         // Explicitly follow the physical sensor in both portrait and landscape.
         // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
@@ -982,92 +1015,61 @@ class MainActivity : Activity() {
 
     private fun startInsertReverbTest() {
         stopInsertReverbTest()
-        var stage = "inizializzazione"
         try {
-            stage = "lettura UUID effetto"
-            val type = java.util.UUID.fromString("c2e5d5f0-94bd-4763-9cac-4e234d06839e")
-            val implementation = java.util.UUID.fromString("c7a511a0-a3bc-11df-860e-0002a5d5c51b")
-
-            stage = "accesso al costruttore AudioEffect (API nascosta)"
-            val constructor = android.media.audiofx.AudioEffect::class.java.getDeclaredConstructor(
-                java.util.UUID::class.java, java.util.UUID::class.java,
-                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
-            )
-            constructor.isAccessible = true
-
-            stage = "creazione effetto sulla sessione globale 0"
-            val effect = constructor.newInstance(type, implementation, 100, 0) as android.media.audiofx.AudioEffect
-            insertReverbTest = effect
-
-            stage = "accesso ai metodi setParameter (API nascosta)"
-            val setShort = android.media.audiofx.AudioEffect::class.java.getDeclaredMethod(
-                "setParameter", Int::class.javaPrimitiveType, Short::class.javaPrimitiveType
-            ).apply { isAccessible = true }
-            val setInt = android.media.audiofx.AudioEffect::class.java.getDeclaredMethod(
-                "setParameter", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
-            ).apply { isAccessible = true }
-
-            fun putShort(id: Int, value: Int) {
-                stage = "scrittura parametro short $id"
-                val result = setShort.invoke(effect, id, value.toShort()) as Int
-                if (result < 0) throw IllegalStateException("Parametro $id rifiutato dal driver ($result)")
+            if (Shizuku.isPreV11()) {
+                showShizukuReverbResult("Versione Shizuku non supportata. Aggiorna Shizuku alla versione 11 o successiva.")
+                return
             }
-            fun putInt(id: Int, value: Int) {
-                stage = "scrittura parametro int $id"
-                val result = setInt.invoke(effect, id, value) as Int
-                if (result < 0) throw IllegalStateException("Parametro $id rifiutato dal driver ($result)")
+            if (!Shizuku.pingBinder()) {
+                showShizukuReverbResult("SHIZUKU NON ATTIVO\\n\\nApri Shizuku, avvia il servizio tramite Debug wireless e poi riprova.")
+                return
             }
-
-            putShort(0, -1000)
-            putShort(1, -1500)
-            putInt(2, 1800)
-            putShort(3, 550)
-            putShort(4, -3000)
-            putInt(5, 10)
-            putShort(6, -2500)
-            putInt(7, 20)
-            putShort(8, 650)
-            putShort(9, 650)
-
-            stage = "attivazione dell'effetto"
-            effect.enabled = true
-            val state = "INSERT REVERB CREATED\nID=${effect.id}\nENABLED=${effect.enabled}\nHAS CONTROL=${effect.hasControl()}\nIMPLEMENTATION=${implementation}\nSESSION=0 (OUTPUT MIX)"
-            AlertDialog.Builder(this)
-                .setTitle("TEST INSERT REVERB ATTIVO")
-                .setMessage(state + "\n\nLascia riprodurre YouTube Morphe e ascolta. Premi STOP per disattivare.")
-                .setPositiveButton("STOP / DISATTIVA") { _, _ -> stopInsertReverbTest() }
-                .setNegativeButton("LASCIA ATTIVO", null)
-                .show()
-            Toast.makeText(this, "Test Insert Reverb avviato", Toast.LENGTH_LONG).show()
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                Shizuku.requestPermission(shizukuRequestCode)
+                return
+            }
+            bindShizukuReverbService()
         } catch (t: Throwable) {
-            val error = buildString {
-                append("FASE: ").append(stage).append("\n")
-                append("ANDROID: ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")
-                append("DEVICE: ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n\n")
-                append(android.util.Log.getStackTraceString(t))
-            }
-            stopInsertReverbTest()
-            val errorView = TextView(this).apply {
-                text = error
-                textSize = 12f
-                setTextColor(Color.WHITE)
-                setTextIsSelectable(true)
-                setPadding(dp(14), dp(10), dp(14), dp(10))
-            }
-            AlertDialog.Builder(this)
-                .setTitle("ERRORE INSERT REVERB • DETTAGLI")
-                .setView(ScrollView(this).apply { addView(errorView) })
-                .setPositiveButton("CHIUDI", null)
-                .setNeutralButton("COPIA ERRORE") { _, _ ->
-                    val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Insert Reverb error", error))
-                    Toast.makeText(this, "Errore completo copiato", Toast.LENGTH_SHORT).show()
-                }
-                .show()
+            showShizukuReverbResult("ERRORE SHIZUKU\\n" + android.util.Log.getStackTraceString(t))
         }
     }
 
+    private fun bindShizukuReverbService() {
+        try {
+            Shizuku.bindUserService(shizukuUserServiceArgs, shizukuServiceConnection)
+            showShizukuReverbResult("Richiesta inviata a Shizuku. Attendo il servizio privilegiato…")
+        } catch (t: Throwable) {
+            showShizukuReverbResult("ERRORE AVVIO USER SERVICE\\n" + android.util.Log.getStackTraceString(t))
+        }
+    }
+
+    private fun showShizukuReverbResult(message: String) {
+        val view = TextView(this).apply {
+            text = message
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setTextIsSelectable(true)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (message.startsWith("INSERT REVERB ATTIVO")) "TEST SHIZUKU • REVERB" else "SHIZUKU • DIAGNOSTICA")
+            .setView(ScrollView(this).apply { addView(view) })
+            .setPositiveButton(if (message.startsWith("INSERT REVERB ATTIVO")) "STOP / DISATTIVA" else "CHIUDI") { _, _ ->
+                if (message.startsWith("INSERT REVERB ATTIVO")) stopInsertReverbTest()
+            }
+            .setNeutralButton("COPIA DETTAGLI") { _, _ ->
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Shizuku Reverb", message))
+                Toast.makeText(this, "Dettagli copiati", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("LASCIA ATTIVO", null)
+            .show()
+    }
+
     private fun stopInsertReverbTest() {
+        try { shizukuReverbService?.stopReverb() } catch (_: Throwable) {}
+        try { Shizuku.unbindUserService(shizukuUserServiceArgs, shizukuServiceConnection, true) } catch (_: Throwable) {}
+        shizukuReverbService = null
         try { insertReverbTest?.enabled = false } catch (_: Throwable) {}
         try { insertReverbTest?.release() } catch (_: Throwable) {}
         insertReverbTest = null
@@ -1241,6 +1243,7 @@ class MainActivity : Activity() {
     }
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
+        try { Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener) } catch (_: Throwable) {}
         // Clear the background marker only for an intentional Activity finish.
         // Do not clear it when Android destroys a background process or rotates the device.
         if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
