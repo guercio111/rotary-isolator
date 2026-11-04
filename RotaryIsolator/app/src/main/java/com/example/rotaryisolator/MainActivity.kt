@@ -34,12 +34,12 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
     private var reverbEffect: EnvironmentalReverb? = null
-    private var reverbOn = false
-    private var reverbMix = 28
-    private var reverbDecay = 1800
-    private var reverbSize = 650
-    private var reverbDamping = 550
-    private var reverbLowCutHz = 160
+    @Volatile private var reverbOn = false
+    @Volatile private var reverbMix = 28
+    @Volatile private var reverbDecay = 1800
+    @Volatile private var reverbSize = 650
+    @Volatile private var reverbDamping = 550
+    @Volatile private var reverbLowCutHz = 160
     private var reverbPopup: android.widget.PopupWindow? = null
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
