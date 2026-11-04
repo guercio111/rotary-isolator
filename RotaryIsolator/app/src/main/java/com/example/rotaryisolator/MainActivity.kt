@@ -958,6 +958,12 @@ class MainActivity : Activity() {
         dialog.show()
     }
     private fun startAudioCaptureTest() {
+        // Keep the current MediaProjection session alive when the meter dialog is
+        // closed. Reopening the panel must not request a second Android approval.
+        if (captureRunning) {
+            showCaptureMeter()
+            return
+        }
         if (Build.VERSION.SDK_INT < 29) {
             AlertDialog.Builder(this).setTitle("TEST NON SUPPORTATO")
                 .setMessage("La cattura audio interna richiede Android 10 o superiore.")
@@ -1152,17 +1158,26 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(16), dp(18), dp(16))
         }
         captureStatusView = view
+        // If the capture is already running, simply reopen its status window.
+        captureDialog?.let { if (it.isShowing) { it.dismiss() } }
         val dialog = AlertDialog.Builder(this)
             .setTitle("TEST CATTURA AUDIO")
             .setView(view)
             .setPositiveButton("FERMA TEST", null)
-            .setNegativeButton("CHIUDI", null)
+            .setNegativeButton("NASCONDI", null)
             .create()
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { dialog.dismiss() }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                stopAudioCaptureTest()
+                dialog.dismiss()
+            }
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { dialog.dismiss() }
         }
-        dialog.setOnDismissListener { stopAudioCaptureTest() }
+        // Dismissing or hiding this window no longer ends MediaProjection.
+        dialog.setOnDismissListener {
+            if (captureDialog === dialog) captureDialog = null
+            if (captureStatusView === view) captureStatusView = null
+        }
         captureDialog = dialog
         dialog.show()
     }
