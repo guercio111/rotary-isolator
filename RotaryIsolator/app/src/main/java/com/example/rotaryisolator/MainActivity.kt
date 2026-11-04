@@ -374,7 +374,7 @@ class MainActivity : Activity() {
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
-            .putBoolean("default_settings_on_start",defaultSettingsOnStart)
+            .putBoolean("default_settings_on_start",defaultSettingsOnStart).putBoolean("session_in_background",true)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -468,7 +468,7 @@ class MainActivity : Activity() {
         box.addView(header)
         // In tablet portrait, stack LOW / MID / HIGH as full-width mixer strips.
         // Phone layouts keep their compact three-column arrangement.
-        val useVerticalRows=!wideLayout && !phonePortrait
+        val useVerticalRows=!wideLayout
         // Size portrait strips from their actual count: EQ has four rows in
         // double-mid mode, while the Isolator has three. This prevents the last
         // strip from being clipped by the quadrant boundary.
@@ -559,7 +559,7 @@ class MainActivity : Activity() {
         val compactFilter = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compactFilter)1 else 4),dp(4),dp(if(compactFilter)1 else 4),dp(1))}
         val filterAccent = accentFor("FILTERS")
-        val useVerticalRows=!wideLayout && !phonePortrait
+        val useVerticalRows=!wideLayout
         val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         }
@@ -979,9 +979,10 @@ class MainActivity : Activity() {
     }
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
-        // Clear the background marker only for an intentional Activity finish.
-        // Do not clear it when Android destroys a background process or rotates the device.
-        if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
+        // Keep the last saved mixer state available even after an intentional app close.
+        // onCreate clears this marker only after it has restored the previous session.
+        save()
+        prefs.edit().putBoolean("session_in_background", true).apply()
         try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
