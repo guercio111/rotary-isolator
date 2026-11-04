@@ -34,6 +34,7 @@ class MainActivity : Activity() {
     private var reverbDecay = 1800
     private var reverbSize = 650
     private var reverbDamping = 550
+    private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var audioReady = false
     private var appEnabled = true
     private var defaultSettingsOnStart = true
@@ -974,8 +975,75 @@ class MainActivity : Activity() {
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER audio diagnostics", report))
                 Toast.makeText(this, "Report copiato", Toast.LENGTH_SHORT).show()
             }
+            .setNeutralButton("PROVA INSERT REVERB") { _, _ -> startInsertReverbTest() }
             .setNegativeButton("CHIUDI", null)
             .show()
+    }
+
+    private fun startInsertReverbTest() {
+        stopInsertReverbTest()
+        try {
+            val type = java.util.UUID.fromString("c2e5d5f0-94bd-4763-9cac-4e234d06839e")
+            val implementation = java.util.UUID.fromString("c7a511a0-a3bc-11df-860e-0002a5d5c51b")
+            val constructor = android.media.audiofx.AudioEffect::class.java.getDeclaredConstructor(
+                java.util.UUID::class.java, java.util.UUID::class.java,
+                Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
+            )
+            constructor.isAccessible = true
+            val effect = constructor.newInstance(type, implementation, 100, 0) as android.media.audiofx.AudioEffect
+            insertReverbTest = effect
+
+            val setShort = android.media.audiofx.AudioEffect::class.java.getDeclaredMethod(
+                "setParameter", Int::class.javaPrimitiveType, Short::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+            val setInt = android.media.audiofx.AudioEffect::class.java.getDeclaredMethod(
+                "setParameter", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+
+            fun putShort(id: Int, value: Int) {
+                val result = setShort.invoke(effect, id, value.toShort()) as Int
+                if (result < 0) throw IllegalStateException("Parametro $id rifiutato ($result)")
+            }
+            fun putInt(id: Int, value: Int) {
+                val result = setInt.invoke(effect, id, value) as Int
+                if (result < 0) throw IllegalStateException("Parametro $id rifiutato ($result)")
+            }
+
+            putShort(0, -1000)       // room level
+            putShort(1, -1500)       // room HF level
+            putInt(2, 1800)          // decay time, ms
+            putShort(3, 550)         // decay HF ratio
+            putShort(4, -3000)       // early reflections level
+            putInt(5, 10)            // reflections delay, ms
+            putShort(6, -2500)       // reverb level
+            putInt(7, 20)            // reverb delay, ms
+            putShort(8, 650)         // diffusion
+            putShort(9, 650)         // density
+
+            effect.enabled = true
+            val state = "INSERT REVERB CREATED\nID=${effect.id}\nENABLED=${effect.enabled}\nHAS CONTROL=${effect.hasControl()}\nIMPLEMENTATION=${implementation}\nSESSION=0 (OUTPUT MIX)"
+            AlertDialog.Builder(this)
+                .setTitle("TEST INSERT REVERB ATTIVO")
+                .setMessage(state + "\n\nLascia riprodurre YouTube Morphe e ascolta. Premi STOP per disattivare.")
+                .setPositiveButton("STOP / DISATTIVA") { _, _ -> stopInsertReverbTest() }
+                .setNegativeButton("LASCIA ATTIVO", null)
+                .show()
+            Toast.makeText(this, "Test Insert Reverb avviato", Toast.LENGTH_LONG).show()
+        } catch (t: Throwable) {
+            stopInsertReverbTest()
+            val cause = t.cause ?: t
+            AlertDialog.Builder(this)
+                .setTitle("INSERT REVERB NON AVVIATO")
+                .setMessage("${cause.javaClass.simpleName}: ${cause.message}")
+                .setPositiveButton("OK", null)
+                .show()
+        }
+    }
+
+    private fun stopInsertReverbTest() {
+        try { insertReverbTest?.enabled = false } catch (_: Throwable) {}
+        try { insertReverbTest?.release() } catch (_: Throwable) {}
+        insertReverbTest = null
     }
 
     private fun connectAudio(){
@@ -1149,6 +1217,7 @@ class MainActivity : Activity() {
         // Clear the background marker only for an intentional Activity finish.
         // Do not clear it when Android destroys a background process or rotates the device.
         if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
+        stopInsertReverbTest()
         try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release();reverbEffect?.enabled=false;reverbEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
