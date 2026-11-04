@@ -37,6 +37,9 @@ class MainActivity : Activity() {
     @Volatile private var reverbOn = false
     @Volatile private var reverbMix = 28
     @Volatile private var reverbSize = 550
+    // Legacy values retained only for the dormant Shizuku diagnostic path.
+    private var reverbDecay = 1800
+    private var reverbDamping = 550
     @Volatile private var reverbHpHz = 180
     @Volatile private var reverbLpHz = 9000
     @Volatile private var reverbFreeze = false
@@ -1167,7 +1170,7 @@ class MainActivity : Activity() {
                                         "REVERB PARALLELO ATTIVO • 48 kHz mono\n" +
                                         "Ingresso Morphe RMS: ${"%.1f".format(rmsDb)} dBFS\n" +
                                         "Picco: ${"%.1f".format(peakDb)} dBFS\n" +
-                                        "MIX: $reverbMix% • DECAY: $reverbDecay ms\n\n" +
+                                        "MIX: $reverbMix% • SIZE: $reverbSize%\n\n" +
                                         "La traccia originale resta attiva; FREQUALIZER riproduce il ritorno riverberato."
                                 }
                             }
