@@ -1114,10 +1114,39 @@ class MainActivity : Activity() {
     }
 
     private fun showCaptureError(title: String, error: Throwable?) {
-        val detail = if (error == null) title else "$title\n\n${error.javaClass.simpleName}: ${error.message}"
-        AlertDialog.Builder(this).setTitle("TEST CATTURA AUDIO")
-            .setMessage(detail)
-            .setPositiveButton("OK", null).show()
+        val detail = buildString {
+            append(title)
+            if (error != null) {
+                append("\n\n")
+                append(error.javaClass.name)
+                append(": ")
+                append(error.message ?: "(nessun messaggio)")
+                append("\n\nDETTAGLI TECNICI:\n")
+                append(android.util.Log.getStackTraceString(error))
+            }
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("TEST CATTURA AUDIO • ERRORE")
+            .setMessage(ScrollView(this).apply {
+                addView(TextView(this@MainActivity).apply {
+                    text = detail
+                    textSize = 12f
+                    setTextColor(Color.WHITE)
+                    setTextIsSelectable(true)
+                    setPadding(dp(12), dp(8), dp(12), dp(8))
+                })
+            })
+            .setPositiveButton("CHIUDI", null)
+            .setNeutralButton("COPIA DETTAGLI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Capture Error", detail))
+                Toast.makeText(this, "Dettagli copiati", Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
     }
 
     private fun stopAudioCaptureTest() {
