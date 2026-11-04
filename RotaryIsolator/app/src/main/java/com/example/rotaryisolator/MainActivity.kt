@@ -1125,17 +1125,18 @@ class MainActivity : Activity() {
                 append(android.util.Log.getStackTraceString(error))
             }
         }
+        val detailsView = ScrollView(this).apply {
+            addView(TextView(this@MainActivity).apply {
+                text = detail
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setTextIsSelectable(true)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+            })
+        }
         val dialog = AlertDialog.Builder(this)
             .setTitle("TEST CATTURA AUDIO • ERRORE")
-            .setMessage(ScrollView(this).apply {
-                addView(TextView(this@MainActivity).apply {
-                    text = detail
-                    textSize = 12f
-                    setTextColor(Color.WHITE)
-                    setTextIsSelectable(true)
-                    setPadding(dp(12), dp(8), dp(12), dp(8))
-                })
-            })
+            .setView(detailsView)
             .setPositiveButton("CHIUDI", null)
             .setNeutralButton("COPIA DETTAGLI", null)
             .create()
