@@ -1031,7 +1031,7 @@ class MainActivity : Activity() {
 
             stage = "attivazione dell'effetto"
             effect.enabled = true
-            val state = "INSERT REVERB CREATED\nID=\${effect.id}\nENABLED=\${effect.enabled}\nHAS CONTROL=\${effect.hasControl()}\nIMPLEMENTATION=\${implementation}\nSESSION=0 (OUTPUT MIX)"
+            val state = "INSERT REVERB CREATED\nID=${effect.id}\nENABLED=${effect.enabled}\nHAS CONTROL=${effect.hasControl()}\nIMPLEMENTATION=${implementation}\nSESSION=0 (OUTPUT MIX)"
             AlertDialog.Builder(this)
                 .setTitle("TEST INSERT REVERB ATTIVO")
                 .setMessage(state + "\n\nLascia riprodurre YouTube Morphe e ascolta. Premi STOP per disattivare.")
