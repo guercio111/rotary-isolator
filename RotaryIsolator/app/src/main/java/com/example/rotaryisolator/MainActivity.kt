@@ -137,8 +137,8 @@ class MainActivity : Activity() {
     private fun titleTint(default:Int) = if(colorTitles == Color.TRANSPARENT) default else colorTitles
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         super.onCreate(savedInstanceState)
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         // Explicitly follow the physical sensor in both portrait and landscape.
         // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
