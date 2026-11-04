@@ -59,9 +59,53 @@ jobs:
           sudo apt-get install -y python3-pil
           /usr/bin/python3 .github/scripts/generate_app_icon.py extracted/RotaryIsolator
 
-      - name: Use maintained Kotlin source
+      - name: Use maintained Kotlin source and Shizuku service
         run: |
+          mkdir -p extracted/RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt
+          cp RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl extracted/RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl
+
+      - name: Enable Shizuku API and provider
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          app = Path("extracted/RotaryIsolator/app")
+          gradle = app / "build.gradle"
+          if not gradle.exists():
+              gradle = app / "build.gradle.kts"
+          source = gradle.read_text()
+          if "dev.rikka.shizuku:api" not in source:
+              dep = ("    implementation 'dev.rikka.shizuku:api:13.1.5'\\n"
+                     "    implementation 'dev.rikka.shizuku:provider:13.1.5'\\n")
+              if "dependencies {" not in source:
+                  raise SystemExit("dependencies block not found")
+              source = source.replace("dependencies {", "dependencies {\\n" + dep, 1)
+          if "aidl true" not in source and "aidl = true" not in source:
+              if "buildFeatures {" in source:
+                  source = source.replace("buildFeatures {", "buildFeatures {\\n        aidl true", 1)
+              else:
+                  source = source.replace("android {", "android {\\n    buildFeatures { aidl true }\\n", 1)
+          gradle.write_text(source)
+          manifests = list(app.glob("src/main/AndroidManifest.xml"))
+          if not manifests:
+              raise SystemExit("app AndroidManifest.xml not found")
+          manifest = manifests[0]
+          xml = manifest.read_text()
+          provider = '''        <provider
+              android:name="rikka.shizuku.ShizukuProvider"
+              android:authorities="${applicationId}.shizuku"
+              android:enabled="true"
+              android:exported="true"
+              android:multiprocess="false"
+              android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+          '''
+          if "rikka.shizuku.ShizukuProvider" not in xml:
+              if "</application>" not in xml:
+                  raise SystemExit("application closing tag not found")
+              xml = xml.replace("</application>", provider + "\\n    </application>", 1)
+              manifest.write_text(xml)
+          PY
 
       - name: Set Java compatibility to 17
         run: |
