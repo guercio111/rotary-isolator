@@ -1,6 +1,6 @@
 # Tablet stable APK rebuild trigger
 name: Build Rotary Isolator APK
-# Build isolated tablet insert reverb output-mix test
+# Build isolated tablet insert reverb output-mix test with full exception diagnostics
 
 on:
   push:
