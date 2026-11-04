@@ -65,6 +65,7 @@ jobs:
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt
           cp RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl extracted/RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl
 
       - name: Enable Shizuku API and provider
