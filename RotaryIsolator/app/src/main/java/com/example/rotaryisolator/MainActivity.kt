@@ -40,6 +40,13 @@ class MainActivity : Activity() {
     private var reverbSize = 650
     private var reverbDamping = 550
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
+    private var captureProjection: android.media.projection.MediaProjection? = null
+    private var captureRecord: android.media.AudioRecord? = null
+    @Volatile private var captureRunning = false
+    private var captureDialog: AlertDialog? = null
+    private var captureStatusView: TextView? = null
+    private val captureRequestCode = 7420
+    private val capturePermissionRequestCode = 7421
     private var shizukuReverbService: IShizukuReverbService? = null
     private val shizukuRequestCode = 7419
     private val shizukuUserServiceArgs by lazy {
@@ -927,6 +934,14 @@ class MainActivity : Activity() {
         panel.addView(diagnosticButton, LinearLayout.LayoutParams(-1, dp(44)).apply {
             topMargin = dp(8)
         })
+        val captureButton = Button(this).apply {
+            text = "TEST CATTURA AUDIO (YOUTUBE MORPHE)"
+            textSize = 12f
+            setOnClickListener { startAudioCaptureTest() }
+        }
+        panel.addView(captureButton, LinearLayout.LayoutParams(-1, dp(44)).apply {
+            topMargin = dp(6)
+        })
         val dialog = AlertDialog.Builder(this)
             .setTitle("REVERB • EXPERIMENTAL")
             .setView(ScrollView(this).apply { addView(panel) })
@@ -939,6 +954,185 @@ class MainActivity : Activity() {
         }
         dialog.show()
     }
+    private fun startAudioCaptureTest() {
+        if (Build.VERSION.SDK_INT < 29) {
+            AlertDialog.Builder(this).setTitle("TEST NON SUPPORTATO")
+                .setMessage("La cattura audio interna richiede Android 10 o superiore.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), capturePermissionRequestCode)
+            return
+        }
+        try {
+            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+            startActivityForResult(manager.createScreenCaptureIntent(), captureRequestCode)
+        } catch (t: Throwable) {
+            showCaptureError("IMPOSSIBILE AVVIARE LA RICHIESTA DI CATTURA", t)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == capturePermissionRequestCode) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startAudioCaptureTest()
+            } else {
+                AlertDialog.Builder(this).setTitle("PERMESSO NEGATO")
+                    .setMessage("Senza il permesso microfono Android non consente di avviare il test di cattura audio.")
+                    .setPositiveButton("OK", null).show()
+            }
+        }
+    }
+
+    @Deprecated("Deprecated in Android API  Activity Result migration is not required for this diagnostic")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != captureRequestCode) return
+        if (resultCode != RESULT_OK || data == null) {
+            Toast.makeText(this, "Cattura audio non autorizzata", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+            val projection = manager.getMediaProjection(resultCode, data)
+            if (projection == null) {
+                showCaptureError("ANDROID NON HA RESTITUITO LA SESSIONE DI CATTURA", null)
+                return
+            }
+            captureProjection = projection
+            projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
+                override fun onStop() {
+                    runOnUiThread { stopAudioCaptureTest() }
+                }
+            }, handler)
+            beginAudioCapture(projection)
+        } catch (t: Throwable) {
+            showCaptureError("ERRORE CREAZIONE SESSIONE DI CATTURA", t)
+            stopAudioCaptureTest()
+        }
+    }
+
+    private fun beginAudioCapture(projection: android.media.projection.MediaProjection) {
+        try {
+            val sampleRate = 48000
+            val format = android.media.AudioFormat.Builder()
+                .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sampleRate)
+                .setChannelMask(android.media.AudioFormat.CHANNEL_IN_MONO)
+                .build()
+            val minBuffer = android.media.AudioRecord.getMinBufferSize(
+                sampleRate,
+                android.media.AudioFormat.CHANNEL_IN_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (minBuffer <= 0) throw IllegalStateException("AudioRecord buffer non valido: $minBuffer")
+            val config = android.media.AudioPlaybackCaptureConfiguration.Builder(projection)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_GAME)
+                .build()
+            val record = android.media.AudioRecord.Builder()
+                .setAudioFormat(format)
+                .setBufferSizeInBytes(maxOf(minBuffer * 2, 8192))
+                .setAudioPlaybackCaptureConfig(config)
+                .build()
+            if (record.state != android.media.AudioRecord.STATE_INITIALIZED) {
+                record.release()
+                throw IllegalStateException("AudioRecord non inizializzato sul dispositivo")
+            }
+            captureRecord = record
+            showCaptureMeter()
+            record.startRecording()
+            captureRunning = true
+            captureThread = Thread({
+                val buffer = ShortArray(2048)
+                var lastUi = 0L
+                try {
+                    while (captureRunning) {
+                        val count = record.read(buffer, 0, buffer.size)
+                        if (count > 0) {
+                            var peak = 0
+                            var sum = 0.0
+                            for (i in 0 until count) {
+                                val sample = buffer[i].toInt()
+                                val absolute = kotlin.math.abs(sample)
+                                if (absolute > peak) peak = absolute
+                                sum += sample.toDouble() * sample.toDouble()
+                            }
+                            val rms = kotlin.math.sqrt(sum / count)
+                            val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
+                            val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (now - lastUi >= 400) {
+                                lastUi = now
+                                handler.post {
+                                    captureStatusView?.text =
+                                        "CATTURA ATTIVA • 48 kHz mono\n" +
+                                        "Livello RMS: \${"%.1f".format(rmsDb)} dBFS\n" +
+                                        "Picco: \${"%.1f".format(peakDb)} dBFS\n\n" +
+                                        if (peak > 0) "AUDIO RILEVATO: il flusso di YouTube è catturabile." else "In attesa di audio…"
+                                }
+                            }
+                        } else if (count < 0) {
+                            handler.post { captureStatusView?.text = "ERRORE LETTURA AUDIO: codice $count" }
+                            break
+                        }
+                    }
+                } catch (t: Throwable) {
+                    handler.post { captureStatusView?.text = "ERRORE DURANTE LA CATTURA\n\${t.javaClass.simpleName}: \${t.message}" }
+                }
+            }, "Frequalizer-AudioCapture").apply { start() }
+        } catch (t: Throwable) {
+            showCaptureError("CATTURA AUDIO NON AVVIATA", t)
+            stopAudioCaptureTest()
+        }
+    }
+
+    private fun showCaptureMeter() {
+        val view = TextView(this).apply {
+            text = "Richiesta di avvio cattura…\n\nApri YouTube Morphe e fai partire un brano.\nQuesto test misura soltanto il livello catturato: non applica effetti e non modifica l'audio che ascolti."
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+        }
+        captureStatusView = view
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("TEST CATTURA AUDIO")
+            .setView(view)
+            .setPositiveButton("FERMA TEST", null)
+            .setNegativeButton("CHIUDI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { dialog.dismiss() }
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { dialog.dismiss() }
+        }
+        dialog.setOnDismissListener { stopAudioCaptureTest() }
+        captureDialog = dialog
+        dialog.show()
+    }
+
+    private fun showCaptureError(title: String, error: Throwable?) {
+        val detail = if (error == null) title else "$title\n\n\${error.javaClass.simpleName}: \${error.message}"
+        AlertDialog.Builder(this).setTitle("TEST CATTURA AUDIO")
+            .setMessage(detail)
+            .setPositiveButton("OK", null).show()
+    }
+
+    private fun stopAudioCaptureTest() {
+        captureRunning = false
+        val record = captureRecord
+        captureRecord = null
+        try { record?.stop() } catch (_: Throwable) {}
+        try { record?.release() } catch (_: Throwable) {}
+        captureThread = null
+        val projection = captureProjection
+        captureProjection = null
+        try { projection?.stop() } catch (_: Throwable) {}
+        captureStatusView = null
+        captureDialog = null
+    }
+
     private fun showAudioDiagnostics(){
         val lines = mutableListOf<String>()
         lines += "FREQUALIZER • AUDIO DIAGNOSTICS"
