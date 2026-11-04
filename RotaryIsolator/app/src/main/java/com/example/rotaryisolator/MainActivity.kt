@@ -203,9 +203,14 @@ class MainActivity : Activity() {
         // Startup defaults apply only to a genuinely new app session. If Android
         // recreates the process after suspending/killing the app in background,
         // restore the last mixer state instead of resetting it to defaults.
-        val returningFromBackground = prefs.getBoolean("session_in_background", false)
+        // Use the Android task ID to distinguish a genuinely new app launch
+        // (the user closed/removed the previous task) from Android restoring
+        // the same task after background process reclamation.
+        val previousTaskId = prefs.getInt("session_task_id", -1)
+        val isNewTask = previousTaskId != -1 && previousTaskId != taskId
+        val returningFromBackground = prefs.getBoolean("session_in_background", false) && !isNewTask
         if (defaultSettingsOnStart && savedInstanceState == null && !returningFromBackground) applyStartupDefaults()
-        prefs.edit().putBoolean("session_in_background", false).apply()
+        prefs.edit().putInt("session_task_id", taskId).putBoolean("session_in_background", false).apply()
         buildUi()
         connectAudio()
     }
