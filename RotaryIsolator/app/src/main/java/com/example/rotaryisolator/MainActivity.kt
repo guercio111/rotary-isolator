@@ -907,6 +907,7 @@ class MainActivity : Activity() {
             isChecked = reverbOn
         }
         panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(48)))
+        val reverbSliders = mutableMapOf<String, Pair<SeekBar, TextView>>()
         fun addReverbSlider(title:String, min:Int, max:Int, initial:Int, suffix:String, changed:(Int)->Unit) {
             val valueLabel = label("$title  $initial$suffix", 13f, colorMaster)
             valueLabel.gravity = Gravity.CENTER_VERTICAL
@@ -927,6 +928,7 @@ class MainActivity : Activity() {
                     override fun onStopTrackingTouch(bar:SeekBar?){ save() }
                 })
             }
+            reverbSliders[title] = seek to valueLabel
             panel.addView(seek, LinearLayout.LayoutParams(-1, dp(42)))
         }
         addReverbSlider("MIX",0,100,reverbMix,"%"){reverbMix=it}
@@ -934,6 +936,35 @@ class MainActivity : Activity() {
         addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
         addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
         addReverbSlider("LOW CUT",60,500,reverbLowCutHz," Hz"){reverbLowCutHz=it}
+        val v10PresetButton = Button(this).apply {
+            text = "CARICA PRESET V10 STYLE"
+            textSize = 12f
+            setOnClickListener {
+                // Approximation of the DJM-V10's balanced, filtered reverb character.
+                reverbMix = 24
+                reverbDecay = 2600
+                reverbSize = 720
+                reverbDamping = 680
+                reverbLowCutHz = 220
+                val presetValues = mapOf(
+                    "MIX" to (reverbMix to "%"),
+                    "DECAY" to (reverbDecay to " ms"),
+                    "ROOM SIZE" to (reverbSize to "%"),
+                    "DAMPING" to (reverbDamping to "%"),
+                    "LOW CUT" to (reverbLowCutHz to " Hz")
+                )
+                val ranges = mapOf("MIX" to 0, "DECAY" to 100, "ROOM SIZE" to 0, "DAMPING" to 100, "LOW CUT" to 60)
+                for ((name, pair) in presetValues) {
+                    reverbSliders[name]?.let { (seek, valueLabel) ->
+                        seek.progress = pair.first - (ranges[name] ?: 0)
+                        valueLabel.text = "$name  ${pair.first}${pair.second}"
+                    }
+                }
+                save()
+                scheduleUpdate()
+            }
+        }
+        panel.addView(v10PresetButton, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(5) })
         val diagnosticButton = Button(this).apply {
             text = "VERIFICA COMPATIBILITÀ AUDIO"
             textSize = 12f
