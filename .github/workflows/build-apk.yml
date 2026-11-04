@@ -64,6 +64,7 @@ jobs:
           mkdir -p extracted/RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
           cp RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl extracted/RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl
 
       - name: Enable Shizuku API and provider
@@ -101,9 +102,22 @@ jobs:
               raise SystemExit("app AndroidManifest.xml not found")
           manifest = manifests[0]
           xml = manifest.read_text()
-          permission = '    <uses-permission android:name="android.permission.RECORD_AUDIO" />'
-          if "android.permission.RECORD_AUDIO" not in xml:
-              xml = xml.replace("<application", permission + "\n    <application", 1)
+          permissions = [
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />',
+          ]
+          for permission in permissions:
+              name = permission.split('"')[1]
+              if name not in xml:
+                  xml = xml.replace("<application", permission + "\n    <application", 1)
+          capture_service = '''        <service
+              android:name=".AudioCaptureForegroundService"
+              android:exported="false"
+              android:foregroundServiceType="mediaProjection" />
+          '''
+          if "AudioCaptureForegroundService" not in xml:
+              xml = xml.replace("</application>", capture_service + "\n    </application>", 1)
           provider = '''        <provider
               android:name="rikka.shizuku.ShizukuProvider"
               android:authorities="${applicationId}.shizuku"
