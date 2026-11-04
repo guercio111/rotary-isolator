@@ -77,24 +77,24 @@ jobs:
           source = gradle.read_text()
           if "dev.rikka.shizuku:api" not in source:
               if gradle.name.endswith(".kts"):
-                  dep = 'dependencies {\\n    implementation("dev.rikka.shizuku:api:13.1.5")\\n    implementation("dev.rikka.shizuku:provider:13.1.5")\\n}\\n'
+                  dep = 'dependencies {\n    implementation("dev.rikka.shizuku:api:13.1.5")\n    implementation("dev.rikka.shizuku:provider:13.1.5")\n}\n'
                   if "dependencies {" in source:
-                      source = source.replace("dependencies {", 'dependencies {\\n    implementation("dev.rikka.shizuku:api:13.1.5")\\n    implementation("dev.rikka.shizuku:provider:13.1.5")', 1)
+                      source = source.replace("dependencies {", 'dependencies {\n    implementation("dev.rikka.shizuku:api:13.1.5")\n    implementation("dev.rikka.shizuku:provider:13.1.5")', 1)
                   else:
-                      source += "\\n" + dep
+                      source += "\n" + dep
               else:
-                  dep = "dependencies {\\n    implementation 'dev.rikka.shizuku:api:13.1.5'\\n    implementation 'dev.rikka.shizuku:provider:13.1.5'\\n}\\n"
+                  dep = "dependencies {\n    implementation 'dev.rikka.shizuku:api:13.1.5'\n    implementation 'dev.rikka.shizuku:provider:13.1.5'\n}\n"
                   if "dependencies {" in source:
-                      source = source.replace("dependencies {", "dependencies {\\n    implementation 'dev.rikka.shizuku:api:13.1.5'\\n    implementation 'dev.rikka.shizuku:provider:13.1.5'", 1)
+                      source = source.replace("dependencies {", "dependencies {\n    implementation 'dev.rikka.shizuku:api:13.1.5'\n    implementation 'dev.rikka.shizuku:provider:13.1.5'", 1)
                   else:
-                      source += "\\n" + dep
+                      source += "\n" + dep
           if "aidl true" not in source and "aidl = true" not in source:
               if "buildFeatures {" in source:
                   line = "aidl = true" if gradle.name.endswith(".kts") else "aidl true"
-                  source = source.replace("buildFeatures {", "buildFeatures {\\n        " + line, 1)
+                  source = source.replace("buildFeatures {", "buildFeatures {\n        " + line, 1)
               else:
                   line = "aidl = true" if gradle.name.endswith(".kts") else "aidl true"
-                  source = source.replace("android {", "android {\\n    buildFeatures { " + line + " }\\n", 1)
+                  source = source.replace("android {", "android {\n    buildFeatures { " + line + " }\n", 1)
           gradle.write_text(source)
           manifests = list(app.glob("src/main/AndroidManifest.xml"))
           if not manifests:
