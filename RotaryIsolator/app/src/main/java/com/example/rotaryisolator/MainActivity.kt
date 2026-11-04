@@ -885,6 +885,14 @@ class MainActivity : Activity() {
         addReverbSlider("DECAY",100,8000,reverbDecay," ms"){reverbDecay=it}
         addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
         addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
+        val diagnosticButton = Button(this).apply {
+            text = "VERIFICA COMPATIBILITÀ AUDIO"
+            textSize = 12f
+            setOnClickListener { showAudioDiagnostics() }
+        }
+        panel.addView(diagnosticButton, LinearLayout.LayoutParams(-1, dp(44)).apply {
+            topMargin = dp(8)
+        })
         val dialog = AlertDialog.Builder(this)
             .setTitle("REVERB • EXPERIMENTAL")
             .setView(ScrollView(this).apply { addView(panel) })
@@ -897,6 +905,79 @@ class MainActivity : Activity() {
         }
         dialog.show()
     }
+    private fun showAudioDiagnostics(){
+        val lines = mutableListOf<String>()
+        lines += "FREQUALIZER • AUDIO DIAGNOSTICS"
+        lines += "DEVICE: ${Build.MANUFACTURER} ${Build.MODEL}"
+        lines += "ANDROID: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+        lines += ""
+        try {
+            val audioManager = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+            lines += "OUTPUT SAMPLE RATE: ${audioManager.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE) ?: "n/d"} Hz"
+            lines += "OUTPUT FRAMES/BUFFER: ${audioManager.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER) ?: "n/d"}"
+            if (Build.VERSION.SDK_INT >= 23) {
+                val outputs = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                lines += ""
+                lines += "OUTPUT DEVICES (${outputs.size}):"
+                outputs.forEach { device ->
+                    lines += "• ${device.productName} | type=${device.type} | id=${device.id}"
+                }
+            }
+        } catch (t:Throwable) {
+            lines += "OUTPUT INFO ERROR: ${t.javaClass.simpleName}: ${t.message}"
+        }
+        lines += ""
+        lines += "AUDIO EFFECT DESCRIPTORS:"
+        try {
+            val effects = android.media.audiofx.AudioEffect.queryEffects()
+            if (effects.isNullOrEmpty()) {
+                lines += "No descriptors returned by Android."
+            } else {
+                lines += "COUNT: ${effects.size}"
+                effects.sortedBy { "${it.connectMode} ${it.name}" }.forEach { effect ->
+                    lines += "• ${effect.name} | ${effect.implementor}"
+                    lines += "  MODE=${effect.connectMode}"
+                    lines += "  TYPE=${effect.type}"
+                    lines += "  UUID=${effect.uuid}"
+                }
+            }
+        } catch (t:Throwable) {
+            lines += "QUERY EFFECTS ERROR: ${t.javaClass.simpleName}: ${t.message}"
+        }
+        lines += ""
+        val rev = reverbEffect
+        if (rev == null) {
+            lines += "ENVIRONMENTAL REVERB INSTANCE: NOT CREATED"
+        } else {
+            try {
+                lines += "ENVIRONMENTAL REVERB INSTANCE: CREATED"
+                lines += "ID=${rev.id} | ENABLED=${rev.enabled} | HAS CONTROL=${rev.hasControl()}"
+            } catch (t:Throwable) {
+                lines += "ENVIRONMENTAL REVERB STATE ERROR: ${t.javaClass.simpleName}: ${t.message}"
+            }
+        }
+        lines += ""
+        lines += "NOTE: this report only reads Android audio capabilities; it does not change DSP or mixer settings."
+        val report = lines.joinToString("\n")
+        val reportView = TextView(this).apply {
+            text = report
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setTextIsSelectable(true)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("DIAGNOSTICA AUDIO")
+            .setView(ScrollView(this).apply { addView(reportView) })
+            .setPositiveButton("COPIA REPORT") { _, _ ->
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER audio diagnostics", report))
+                Toast.makeText(this, "Report copiato", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("CHIUDI", null)
+            .show()
+    }
+
     private fun connectAudio(){
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
