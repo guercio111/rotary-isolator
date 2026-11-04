@@ -22,6 +22,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
             if (index == data.size) index = 0
             return delayed
         }
+        fun clear() {
+            data.fill(0f)
+            index = 0
+            dampingState = 0f
+        }
     }
 
     private class AllPass(delay: Int, private val gain: Float = 0.5f) {
@@ -34,6 +39,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
             index++
             if (index == data.size) index = 0
             return output
+        }
+        fun clear() {
+            data.fill(0f)
+            index = 0
         }
     }
 
@@ -48,6 +57,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var hpPreviousInput = 0f
     private var hpPreviousOutput = 0f
     private var limiterGain = 1f
+
+    fun clear() {
+        combs.forEach { it.clear() }
+        allPassA.clear()
+        allPassB.clear()
+        hpPreviousInput = 0f
+        hpPreviousOutput = 0f
+        limiterGain = 1f
+    }
 
     fun process(
         input: ShortArray, output: ShortArray, count: Int,
