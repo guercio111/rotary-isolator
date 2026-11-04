@@ -1070,8 +1070,8 @@ class MainActivity : Activity() {
                                 handler.post {
                                     captureStatusView?.text =
                                         "CATTURA ATTIVA • 48 kHz mono\n" +
-                                        "Livello RMS: \${"%.1f".format(rmsDb)} dBFS\n" +
-                                        "Picco: \${"%.1f".format(peakDb)} dBFS\n\n" +
+                                        "Livello RMS: ${"%.1f".format(rmsDb)} dBFS\n" +
+                                        "Picco: ${"%.1f".format(peakDb)} dBFS\n\n" +
                                         if (peak > 0) "AUDIO RILEVATO: il flusso di YouTube è catturabile." else "In attesa di audio…"
                                 }
                             }
@@ -1081,7 +1081,7 @@ class MainActivity : Activity() {
                         }
                     }
                 } catch (t: Throwable) {
-                    handler.post { captureStatusView?.text = "ERRORE DURANTE LA CATTURA\n\${t.javaClass.simpleName}: \${t.message}" }
+                    handler.post { captureStatusView?.text = "ERRORE DURANTE LA CATTURA\n${t.javaClass.simpleName}: ${t.message}" }
                 }
             }, "Frequalizer-AudioCapture").apply { start() }
         } catch (t: Throwable) {
@@ -1114,7 +1114,7 @@ class MainActivity : Activity() {
     }
 
     private fun showCaptureError(title: String, error: Throwable?) {
-        val detail = if (error == null) title else "$title\n\n\${error.javaClass.simpleName}: \${error.message}"
+        val detail = if (error == null) title else "$title\n\n${error.javaClass.simpleName}: ${error.message}"
         AlertDialog.Builder(this).setTitle("TEST CATTURA AUDIO")
             .setMessage(detail)
             .setPositiveButton("OK", null).show()
