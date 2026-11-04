@@ -42,6 +42,8 @@ class MainActivity : Activity() {
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
     private var captureRecord: android.media.AudioRecord? = null
+    private var captureTrack: android.media.AudioTrack? = null
+    private var parallelReverbProcessor: SchroederReverb? = null
     private var captureThread: Thread? = null
     @Volatile private var captureRunning = false
     private var captureDialog: AlertDialog? = null
@@ -927,14 +929,6 @@ class MainActivity : Activity() {
         addReverbSlider("DECAY",100,8000,reverbDecay," ms"){reverbDecay=it}
         addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
         addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
-        val insertReverbButton = Button(this).apply {
-            text = "PROVA REVERB SUL SUONO DI SISTEMA (SHIZUKU)"
-            textSize = 12f
-            setOnClickListener { startInsertReverbTest() }
-        }
-        panel.addView(insertReverbButton, LinearLayout.LayoutParams(-1, dp(48)).apply {
-            topMargin = dp(8)
-        })
         val diagnosticButton = Button(this).apply {
             text = "VERIFICA COMPATIBILITÀ AUDIO"
             textSize = 12f
@@ -944,12 +938,12 @@ class MainActivity : Activity() {
             topMargin = dp(8)
         })
         val captureButton = Button(this).apply {
-            text = "TEST CATTURA AUDIO (YOUTUBE MORPHE)"
+            text = "PROVA REVERB PARALLELO (MORPHE)"
             textSize = 12f
             setOnClickListener { startAudioCaptureTest() }
         }
-        panel.addView(captureButton, LinearLayout.LayoutParams(-1, dp(44)).apply {
-            topMargin = dp(6)
+        panel.addView(captureButton, LinearLayout.LayoutParams(-1, dp(48)).apply {
+            topMargin = dp(8)
         })
         val dialog = AlertDialog.Builder(this)
             .setTitle("REVERB • EXPERIMENTAL")
@@ -1062,12 +1056,41 @@ class MainActivity : Activity() {
                 record.release()
                 throw IllegalStateException("AudioRecord non inizializzato sul dispositivo")
             }
+            val minOut = android.media.AudioTrack.getMinBufferSize(
+                sampleRate, android.media.AudioFormat.CHANNEL_OUT_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (minOut <= 0) throw IllegalStateException("AudioTrack buffer non valido: $minOut")
+            val outputFormat = android.media.AudioFormat.Builder()
+                .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sampleRate)
+                .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
+                .build()
+            val outputAttributes = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            val track = android.media.AudioTrack.Builder()
+                .setAudioAttributes(outputAttributes)
+                .setAudioFormat(outputFormat)
+                .setBufferSizeInBytes(maxOf(minOut * 2, 8192))
+                .setTransferMode(android.media.AudioTrack.MODE_STREAM)
+                .build()
+            if (track.state != android.media.AudioTrack.STATE_INITIALIZED) {
+                track.release()
+                throw IllegalStateException("AudioTrack non inizializzato sull'uscita audio")
+            }
+            captureTrack = track
+            parallelReverbProcessor = SchroederReverb(sampleRate)
             captureRecord = record
             showCaptureMeter()
+            track.play()
             record.startRecording()
             captureRunning = true
             captureThread = Thread({
                 val buffer = ShortArray(2048)
+                val wetBuffer = ShortArray(buffer.size)
+                val processor = parallelReverbProcessor ?: return@Thread
                 var lastUi = 0L
                 try {
                     while (captureRunning) {
@@ -1081,6 +1104,16 @@ class MainActivity : Activity() {
                                 if (absolute > peak) peak = absolute
                                 sum += sample.toDouble() * sample.toDouble()
                             }
+                            processor.process(
+                                buffer, wetBuffer, count,
+                                reverbMix, reverbDecay, reverbSize, reverbDamping
+                            )
+                            var written = 0
+                            while (written < count && captureRunning) {
+                                val n = track.write(wetBuffer, written, count - written, android.media.AudioTrack.WRITE_BLOCKING)
+                                if (n < 0) throw IllegalStateException("AudioTrack write: $n")
+                                written += n
+                            }
                             val rms = kotlin.math.sqrt(sum / count)
                             val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
                             val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
@@ -1089,10 +1122,11 @@ class MainActivity : Activity() {
                                 lastUi = now
                                 handler.post {
                                     captureStatusView?.text =
-                                        "CATTURA ATTIVA • 48 kHz mono\n" +
-                                        "Livello RMS: ${"%.1f".format(rmsDb)} dBFS\n" +
-                                        "Picco: ${"%.1f".format(peakDb)} dBFS\n\n" +
-                                        if (peak > 0) "AUDIO RILEVATO: il flusso di YouTube è catturabile." else "In attesa di audio…"
+                                        "REVERB PARALLELO ATTIVO • 48 kHz mono\n" +
+                                        "Ingresso Morphe RMS: ${"%.1f".format(rmsDb)} dBFS\n" +
+                                        "Picco: ${"%.1f".format(peakDb)} dBFS\n" +
+                                        "MIX: $reverbMix% • DECAY: $reverbDecay ms\n\n" +
+                                        "La traccia originale resta attiva; FREQUALIZER riproduce il ritorno riverberato."
                                 }
                             }
                         } else if (count < 0) {
@@ -1101,9 +1135,9 @@ class MainActivity : Activity() {
                         }
                     }
                 } catch (t: Throwable) {
-                    handler.post { captureStatusView?.text = "ERRORE DURANTE LA CATTURA\n${t.javaClass.simpleName}: ${t.message}" }
+                    handler.post { captureStatusView?.text = "ERRORE REVERB PARALLELO\n${t.javaClass.simpleName}: ${t.message}" }
                 }
-            }, "Frequalizer-AudioCapture").apply { start() }
+            }, "Frequalizer-ReverbReturn").apply { priority = Thread.MAX_PRIORITY; start() }
         } catch (t: Throwable) {
             showCaptureError("CATTURA AUDIO NON AVVIATA", t)
             stopAudioCaptureTest()
@@ -1112,7 +1146,7 @@ class MainActivity : Activity() {
 
     private fun showCaptureMeter() {
         val view = TextView(this).apply {
-            text = "Richiesta di avvio cattura…\n\nApri YouTube Morphe e fai partire un brano.\nQuesto test misura soltanto il livello catturato: non applica effetti e non modifica l'audio che ascolti."
+            text = "Richiesta di avvio Reverb parallelo…\n\nApri YouTube Morphe e fai partire un brano. FREQUALIZER elaborerà la copia catturata e riprodurrà il ritorno riverberato. L'audio originale continuerà a suonare."
             textSize = 14f
             setTextColor(Color.WHITE)
             setPadding(dp(18), dp(16), dp(18), dp(16))
@@ -1176,6 +1210,13 @@ class MainActivity : Activity() {
         captureRecord = null
         try { record?.stop() } catch (_: Throwable) {}
         try { record?.release() } catch (_: Throwable) {}
+        val track = captureTrack
+        captureTrack = null
+        try { track?.pause() } catch (_: Throwable) {}
+        try { track?.flush() } catch (_: Throwable) {}
+        try { track?.stop() } catch (_: Throwable) {}
+        try { track?.release() } catch (_: Throwable) {}
+        parallelReverbProcessor = null
         captureThread = null
         val projection = captureProjection
         captureProjection = null
@@ -1605,4 +1646,3 @@ private class RotaryControl(
 }
 
 // Experimental master compressor prototype: Android DynamicsProcessing MBC.
-
