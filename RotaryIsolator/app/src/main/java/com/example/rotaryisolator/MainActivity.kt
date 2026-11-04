@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.content.res.ColorStateList
 import android.media.audiofx.DynamicsProcessing
+import android.media.audiofx.EnvironmentalReverb
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -27,6 +28,12 @@ import kotlin.math.*
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
+    private var reverbEffect: EnvironmentalReverb? = null
+    private var reverbOn = false
+    private var reverbMix = 28
+    private var reverbDecay = 1800
+    private var reverbSize = 650
+    private var reverbDamping = 550
     private var audioReady = false
     private var appEnabled = true
     private var defaultSettingsOnStart = true
@@ -103,6 +110,11 @@ class MainActivity : Activity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
+        reverbOn = prefs.getBoolean("reverb_on", false)
+        reverbMix = prefs.getInt("reverb_mix", 28).coerceIn(0,100)
+        reverbDecay = prefs.getInt("reverb_decay", 1800).coerceIn(100,8000)
+        reverbSize = prefs.getInt("reverb_size", 650).coerceIn(0,1000)
+        reverbDamping = prefs.getInt("reverb_damping", 550).coerceIn(100,1000)
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -375,6 +387,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_mix",reverbMix).putInt("reverb_decay",reverbDecay).putInt("reverb_size",reverbSize).putInt("reverb_damping",reverbDamping)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -725,6 +738,22 @@ class MainActivity : Activity() {
                 box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(7)})
             }
         }
+        val reverbButton = Button(this).apply {
+            text = "REVERB"
+            textSize = 11f
+            isAllCaps = false
+            setTextColor(Color.BLACK)
+            backgroundTintList = ColorStateList.valueOf(colorButtons)
+            minHeight = dp(32)
+            minimumHeight = dp(32)
+            setPadding(dp(18), 0, dp(18), 0)
+            setOnClickListener { showReverbPopup() }
+        }
+        box.addView(reverbButton, LinearLayout.LayoutParams(-2, dp(32)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(5)
+            bottomMargin = dp(2)
+        })
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
     }
 
@@ -819,11 +848,61 @@ class MainActivity : Activity() {
     }
 
 
+    private fun showReverbPopup(){
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+        }
+        val enabledSwitch = Switch(this).apply {
+            text = "REVERB ON"
+            textSize = 14f
+            isChecked = reverbOn
+        }
+        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(48)))
+        fun addReverbSlider(title:String, min:Int, max:Int, initial:Int, suffix:String, changed:(Int)->Unit) {
+            val valueLabel = label("$title  $initial$suffix", 13f, colorMaster)
+            valueLabel.gravity = Gravity.CENTER_VERTICAL
+            panel.addView(valueLabel, LinearLayout.LayoutParams(-1, dp(30)))
+            val seek = SeekBar(this).apply {
+                this.max = max-min
+                progress = (initial-min).coerceIn(0,max-min)
+                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar:SeekBar?, progress:Int, fromUser:Boolean) {
+                        if(fromUser) {
+                            val value = min+progress
+                            valueLabel.text = "$title  $value$suffix"
+                            changed(value)
+                            scheduleUpdate()
+                        }
+                    }
+                    override fun onStartTrackingTouch(bar:SeekBar?){}
+                    override fun onStopTrackingTouch(bar:SeekBar?){ save() }
+                })
+            }
+            panel.addView(seek, LinearLayout.LayoutParams(-1, dp(42)))
+        }
+        addReverbSlider("MIX",0,100,reverbMix,"%"){reverbMix=it}
+        addReverbSlider("DECAY",100,8000,reverbDecay," ms"){reverbDecay=it}
+        addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
+        addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("REVERB • EXPERIMENTAL")
+            .setView(ScrollView(this).apply { addView(panel) })
+            .setNegativeButton("CHIUDI") { _, _ -> save(); scheduleUpdate() }
+            .create()
+        enabledSwitch.setOnCheckedChangeListener { _, checked ->
+            reverbOn = checked
+            save()
+            scheduleUpdate()
+        }
+        dialog.show()
+    }
     private fun connectAudio(){
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
             val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
+            try { reverbEffect=EnvironmentalReverb(0,0).also{it.enabled=false} } catch(_:Throwable) { reverbEffect=null }
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
     }
@@ -894,6 +973,18 @@ class MainActivity : Activity() {
                 fx.setLimiterAllChannelsTo(lim)
             }
             fx.enabled=appEnabled && (eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn)
+            reverbEffect?.let { rev ->
+                try {
+                    rev.setRoomLevel((-1000).toShort())
+                    rev.setRoomHFLevel((-1500).toShort())
+                    rev.setDecayTime(reverbDecay)
+                    rev.setDecayHFRatio(reverbDamping.toShort())
+                    rev.setDiffusion(reverbSize.toShort())
+                    rev.setDensity(reverbSize.toShort())
+                    rev.setReverbLevel((-9000 + reverbMix * 85).coerceIn(-9000,0).toShort())
+                    rev.enabled = appEnabled && reverbOn && reverbMix > 0
+                } catch(_:Throwable) { runOnUiThread { if(::status.isInitialized) status.text="REVERB non supportato dal driver audio" } }
+            }
 
             val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
             runOnUiThread { if(::status.isInitialized) status.text=message }
@@ -977,7 +1068,7 @@ class MainActivity : Activity() {
         // Clear the background marker only for an intentional Activity finish.
         // Do not clear it when Android destroys a background process or rotates the device.
         if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
-        try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
+        try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release();reverbEffect?.enabled=false;reverbEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
 }
