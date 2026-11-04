@@ -996,21 +996,33 @@ class MainActivity : Activity() {
             return
         }
         try {
-            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
-            val projection = manager.getMediaProjection(resultCode, data)
-            if (projection == null) {
-                showCaptureError("ANDROID NON HA RESTITUITO LA SESSIONE DI CATTURA", null)
-                return
-            }
-            captureProjection = projection
-            projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
-                override fun onStop() {
-                    runOnUiThread { stopAudioCaptureTest() }
+            // Android 14+ requires a running mediaProjection foreground service
+            // before getMediaProjection() is called.
+            val serviceIntent = android.content.Intent(this, AudioCaptureForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+            handler.postDelayed({
+                try {
+                    val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                    val projection = manager.getMediaProjection(resultCode, data)
+                    if (projection == null) {
+                        showCaptureError("ANDROID NON HA RESTITUITO LA SESSIONE DI CATTURA", null)
+                        stopAudioCaptureTest()
+                        return@postDelayed
+                    }
+                    captureProjection = projection
+                    projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
+                        override fun onStop() {
+                            runOnUiThread { stopAudioCaptureTest() }
+                        }
+                    }, handler)
+                    beginAudioCapture(projection)
+                } catch (t: Throwable) {
+                    showCaptureError("ERRORE CREAZIONE SESSIONE DI CATTURA", t)
+                    stopAudioCaptureTest()
                 }
-            }, handler)
-            beginAudioCapture(projection)
+            }, 500)
         } catch (t: Throwable) {
-            showCaptureError("ERRORE CREAZIONE SESSIONE DI CATTURA", t)
+            showCaptureError("IMPOSSIBILE AVVIARE IL SERVIZIO MEDIA PROJECTION", t)
             stopAudioCaptureTest()
         }
     }
@@ -1160,6 +1172,7 @@ class MainActivity : Activity() {
         val projection = captureProjection
         captureProjection = null
         try { projection?.stop() } catch (_: Throwable) {}
+        try { stopService(android.content.Intent(this, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
         captureStatusView = null
         captureDialog = null
     }
