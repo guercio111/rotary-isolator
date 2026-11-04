@@ -927,6 +927,14 @@ class MainActivity : Activity() {
         addReverbSlider("DECAY",100,8000,reverbDecay," ms"){reverbDecay=it}
         addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
         addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
+        val insertReverbButton = Button(this).apply {
+            text = "PROVA REVERB SUL SUONO DI SISTEMA (SHIZUKU)"
+            textSize = 12f
+            setOnClickListener { startInsertReverbTest() }
+        }
+        panel.addView(insertReverbButton, LinearLayout.LayoutParams(-1, dp(48)).apply {
+            topMargin = dp(8)
+        })
         val diagnosticButton = Button(this).apply {
             text = "VERIFICA COMPATIBILITÀ AUDIO"
             textSize = 12f
