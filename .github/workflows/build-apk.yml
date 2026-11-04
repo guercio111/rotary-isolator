@@ -76,16 +76,16 @@ jobs:
               gradle = app / "build.gradle.kts"
           source = gradle.read_text()
           if "dev.rikka.shizuku:api" not in source:
-              dep = ("    implementation 'dev.rikka.shizuku:api:13.1.5'\\n"
-                     "    implementation 'dev.rikka.shizuku:provider:13.1.5'\\n")
+              dep = ("    implementation 'dev.rikka.shizuku:api:13.1.5'\n"
+                     "    implementation 'dev.rikka.shizuku:provider:13.1.5'\n")
               if "dependencies {" not in source:
                   raise SystemExit("dependencies block not found")
-              source = source.replace("dependencies {", "dependencies {\\n" + dep, 1)
+              source = source.replace("dependencies {", "dependencies {\n" + dep, 1)
           if "aidl true" not in source and "aidl = true" not in source:
               if "buildFeatures {" in source:
-                  source = source.replace("buildFeatures {", "buildFeatures {\\n        aidl true", 1)
+                  source = source.replace("buildFeatures {", "buildFeatures {\n        aidl true", 1)
               else:
-                  source = source.replace("android {", "android {\\n    buildFeatures { aidl true }\\n", 1)
+                  source = source.replace("android {", "android {\n    buildFeatures { aidl true }\n", 1)
           gradle.write_text(source)
           manifests = list(app.glob("src/main/AndroidManifest.xml"))
           if not manifests:
@@ -103,7 +103,7 @@ jobs:
           if "rikka.shizuku.ShizukuProvider" not in xml:
               if "</application>" not in xml:
                   raise SystemExit("application closing tag not found")
-              xml = xml.replace("</application>", provider + "\\n    </application>", 1)
+              xml = xml.replace("</application>", provider + "\n    </application>", 1)
               manifest.write_text(xml)
           PY
 
