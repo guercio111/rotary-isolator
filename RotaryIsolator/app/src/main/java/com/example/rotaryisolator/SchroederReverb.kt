@@ -57,7 +57,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val mix = mixPercent.coerceIn(0, 100) / 100f
         val decay = decayMs.coerceIn(100, 8000) / 8000f
         val size = roomSize.coerceIn(0, 1000) / 1000f
-        val feedback = (0.48f + decay * 0.40f + size * 0.055f).coerceIn(0.48f, 0.935f)
+        // Calibrate comb feedback against the requested RT60 instead of a linear knob curve.
+        // This gives the 2.6 s V10-style preset a genuinely longer, smoother tail.
+        val decaySeconds = decayMs.coerceIn(100, 8000) / 1000.0
+        val feedback = (Math.pow(10.0, -3.0 * 0.0379 / decaySeconds).toFloat() + size * 0.01f).coerceIn(0.55f, 0.94f)
         val damping = (dampingPercent.coerceIn(100, 1000) / 1000f * 0.78f).coerceIn(0.08f, 0.78f)
         val cutoff = lowCutHz.coerceIn(60, 500).toFloat()
         val hpAlpha = exp((-2.0 * Math.PI * cutoff / sampleRate).toFloat())
