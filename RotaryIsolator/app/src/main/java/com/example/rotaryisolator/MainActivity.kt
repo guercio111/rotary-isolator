@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
     private var captureRecord: android.media.AudioRecord? = null
+    private var captureThread: Thread? = null
     @Volatile private var captureRunning = false
     private var captureDialog: AlertDialog? = null
     private var captureStatusView: TextView? = null
