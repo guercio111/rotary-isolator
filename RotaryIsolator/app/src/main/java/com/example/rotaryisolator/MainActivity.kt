@@ -53,6 +53,7 @@ class MainActivity : Activity() {
     private var parallelReverbProcessor: SchroederReverb? = null
     private var captureThread: Thread? = null
     @Volatile private var captureRunning = false
+    @Volatile private var captureRestartAttempts = 0
     private var captureDialog: AlertDialog? = null
     private var captureStatusView: TextView? = null
     private val captureRequestCode = 7420
@@ -175,7 +176,9 @@ class MainActivity : Activity() {
                 .putBoolean("reverb_tone_defaults_v1", true).apply()
         }
         reverbFreeze = false
-        reverbFadeMs = prefs.getInt("reverb_fade_ms", 1400).coerceIn(300, 4000)
+        val fadePlusThreeApplied = prefs.getBoolean("reverb_fade_plus3_v1", false)
+        reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeApplied) 0 else 300).coerceIn(300, 4000)
+        if (!fadePlusThreeApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3_v1", true).apply()
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -1163,6 +1166,7 @@ class MainActivity : Activity() {
             track.play()
             record.startRecording()
             captureRunning = true
+            captureRestartAttempts = 0
             captureThread = Thread({
                 val buffer = ShortArray(2048)
                 val wetBuffer = ShortArray(buffer.size)
@@ -1173,6 +1177,7 @@ class MainActivity : Activity() {
                     while (captureRunning) {
                         val count = record.read(buffer, 0, buffer.size)
                         if (count > 0) {
+                            captureRestartAttempts = 0
                             var peak = 0
                             var sum = 0.0
                             for (i in 0 until count) {
@@ -1212,20 +1217,51 @@ class MainActivity : Activity() {
                         }
                     }
                 } catch (t: Throwable) {
-                    if (captureRunning) {
-                        captureRunning = false
-                        handler.post {
-                            showCaptureError("IL MOTORE REVERB SI È FERMATO", t)
-                            stopAudioCaptureTest()
-                        }
-                    }
+                    if (captureRunning) scheduleCaptureRestart(projection, t)
                 } finally {
                     captureRunning = false
                 }
             }, "Frequalizer-ReverbReturn").apply { priority = Thread.MAX_PRIORITY; start() }
         } catch (t: Throwable) {
-            showCaptureError("CATTURA AUDIO NON AVVIATA", t)
-            stopAudioCaptureTest()
+            scheduleCaptureRestart(projection, t)
+        }
+    }
+
+    // Rebuild only the input/output audio streams after a track or route change.
+    // Keep the MediaProjection token and its foreground service alive, so Android
+    // does not ask for a new screen-capture approval for every song.
+    private fun releaseCaptureIoOnly() {
+        val record = captureRecord
+        captureRecord = null
+        try { record?.stop() } catch (_: Throwable) {}
+        try { record?.release() } catch (_: Throwable) {}
+        val track = captureTrack
+        captureTrack = null
+        try { track?.pause() } catch (_: Throwable) {}
+        try { track?.flush() } catch (_: Throwable) {}
+        try { track?.stop() } catch (_: Throwable) {}
+        try { track?.release() } catch (_: Throwable) {}
+        parallelReverbProcessor = null
+        captureThread = null
+    }
+
+    private fun scheduleCaptureRestart(projection: android.media.projection.MediaProjection, error: Throwable) {
+        captureRunning = false
+        handler.post {
+            releaseCaptureIoOnly()
+            if (captureProjection !== projection || !reverbOn) return@post
+            if (captureRestartAttempts >= 8) {
+                showCaptureError("IL FLUSSO AUDIO NON SI È RIPRISTINATO DOPO IL CAMBIO TRACCIA", error)
+                stopAudioCaptureTest()
+                return@post
+            }
+            captureRestartAttempts++
+            val waitMs = 400L + captureRestartAttempts * 300L
+            handler.postDelayed({
+                if (captureProjection === projection && reverbOn && !captureRunning) {
+                    beginAudioCapture(projection)
+                }
+            }, waitMs)
         }
     }
 
@@ -1300,18 +1336,9 @@ class MainActivity : Activity() {
 
     private fun stopAudioCaptureTest() {
         captureRunning = false
-        val record = captureRecord
-        captureRecord = null
-        try { record?.stop() } catch (_: Throwable) {}
-        try { record?.release() } catch (_: Throwable) {}
-        val track = captureTrack
-        captureTrack = null
-        try { track?.pause() } catch (_: Throwable) {}
-        try { track?.flush() } catch (_: Throwable) {}
-        try { track?.stop() } catch (_: Throwable) {}
-        try { track?.release() } catch (_: Throwable) {}
-        parallelReverbProcessor = null
-        captureThread = null
+        handler.removeCallbacksAndMessages(null)
+        releaseCaptureIoOnly()
+        captureRestartAttempts = 0
         val projection = captureProjection
         captureProjection = null
         try { projection?.stop() } catch (_: Throwable) {}
