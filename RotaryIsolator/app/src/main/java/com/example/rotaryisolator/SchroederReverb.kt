@@ -61,23 +61,24 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // Longer incommensurate delays disperse the tail and reduce the
     // beat-like, metallic comb pattern.
     private val delayTimes = floatArrayOf(
-        0.0411f, 0.0469f, 0.0537f, 0.0611f,
-        0.0689f, 0.0773f, 0.0869f, 0.0971f
+        0.0531f, 0.0617f, 0.0709f, 0.0823f,
+        0.0957f, 0.1091f, 0.1237f, 0.1391f
     )
     private val lines = delayTimes.map { DelayLine((sampleRate * it).toInt()) }.toTypedArray()
     private val inputDiffusers = arrayOf(
-        AllPass((sampleRate * 0.0029f).toInt(), 0.58f),
-        AllPass((sampleRate * 0.0043f).toInt(), 0.58f),
-        AllPass((sampleRate * 0.0067f).toInt(), 0.58f),
-        AllPass((sampleRate * 0.0091f).toInt(), 0.58f)
+        AllPass((sampleRate * 0.0037f).toInt(), 0.62f),
+        AllPass((sampleRate * 0.0053f).toInt(), 0.62f),
+        AllPass((sampleRate * 0.0079f).toInt(), 0.62f),
+        AllPass((sampleRate * 0.0113f).toInt(), 0.62f)
     )
     private val outputDiffusers = arrayOf(
-        AllPass((sampleRate * 0.0037f).toInt(), 0.64f),
-        AllPass((sampleRate * 0.0059f).toInt(), 0.64f),
-        AllPass((sampleRate * 0.0083f).toInt(), 0.64f),
-        AllPass((sampleRate * 0.0117f).toInt(), 0.64f),
-        AllPass((sampleRate * 0.0151f).toInt(), 0.64f),
-        AllPass((sampleRate * 0.0187f).toInt(), 0.64f)
+        AllPass((sampleRate * 0.0041f).toInt(), 0.66f),
+        AllPass((sampleRate * 0.0067f).toInt(), 0.66f),
+        AllPass((sampleRate * 0.0097f).toInt(), 0.66f),
+        AllPass((sampleRate * 0.0131f).toInt(), 0.66f),
+        AllPass((sampleRate * 0.0173f).toInt(), 0.66f),
+        AllPass((sampleRate * 0.0217f).toInt(), 0.66f),
+        AllPass((sampleRate * 0.0263f).toInt(), 0.66f)
     )
 
     private val matrix = FloatArray(8)
