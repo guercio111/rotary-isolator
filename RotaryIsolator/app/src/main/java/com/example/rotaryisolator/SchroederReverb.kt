@@ -81,6 +81,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
         AllPass((sampleRate * 0.0263f).toInt(), 0.66f)
     )
 
+    // Use different, non-eigenvector injection and pickup patterns.
+    // The previous identical alternating pattern was a Hadamard eigenvector:
+    // it excited and listened to essentially one feedback mode, creating a
+    // beat-synchronous metallic pulse. These two independent patterns engage
+    // the full network and average its modes into a smoother continuous tail.
+    private val inputPattern = intArrayOf(1, 1, -1, 1, -1, -1, 1, -1)
+    private val outputPattern = intArrayOf(1, -1, -1, 1, 1, -1, 1, -1)
     private val matrix = FloatArray(8)
     private var hpX = 0f
     private var hpY = 0f
@@ -169,16 +176,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
             for (n in 0 until 8) {
                 val delayed = lines[n].read(damping)
                 matrix[n] = delayed
-                val polarity = if ((n and 1) == 0) 1f else -1f
-                wet += delayed * polarity
+                wet += delayed * outputPattern[n]
             }
 
             // Orthogonal feedback disperses energy across all delay paths instead
             // of returning eight individually recognizable echo trains.
             hadamard(matrix)
             for (n in 0 until 8) {
-                val polarity = if ((n and 1) == 0) 1f else -1f
-                lines[n].write(excitation * polarity + matrix[n] * feedback)
+                lines[n].write(excitation * inputPattern[n] + matrix[n] * feedback)
             }
 
             wet *= 0.35355339f
