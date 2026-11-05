@@ -143,18 +143,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
         inputEnabled: Boolean,
         fadeMs: Int
     ) {
-        val mixTarget = if (inputEnabled) mixPercent.coerceIn(0, 100) / 100f else 0f
-        val fadeSeconds = fadeMs.coerceIn(300, 4000) / 1000f
+        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.30f) else 0f
+        val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
-        val size = roomSize.coerceIn(0, 1000) / 1000f
+        val size = roomSize.coerceIn(0, 1000) / 1000f * 1.30f
         val hp = hpHz.coerceIn(20, 1200).toFloat()
         val lp = lpHz.coerceIn(1000, 20000).toFloat()
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
-        val feedback = if (freeze) 0.965f else (0.80f + size * 0.14f).coerceIn(0.80f, 0.94f)
-        val damping = if (freeze) 0.035f else (0.09f + (1f - size) * 0.16f)
+        val feedback = if (freeze) 0.965f else (0.80f + size * 0.14f).coerceIn(0.80f, 0.955f)
+        val damping = if (freeze) 0.035f else (0.09f + (1f - size.coerceIn(0f, 1f)) * 0.16f)
 
         for (i in 0 until count) {
             val x = input[i] / 32768f
