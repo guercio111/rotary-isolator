@@ -1151,7 +1151,7 @@ class MainActivity : Activity() {
                                         "REVERB PARALLELO ATTIVO • 48 kHz mono\n" +
                                         "Ingresso Morphe RMS: ${"%.1f".format(rmsDb)} dBFS\n" +
                                         "Picco: ${"%.1f".format(peakDb)} dBFS\n" +
-                                        "MIX: $reverbMix% • SIZE: $reverbSize%\n\n" +
+                                        "DISSOLVENZA: ${"%.1f".format(reverbFadeMs / 1000f)} s • ${if (reverbOn) "ON" else "OFF"}\n\n" +
                                         "La traccia originale resta attiva; FREQUALIZER riproduce il ritorno riverberato."
                                 }
                             }
