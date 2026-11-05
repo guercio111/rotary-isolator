@@ -35,8 +35,8 @@ class MainActivity : Activity() {
     private var dpEffect: DynamicsProcessing? = null
     private var reverbEffect: EnvironmentalReverb? = null
     @Volatile private var reverbOn = false
-    @Volatile private var reverbMix = 55
-    @Volatile private var reverbSize = 850
+    @Volatile private var reverbMix = 65
+    @Volatile private var reverbSize = 950
     // Legacy values retained only for the dormant Shizuku diagnostic path.
     private var reverbDecay = 1800
     private var reverbDamping = 550
@@ -160,8 +160,8 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
-        reverbMix = prefs.getInt("reverb_mix", 55).coerceIn(0,100)
-        reverbSize = prefs.getInt("reverb_size_t2", 850).coerceIn(0,1000)
+        reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
+        reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         reverbHpHz = prefs.getInt("reverb_hp_hz", 180).coerceIn(20,1200)
         reverbLpHz = prefs.getInt("reverb_lp_hz", 9000).coerceIn(1000,20000)
         reverbFreeze = false
@@ -974,7 +974,9 @@ class MainActivity : Activity() {
         val popupWidth=masterSection.width.coerceAtLeast(dp(260))
         val popupHeight=masterSection.height.coerceAtLeast(dp(220))
         val popup=android.widget.PopupWindow(scroll,popupWidth,popupHeight,false).apply {
-            isOutsideTouchable=true; isTouchable=true
+            isOutsideTouchable=false; isTouchable=true
+            // Keep the panel open and let taps pass through to EQ, ISOLATOR and FILTERS.
+            setTouchModal(false)
             setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
                 setColor(Color.rgb(25,28,34)); cornerRadius=dp(12).toFloat()
                 setStroke(dp(1),colorMaster)
