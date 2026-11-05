@@ -35,8 +35,8 @@ class MainActivity : Activity() {
     private var dpEffect: DynamicsProcessing? = null
     private var reverbEffect: EnvironmentalReverb? = null
     @Volatile private var reverbOn = false
-    @Volatile private var reverbMix = 28
-    @Volatile private var reverbSize = 550
+    @Volatile private var reverbMix = 40
+    @Volatile private var reverbSize = 650
     // Legacy values retained only for the dormant Shizuku diagnostic path.
     private var reverbDecay = 1800
     private var reverbDamping = 550
@@ -160,8 +160,8 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
-        reverbMix = prefs.getInt("reverb_mix", 28).coerceIn(0,100)
-        reverbSize = prefs.getInt("reverb_size_t2", 550).coerceIn(0,1000)
+        reverbMix = prefs.getInt("reverb_mix", 40).coerceIn(0,100)
+        reverbSize = prefs.getInt("reverb_size_t2", 650).coerceIn(0,1000)
         reverbHpHz = prefs.getInt("reverb_hp_hz", 180).coerceIn(20,1200)
         reverbLpHz = prefs.getInt("reverb_lp_hz", 9000).coerceIn(1000,20000)
         reverbFreeze = false
