@@ -35,8 +35,8 @@ class MainActivity : Activity() {
     private var dpEffect: DynamicsProcessing? = null
     private var reverbEffect: EnvironmentalReverb? = null
     @Volatile private var reverbOn = false
-    @Volatile private var reverbMix = 40
-    @Volatile private var reverbSize = 650
+    @Volatile private var reverbMix = 55
+    @Volatile private var reverbSize = 850
     // Legacy values retained only for the dormant Shizuku diagnostic path.
     private var reverbDecay = 1800
     private var reverbDamping = 550
@@ -160,8 +160,8 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
-        reverbMix = prefs.getInt("reverb_mix", 40).coerceIn(0,100)
-        reverbSize = prefs.getInt("reverb_size_t2", 650).coerceIn(0,1000)
+        reverbMix = prefs.getInt("reverb_mix", 55).coerceIn(0,100)
+        reverbSize = prefs.getInt("reverb_size_t2", 850).coerceIn(0,1000)
         reverbHpHz = prefs.getInt("reverb_hp_hz", 180).coerceIn(20,1200)
         reverbLpHz = prefs.getInt("reverb_lp_hz", 9000).coerceIn(1000,20000)
         reverbFreeze = false
@@ -968,8 +968,8 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply {
             isFillViewport=true; addView(panel); setBackgroundColor(Color.rgb(25,28,34))
         }
-        val popupWidth=minOf(dp(340),(container.width/2-dp(12)).coerceAtLeast(dp(240)))
-        val popupHeight=minOf(dp(430),(container.height*0.43f).toInt().coerceAtLeast(dp(210)))
+        val popupWidth=(container.width-dp(16)).div(2).coerceAtLeast(dp(260))
+        val popupHeight=(container.height-dp(12)).div(2).coerceAtLeast(dp(220))
         val popup=android.widget.PopupWindow(scroll,popupWidth,popupHeight,false).apply {
             isOutsideTouchable=true; isTouchable=true
             setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
@@ -986,7 +986,7 @@ class MainActivity : Activity() {
             save();scheduleUpdate()
         }
         reverbPopup=popup
-        popup.showAtLocation(container,Gravity.BOTTOM or Gravity.END,dp(12),dp(42))
+        popup.showAtLocation(container,Gravity.BOTTOM or Gravity.END,dp(8),dp(6))
     }
     private fun startAudioCaptureTest() {
         // Keep the current MediaProjection session alive when the meter dialog is
