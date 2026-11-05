@@ -177,9 +177,11 @@ class MainActivity : Activity() {
                 .putBoolean("reverb_tone_defaults_v1", true).apply()
         }
         reverbFreeze = false
-        val fadePlusThreeApplied = prefs.getBoolean("reverb_fade_plus3_v1", false)
-        reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeApplied) 0 else 300).coerceIn(300, 4000)
-        if (!fadePlusThreeApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3_v1", true).apply()
+        // TEST251: add a full three seconds to the previous fade setting.
+        // The control tops out at 4.0 seconds, so longer saved values are capped.
+        val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
+        reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
+        if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
