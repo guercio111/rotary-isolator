@@ -1103,9 +1103,12 @@ class MainActivity : Activity() {
                 .setSampleRate(sampleRate)
                 .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
                 .build()
+            // Keep the wet return out of the MediaProjection capture filter.
+            // Otherwise the AudioTrack can be captured again as USAGE_MEDIA and
+            // recursively feed its own reverb back into the processor (ringing/whistle).
             val outputAttributes = android.media.AudioAttributes.Builder()
-                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
             val track = android.media.AudioTrack.Builder()
                 .setAudioAttributes(outputAttributes)
