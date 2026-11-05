@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     @Volatile private var reverbHpHz = 180
     @Volatile private var reverbLpHz = 9000
     @Volatile private var reverbFreeze = false
+    @Volatile private var reverbFadeMs = 1400
     private var reverbPopup: android.widget.PopupWindow? = null
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
@@ -165,6 +166,7 @@ class MainActivity : Activity() {
         reverbHpHz = prefs.getInt("reverb_hp_hz", 180).coerceIn(20,1200)
         reverbLpHz = prefs.getInt("reverb_lp_hz", 9000).coerceIn(1000,20000)
         reverbFreeze = false
+        reverbFadeMs = prefs.getInt("reverb_fade_ms", 1400).coerceIn(300, 4000)
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -902,96 +904,71 @@ class MainActivity : Activity() {
         reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(8), dp(14), dp(4))
+            setPadding(dp(14), dp(10), dp(14), dp(8))
+            setBackgroundColor(Color.rgb(25,28,34))
         }
         val enabledSwitch = Switch(this).apply {
-            text = "REVERB ON"
+            text = "REVERB  ON / OFF"
             textSize = 14f
             isChecked = reverbOn
         }
-        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(44)))
-        val controls = mutableMapOf<String, Pair<SeekBar, TextView>>()
-        fun addControl(title:String,min:Int,max:Int,initial:Int,suffix:String,changed:(Int)->Unit) {
-            val valueLabel = label("$title  $initial$suffix",13f,colorMaster)
-            valueLabel.gravity = Gravity.CENTER_VERTICAL
-            panel.addView(valueLabel,LinearLayout.LayoutParams(-1,dp(27)))
-            val seek=SeekBar(this).apply {
-                this.max=max-min
-                progress=(initial-min).coerceIn(0,max-min)
-                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(bar:SeekBar?,progress:Int,fromUser:Boolean) {
-                        if(fromUser) {
-                            val v=min+progress
-                            valueLabel.text="$title  $v$suffix"
-                            changed(v); scheduleUpdate()
-                        }
+        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(46)))
+        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 13f, colorMaster)
+        fadeLabel.gravity = Gravity.CENTER_VERTICAL
+        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
+        val fadeSeek = SeekBar(this).apply {
+            max = 3700
+            progress = (reverbFadeMs - 300).coerceIn(0, 3700)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        reverbFadeMs = 300 + progress
+                        fadeLabel.text = "DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s"
+                        scheduleUpdate()
                     }
-                    override fun onStartTrackingTouch(bar:SeekBar?){}
-                    override fun onStopTrackingTouch(bar:SeekBar?){save()}
-                })
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+            })
+        }
+        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
+        val startButton = Button(this).apply {
+            text = if (captureRunning) "AUDIO ATTIVO" else "AVVIA AUDIO"
+            textSize = 11f
+            setOnClickListener {
+                startAudioCaptureTest()
+                text = if (captureRunning) "AUDIO ATTIVO" else "AVVIA AUDIO"
             }
-            controls[title]=seek to valueLabel
-            panel.addView(seek,LinearLayout.LayoutParams(-1,dp(36)))
         }
-        addControl("MIX",0,100,reverbMix,"%"){reverbMix=it}
-        addControl("SIZE",0,1000,reverbSize,"%"){reverbSize=it}
-        addControl("HP",20,1200,reverbHpHz," Hz"){reverbHpHz=it}
-        addControl("LP",1000,20000,reverbLpHz," Hz"){reverbLpHz=it}
-        val freezeSwitch=Switch(this).apply {
-            text="FRZ  •  FREEZE"
-            textSize=13f
-            isChecked=reverbFreeze
+        panel.addView(startButton, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(5) })
+        val closeButton = Button(this).apply {
+            text = "CHIUDI"
+            textSize = 11f
+            setOnClickListener { reverbPopup?.dismiss() }
         }
-        panel.addView(freezeSwitch,LinearLayout.LayoutParams(-1,dp(42)))
-        freezeSwitch.setOnCheckedChangeListener { _,checked ->
-            reverbFreeze=checked
-            scheduleUpdate()
-            save()
-        }
-        val info=label("HP/LP filtrano solo il ritorno. FRZ congela la coda; disattivalo per riprendere il decadimento.",11f,colorMaster)
-        panel.addView(info,LinearLayout.LayoutParams(-1,-2))
-        val diagnosticButton=Button(this).apply {
-            text="VERIFICA COMPATIBILITÀ AUDIO"; textSize=11f
-            setOnClickListener{showAudioDiagnostics()}
-        }
-        panel.addView(diagnosticButton,LinearLayout.LayoutParams(-1,dp(38)).apply{topMargin=dp(5)})
-        val captureButton=Button(this).apply {
-            text="AVVIA / MOSTRA TEST MORPHE"; textSize=11f
-            setOnClickListener{startAudioCaptureTest()}
-        }
-        panel.addView(captureButton,LinearLayout.LayoutParams(-1,dp(40)))
-        val closeButton=Button(this).apply {
-            text="CHIUDI"; textSize=11f
-            setOnClickListener{reverbPopup?.dismiss()}
-        }
-        panel.addView(closeButton,LinearLayout.LayoutParams(-1,dp(36)))
-        val scroll=ScrollView(this).apply {
-            isFillViewport=true; addView(panel); setBackgroundColor(Color.rgb(25,28,34))
-        }
-        val masterSection=sections["GAIN"] ?: container
-        val popupLocation=IntArray(2)
+        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
+        val masterSection = sections["GAIN"] ?: container
+        val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
-        val popupWidth=masterSection.width.coerceAtLeast(dp(260))
-        val popupHeight=masterSection.height.coerceAtLeast(dp(220))
-        val popup=android.widget.PopupWindow(scroll,popupWidth,popupHeight,false).apply {
-            isOutsideTouchable=false; isTouchable=true
-            // Keep the panel open and let taps pass through to EQ, ISOLATOR and FILTERS.
+        val popupWidth = masterSection.width.coerceAtLeast(dp(260))
+        val popup = android.widget.PopupWindow(panel, popupWidth, dp(220), false).apply {
+            isOutsideTouchable = false
+            isTouchable = true
             setTouchModal(false)
             setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
-                setColor(Color.rgb(25,28,34)); cornerRadius=dp(12).toFloat()
-                setStroke(dp(1),colorMaster)
+                setColor(Color.rgb(25,28,34)); cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), colorMaster)
             })
-            elevation=dp(12).toFloat()
-            setOnDismissListener{save();scheduleUpdate();reverbPopup=null}
+            elevation = dp(12).toFloat()
+            setOnDismissListener { save(); reverbPopup = null }
         }
-        enabledSwitch.setOnCheckedChangeListener{_,checked->
-            reverbOn=checked
-            if(!checked) reverbFreeze=false
-            freezeSwitch.isChecked=reverbFreeze
-            save();scheduleUpdate()
+        enabledSwitch.setOnCheckedChangeListener { _, checked ->
+            reverbOn = checked
+            save()
+            scheduleUpdate()
         }
-        reverbPopup=popup
-        popup.showAtLocation(container,Gravity.TOP or Gravity.START,popupLocation[0],popupLocation[1])
+        reverbPopup = popup
+        popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupLocation[1])
     }
     private fun startAudioCaptureTest() {
         // Keep the current MediaProjection session alive when the meter dialog is
@@ -1152,21 +1129,15 @@ class MainActivity : Activity() {
                                 if (absolute > peak) peak = absolute
                                 sum += sample.toDouble() * sample.toDouble()
                             }
-                            val effectEnabled = reverbOn
-                            if (effectEnabled) {
-                                processor.process(
-                                    buffer, wetBuffer, count,
-                                    reverbMix, reverbSize, reverbHpHz, reverbLpHz, reverbFreeze
-                                )
-                            } else {
-                                if (previousReverbState) processor.clear()
-                                wetBuffer.fill(0, 0, count)
-                            }
-                            previousReverbState = effectEnabled
+                            processor.process(
+                                buffer, wetBuffer, count,
+                                reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
+                                reverbOn, reverbFadeMs
+                            )
                             var written = 0
                             while (written < count && captureRunning) {
                                 val n = track.write(wetBuffer, written, count - written, android.media.AudioTrack.WRITE_BLOCKING)
-                                if (n < 0) throw IllegalStateException("AudioTrack write: $n")
+                                if (n <= 0) throw IllegalStateException("AudioTrack write non riuscita: $n")
                                 written += n
                             }
                             val rms = kotlin.math.sqrt(sum / count)
@@ -1184,13 +1155,20 @@ class MainActivity : Activity() {
                                         "La traccia originale resta attiva; FREQUALIZER riproduce il ritorno riverberato."
                                 }
                             }
-                        } else if (count < 0) {
-                            handler.post { captureStatusView?.text = "ERRORE LETTURA AUDIO: codice $count" }
-                            break
+                        } else if (count < 0 && captureRunning) {
+                            throw IllegalStateException("AudioRecord read: $count")
                         }
                     }
                 } catch (t: Throwable) {
-                    handler.post { captureStatusView?.text = "ERRORE REVERB PARALLELO\n${t.javaClass.simpleName}: ${t.message}" }
+                    if (captureRunning) {
+                        captureRunning = false
+                        handler.post {
+                            showCaptureError("IL MOTORE REVERB SI È FERMATO", t)
+                            stopAudioCaptureTest()
+                        }
+                    }
+                } finally {
+                    captureRunning = false
                 }
             }, "Frequalizer-ReverbReturn").apply { priority = Thread.MAX_PRIORITY; start() }
         } catch (t: Throwable) {
