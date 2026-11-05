@@ -912,7 +912,34 @@ class MainActivity : Activity() {
             textSize = 14f
             isChecked = reverbOn
         }
-        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(46)))
+        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(42)))
+
+        // Two club-style controls: DEPTH sets the wet amount, TIME sets the
+        // feedback/tail length. Both update the live DSP without restarting capture.
+        val parameterRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val depthDial = RotaryControl(
+            this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbMix = value.roundToInt().coerceIn(0, 100); scheduleUpdate() },
+            { "$reverbMix%" },
+            onEnd = { save() },
+            titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val timeDial = RotaryControl(
+            this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
+            { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0, 1000); scheduleUpdate() },
+            { "\${(reverbSize / 10f).roundToInt()}%" },
+            onEnd = { save() },
+            titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
+        parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
+        panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
+
         val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 13f, colorMaster)
         fadeLabel.gravity = Gravity.CENTER_VERTICAL
         panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
@@ -951,7 +978,7 @@ class MainActivity : Activity() {
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
         val popupWidth = masterSection.width.coerceAtLeast(dp(260))
-        val popup = android.widget.PopupWindow(panel, popupWidth, dp(220), false).apply {
+        val popup = android.widget.PopupWindow(panel, popupWidth, dp(350), false).apply {
             isOutsideTouchable = false
             isTouchable = true
             setTouchModal(false)
