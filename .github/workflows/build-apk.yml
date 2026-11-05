@@ -1,5 +1,5 @@
-# Tablet reverb refinement test 252
-name: Build FREQUALIZER TEST 252 APK
+# Experimental combined EFFECTS panel: TEST253 Dub Delay
+name: Build FREQUALIZER TEST 253 APK
 # Decouple FDN input/output modes for smoother tail; add 2 seconds fade; extend max fade to 6 seconds; +30% DEPTH/TIME DSP; keep projection alive
 
 on:
@@ -44,7 +44,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 252"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 253"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
@@ -66,6 +66,7 @@ jobs:
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/ShizukuReverbUserService.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/DubDelay.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/DubDelay.kt
           cp RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl extracted/RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator/IShizukuReverbService.aidl
 
       - name: Enable Shizuku API and provider
@@ -169,10 +170,10 @@ jobs:
           s = p.read_text()
           if p.name.endswith(".kts"):
               block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test252"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test253"'
           else:
               block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test251"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test253"'
           if "defaultConfig {" not in s:
               raise SystemExit("defaultConfig block not found")
           s = s.replace("defaultConfig {", app_id_suffix, 1)
@@ -187,5 +188,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: frequalizer-test251
+          name: frequalizer-test253
           path: extracted/RotaryIsolator/app/build/outputs/apk/debug/app-debug.apk
