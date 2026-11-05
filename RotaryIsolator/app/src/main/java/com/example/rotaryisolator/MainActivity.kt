@@ -1740,3 +1740,5 @@ private class RotaryControl(
 }
 
 // Experimental master compressor prototype: Android DynamicsProcessing MBC.
+
+// TEST 248 manifest fix rebuild trigger.
