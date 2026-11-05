@@ -968,8 +968,11 @@ class MainActivity : Activity() {
         val scroll=ScrollView(this).apply {
             isFillViewport=true; addView(panel); setBackgroundColor(Color.rgb(25,28,34))
         }
-        val popupWidth=(container.width-dp(16)).div(2).coerceAtLeast(dp(260))
-        val popupHeight=(container.height-dp(12)).div(2).coerceAtLeast(dp(220))
+        val masterSection=sections["GAIN"] ?: container
+        val popupLocation=IntArray(2)
+        masterSection.getLocationInWindow(popupLocation)
+        val popupWidth=masterSection.width.coerceAtLeast(dp(260))
+        val popupHeight=masterSection.height.coerceAtLeast(dp(220))
         val popup=android.widget.PopupWindow(scroll,popupWidth,popupHeight,false).apply {
             isOutsideTouchable=true; isTouchable=true
             setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
@@ -986,7 +989,7 @@ class MainActivity : Activity() {
             save();scheduleUpdate()
         }
         reverbPopup=popup
-        popup.showAtLocation(container,Gravity.BOTTOM or Gravity.END,dp(8),dp(6))
+        popup.showAtLocation(container,Gravity.TOP or Gravity.START,popupLocation[0],popupLocation[1])
     }
     private fun startAudioCaptureTest() {
         // Keep the current MediaProjection session alive when the meter dialog is
