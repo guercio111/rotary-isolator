@@ -204,10 +204,10 @@ class MainActivity : Activity() {
                 .putInt("color_titles", colorTitles).putInt("color_options", colorOptions)
                 .putBoolean("color_defaults_v3", true).apply()
         }
-        val mouseDefaultsApplied = prefs.getBoolean("mouse_defaults_v1", false)
-        mouseWheelAdjustOn = if (mouseDefaultsApplied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
+        val mouseDefaultsApplied = prefs.getBoolean("mouse_defaults_v2", false)
+        mouseWheelAdjustOn = if (mouseDefaultsApplied) prefs.getBoolean("mouse_wheel_adjust_on", false) else false
         mouseWheelSensitivity = if (mouseDefaultsApplied) prefs.getFloat("mouse_wheel_sensitivity", 5f).coerceIn(1f,10f) else 5f
-        if (!mouseDefaultsApplied) prefs.edit().putBoolean("mouse_defaults_v1", true).putBoolean("mouse_wheel_adjust_on", true).putFloat("mouse_wheel_sensitivity", 5f).putBoolean("mini", false).apply()
+        if (!mouseDefaultsApplied) prefs.edit().putBoolean("mouse_defaults_v2", true).putBoolean("mouse_wheel_adjust_on", false).putFloat("mouse_wheel_sensitivity", 5f).putBoolean("mini", false).apply()
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
         compressorOn = prefs.getBoolean("compressor_on", false)
