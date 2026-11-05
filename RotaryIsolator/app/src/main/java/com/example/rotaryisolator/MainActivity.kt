@@ -1088,6 +1088,22 @@ class MainActivity : Activity() {
         bpmLabel.gravity = Gravity.CENTER_VERTICAL
         dubDelayStatusView = bpmLabel
         delayColumn.addView(bpmLabel, LinearLayout.LayoutParams(-1, dp(20)))
+        val bpmSeek = SeekBar(this).apply {
+            max = 120
+            progress = dubDelayBpm - 60
+            isEnabled = !dubDelayAutoSync
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        dubDelayBpm = 60 + progress
+                        bpmLabel.text = "MANUAL • BPM $dubDelayBpm"
+                        scheduleUpdate()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+            })
+        }
         val syncRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1111,22 +1127,6 @@ class MainActivity : Activity() {
         }
         syncRow.addView(syncSwitch)
         delayColumn.addView(syncRow, LinearLayout.LayoutParams(-1, dp(30)))
-        val bpmSeek = SeekBar(this).apply {
-            max = 120
-            progress = dubDelayBpm - 60
-            isEnabled = !dubDelayAutoSync
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    if (fromUser) {
-                        dubDelayBpm = 60 + progress
-                        bpmLabel.text = "MANUAL • BPM $dubDelayBpm"
-                        scheduleUpdate()
-                    }
-                }
-                override fun onStartTrackingTouch(bar: SeekBar?) {}
-                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
-            })
-        }
         delayColumn.addView(bpmSeek, LinearLayout.LayoutParams(-1, dp(28)))
         delayColumn.addView(label("RIPETIZIONI FILTRATE", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, dp(20)))
