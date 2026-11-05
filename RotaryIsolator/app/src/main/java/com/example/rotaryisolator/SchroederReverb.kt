@@ -58,19 +58,19 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val lp=lpHz.coerceIn(1000,20000).toFloat()
         val hpA=exp((-2.0*PI*hp/sampleRate).toFloat())
         val lpA=(1f-exp((-2.0*PI*lp/sampleRate).toFloat())).coerceIn(0.001f,1f)
-        // A bounded feedback curve: SIZE changes tail density/length, never instability.
-        val feedback=if(freeze) 0.985f else (0.48f+size*0.39f).coerceIn(0.48f,0.87f)
+        // Stronger but bounded feedback curve: SIZE controls tail length without runaway resonance.
+        val feedback=if(freeze) 0.985f else (0.58f+size*0.32f).coerceIn(0.58f,0.90f)
         val damping=if(freeze) 0.08f else (0.16f+(1f-size)*0.34f)
         for(i in 0 until count) {
             val x=input[i]/32768f
             val hpOut=hpA*(hpY+x-hpX)
             hpX=x;hpY=hpOut
             lpY+=lpA*(hpOut-lpY)
-            val send=if(freeze) 0f else lpY*0.22f
+            val send=if(freeze) 0f else lpY*0.30f
             var wet=0f
             for(c in combs) wet+=c.tick(send,feedback,damping)
-            wet=ap2.tick(ap1.tick(wet*0.25f))
-            val raw=wet*mix*0.72f
+            wet=ap2.tick(ap1.tick(wet*0.30f))
+            val raw=wet*mix*0.90f
             val mag=abs(raw)
             val target=if(mag>0.72f) 0.72f/mag else 1f
             limiter=if(target<limiter) target else limiter+(1f-limiter)*0.002f
