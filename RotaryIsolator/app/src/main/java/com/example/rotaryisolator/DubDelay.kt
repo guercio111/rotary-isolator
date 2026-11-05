@@ -2,13 +2,10 @@ package com.example.rotaryisolator
 
 import kotlin.math.PI
 import kotlin.math.exp
+import kotlin.math.max
+import kotlin.math.roundToInt
 
-/**
- * Parallel, tempo-divided dub delay return.
- *
- * The feedback path stays entirely inside this processor. Captured output is
- * never fed back into AudioRecord, so echoes cannot create an external loop.
- */
+/** Tempo-divided dub delay with lightweight kick/transient tempo estimation. */
 internal class DubDelay(private val sampleRate: Int) {
     private val divisions = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 2f, 4f, 8f)
     private val ring = FloatArray(sampleRate * 8 + 8)
@@ -17,6 +14,61 @@ internal class DubDelay(private val sampleRate: Int) {
     private var inputEnvelope = 0f
     private var outputEnvelope = 0f
 
+    // Low-frequency energy in 10 ms windows, adaptive threshold and beat interval median.
+    private val analysisWindow = max(1, sampleRate / 100)
+    private var windowSamples = 0
+    private var windowEnergy = 0.0
+    private var lowFrequencyState = 0f
+    private var energyFloor = 0.00002
+    private var sampleClock = 0L
+    private var lastOnsetSample = -1L
+    private val beatIntervals = ArrayDeque<Long>()
+    private var smoothedBpm = 120f
+    private var hasDetectedTempo = false
+    @Volatile var detectedBpm: Int = 120
+        private set
+    var onTempoChanged: ((Int) -> Unit)? = null
+
+    private fun analyzeForTempo(sample: Float) {
+        lowFrequencyState += 0.12f * (sample - lowFrequencyState)
+        windowEnergy += lowFrequencyState.toDouble() * lowFrequencyState.toDouble()
+        windowSamples++
+        sampleClock++
+        if (windowSamples < analysisWindow) return
+
+        val energy = windowEnergy / windowSamples
+        val threshold = max(0.000004, energyFloor * 1.55)
+        val refractory = sampleRate / 4L
+        if (energy > threshold && energy > 0.000025 &&
+            (lastOnsetSample < 0L || sampleClock - lastOnsetSample > refractory)) {
+            if (lastOnsetSample >= 0L) {
+                val interval = sampleClock - lastOnsetSample
+                val seconds = interval.toDouble() / sampleRate
+                if (seconds in 0.30..1.05) {
+                    var candidate = (60.0 / seconds).toFloat()
+                    while (candidate < 60f) candidate *= 2f
+                    while (candidate > 180f) candidate *= 0.5f
+                    beatIntervals.addLast((60.0 * sampleRate / candidate).toLong())
+                    while (beatIntervals.size > 7) beatIntervals.removeFirst()
+                    val sorted = beatIntervals.toList().sorted()
+                    val medianInterval = sorted[sorted.size / 2].coerceAtLeast(1L)
+                    val medianBpm = (60.0 * sampleRate / medianInterval).toFloat().coerceIn(60f, 180f)
+                    smoothedBpm = if (hasDetectedTempo) smoothedBpm * 0.72f + medianBpm * 0.28f else medianBpm
+                    hasDetectedTempo = true
+                    val rounded = smoothedBpm.roundToInt().coerceIn(60, 180)
+                    if (rounded != detectedBpm) {
+                        detectedBpm = rounded
+                        onTempoChanged?.invoke(rounded)
+                    }
+                }
+            }
+            lastOnsetSample = sampleClock
+        }
+        energyFloor = energyFloor * 0.97 + energy * 0.03
+        windowSamples = 0
+        windowEnergy = 0.0
+    }
+
     fun process(
         input: ShortArray,
         output: ShortArray,
@@ -24,47 +76,42 @@ internal class DubDelay(private val sampleRate: Int) {
         enabled: Boolean,
         divisionIndex: Int,
         bpm: Int,
+        autoSync: Boolean,
         feedbackPercent: Int,
         filterPercent: Int,
         mixPercent: Int,
         fadeMs: Int
     ) {
         val division = divisions[divisionIndex.coerceIn(0, divisions.lastIndex)]
-        val tempo = bpm.coerceIn(60, 180)
-        val delaySamples = ((60.0 / tempo * division) * sampleRate)
-            .toInt().coerceIn(1, ring.size - 2)
+        val tempo = (if (autoSync && hasDetectedTempo) detectedBpm else bpm).coerceIn(60, 180)
+        val delaySamples = ((60.0 / tempo * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
         val feedback = feedbackPercent.coerceIn(0, 90) / 100f
         val mix = mixPercent.coerceIn(0, 100) / 100f
-        // Turning FILTER clockwise progressively darkens every repeat.
         val cutoff = 12000f - filterPercent.coerceIn(0, 100) * 105f
-        val filterAlpha = (1.0 - exp(-2.0 * PI * cutoff / sampleRate)).toFloat()
-            .coerceIn(0.001f, 1f)
+        val filterAlpha = (1.0 - exp(-2.0 * PI * cutoff / sampleRate)).toFloat().coerceIn(0.001f, 1f)
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
-        val smoothing = (1.0 - exp(-1.0 / (sampleRate * fadeSeconds))).toFloat()
-            .coerceIn(0.000001f, 1f)
+        val smoothing = (1.0 - exp(-1.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
         val inputTarget = if (enabled) 1f else 0f
         val outputTarget = if (enabled) mix else 0f
 
         for (i in 0 until count) {
+            val dryInput = input[i] / 32768f
+            analyzeForTempo(dryInput)
             inputEnvelope += (inputTarget - inputEnvelope) * smoothing
             outputEnvelope += (outputTarget - outputEnvelope) * smoothing
 
             var readIndex = writeIndex - delaySamples
             if (readIndex < 0) readIndex += ring.size
             val echo = ring[readIndex]
-
-            // A gentle low-pass in the feedback loop makes each repeat warmer.
             filteredFeedback += filterAlpha * (echo - filteredFeedback)
-            val dryInput = input[i] / 32768f
             val feedbackInput = filteredFeedback * feedback
-            // Headroom is reserved before writing; feedback is always bounded.
-            val writeValue = (dryInput * inputEnvelope * 0.72f + feedbackInput)
-                .coerceIn(-0.92f, 0.92f)
-            ring[writeIndex] = writeValue
 
-            val wet = filteredFeedback * outputEnvelope * 0.82f
-            output[i] = (wet.coerceIn(-0.78f, 0.78f) * 32767f)
-                .toInt().coerceIn(-32768, 32767).toShort()
+            // TEST254: stronger input send (+32%) while retaining internal headroom.
+            ring[writeIndex] = (dryInput * inputEnvelope * 0.95f + feedbackInput).coerceIn(-0.92f, 0.92f)
+
+            // Stronger delay return; the main output mix remains hard-limited downstream.
+            val wet = filteredFeedback * outputEnvelope * 1.00f
+            output[i] = (wet.coerceIn(-0.90f, 0.90f) * 32767f).toInt().coerceIn(-32768, 32767).toShort()
 
             writeIndex++
             if (writeIndex == ring.size) writeIndex = 0
@@ -77,5 +124,15 @@ internal class DubDelay(private val sampleRate: Int) {
         filteredFeedback = 0f
         inputEnvelope = 0f
         outputEnvelope = 0f
+        lowFrequencyState = 0f
+        windowSamples = 0
+        windowEnergy = 0.0
+        energyFloor = 0.00002
+        sampleClock = 0L
+        lastOnsetSample = -1L
+        beatIntervals.clear()
+        smoothedBpm = 120f
+        hasDetectedTempo = false
+        detectedBpm = 120
     }
 }
