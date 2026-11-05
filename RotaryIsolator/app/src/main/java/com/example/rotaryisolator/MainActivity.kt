@@ -1099,7 +1099,7 @@ class MainActivity : Activity() {
 
         columns.addView(reverbColumn, LinearLayout.LayoutParams(0, -2, 1f))
         val divider = View(this).apply { setBackgroundColor(Color.rgb(75,80,90)) }
-        columns.addView(divider, LinearLayout.LayoutParams(dp(1), dp(390)))
+        columns.addView(divider, LinearLayout.LayoutParams(dp(1), dp(352)))
         columns.addView(delayColumn, LinearLayout.LayoutParams(0, -2, 1f))
         panel.addView(columns, LinearLayout.LayoutParams(-1, -2))
 
