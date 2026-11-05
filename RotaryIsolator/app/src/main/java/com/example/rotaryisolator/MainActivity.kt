@@ -45,12 +45,19 @@ class MainActivity : Activity() {
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFreeze = false
     @Volatile private var reverbFadeMs = 1400
+    @Volatile private var dubDelayOn = false
+    @Volatile private var dubDelayDivision = 3
+    @Volatile private var dubDelayFeedback = 58
+    @Volatile private var dubDelayFilter = 45
+    @Volatile private var dubDelayMix = 65
+    @Volatile private var dubDelayBpm = 120
     private var reverbPopup: android.widget.PopupWindow? = null
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
     private var captureRecord: android.media.AudioRecord? = null
     private var captureTrack: android.media.AudioTrack? = null
     private var parallelReverbProcessor: SchroederReverb? = null
+    private var parallelDubDelayProcessor: DubDelay? = null
     private var captureThread: Thread? = null
     @Volatile private var captureRunning = false
     @Volatile private var captureRestartAttempts = 0
@@ -164,6 +171,12 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
+        dubDelayOn = prefs.getBoolean("dub_delay_on", false)
+        dubDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 6)
+        dubDelayFeedback = prefs.getInt("dub_delay_feedback", 58).coerceIn(0, 90)
+        dubDelayFilter = prefs.getInt("dub_delay_filter", 45).coerceIn(0, 100)
+        dubDelayMix = prefs.getInt("dub_delay_mix", 65).coerceIn(0, 100)
+        dubDelayBpm = prefs.getInt("dub_delay_bpm", 120).coerceIn(60, 180)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         val toneDefaults = prefs.getBoolean("reverb_tone_defaults_v1", false)
@@ -475,6 +488,7 @@ class MainActivity : Activity() {
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
             .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz)
+            .putBoolean("dub_delay_on",dubDelayOn).putInt("dub_delay_division",dubDelayDivision).putInt("dub_delay_feedback",dubDelayFeedback).putInt("dub_delay_filter",dubDelayFilter).putInt("dub_delay_mix",dubDelayMix).putInt("dub_delay_bpm",dubDelayBpm)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -826,7 +840,7 @@ class MainActivity : Activity() {
             }
         }
         val reverbButton = Button(this).apply {
-            text = "REVERB"
+            text = "EFFECTS"
             textSize = 11f
             isAllCaps = false
             setTextColor(Color.BLACK)
@@ -940,37 +954,68 @@ class MainActivity : Activity() {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(14), dp(10), dp(14), dp(8))
+            setPadding(dp(12), dp(8), dp(12), dp(8))
             setBackgroundColor(Color.rgb(25,28,34))
         }
-        val power = TextView(this).apply {
-            fun paintState() {
-                text = if (reverbOn) "ON" else "OFF"
-                setTextColor(Color.WHITE)
-                textSize = 16f
-                setTypeface(typeface, Typeface.BOLD)
-                gravity = Gravity.CENTER
-                contentDescription = if (reverbOn) "Reverb acceso, tocca per spegnere" else "Reverb spento, tocca per accendere"
-                background = android.graphics.drawable.GradientDrawable().apply {
+        val heading = label("EFFECTS", 16f, colorMaster).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+        }
+        panel.addView(heading, LinearLayout.LayoutParams(-1, dp(28)))
+
+        fun powerButton(title: String, isOn: () -> Boolean, setOn: (Boolean) -> Unit): TextView {
+            fun paint(view: TextView) {
+                val active = isOn()
+                view.text = if (active) "ON" else "OFF"
+                view.setTextColor(Color.WHITE)
+                view.textSize = 15f
+                view.setTypeface(view.typeface, Typeface.BOLD)
+                view.gravity = Gravity.CENTER
+                view.contentDescription = "$title ${if (active) "acceso" else "spento"}"
+                view.background = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(if (reverbOn) Color.rgb(28,170,75) else Color.rgb(185,42,48))
-                    setStroke(dp(2), if (reverbOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+                    setColor(if (active) Color.rgb(28,170,75) else Color.rgb(185,42,48))
+                    setStroke(dp(2), if (active) Color.rgb(125,245,155) else Color.rgb(245,115,120))
                 }
-                elevation = dp(4).toFloat()
+                view.elevation = dp(3).toFloat()
             }
-            paintState()
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                reverbOn = !reverbOn
-                paintState()
-                save()
-                scheduleUpdate()
-                if (reverbOn && !captureRunning) startAudioCaptureTest()
+            return TextView(this).apply {
+                paint(this)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    val next = !isOn()
+                    setOn(next)
+                    paint(this)
+                    save()
+                    scheduleUpdate()
+                    if (next && !captureRunning) startAudioCaptureTest()
+                }
             }
         }
-        panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
-        val parameterRow = LinearLayout(this).apply {
+
+        val columns = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+        }
+        val reverbColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(4), dp(3), dp(6), dp(2))
+        }
+        val delayColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(6), dp(3), dp(4), dp(2))
+        }
+        fun sectionTitle(text: String): TextView = label(text, 13f, colorMaster).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+        }
+        reverbColumn.addView(sectionTitle("REVERB"), LinearLayout.LayoutParams(-1, dp(24)))
+        reverbColumn.addView(powerButton("Reverb", { reverbOn }, { reverbOn = it }),
+            LinearLayout.LayoutParams(dp(58), dp(48)).apply { topMargin = dp(3); bottomMargin = dp(4) })
+        val reverbDials = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
@@ -980,18 +1025,87 @@ class MainActivity : Activity() {
             { "$reverbMix%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        val timeDial = RotaryControl(
+        val reverbTimeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0, 1000); scheduleUpdate() },
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
-        parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
-        panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
-        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 13f, colorMaster)
+        reverbDials.addView(depthDial, LinearLayout.LayoutParams(0, dp(124), 1f))
+        reverbDials.addView(reverbTimeDial, LinearLayout.LayoutParams(0, dp(124), 1f))
+        reverbColumn.addView(reverbDials, LinearLayout.LayoutParams(-1, dp(128)))
+        reverbColumn.addView(label("RIVERBERO DIFFUSO", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, dp(20)))
+
+        delayColumn.addView(sectionTitle("DUB DELAY"), LinearLayout.LayoutParams(-1, dp(24)))
+        delayColumn.addView(powerButton("Dub Delay", { dubDelayOn }, { dubDelayOn = it }),
+            LinearLayout.LayoutParams(dp(58), dp(48)).apply { topMargin = dp(3); bottomMargin = dp(4) })
+        val divisionNames = arrayOf("1/4", "1/2", "3/4", "1", "2", "4", "8")
+        val delayGrid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val delayTop = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        val delayBottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        val delayTimeDial = RotaryControl(
+            this, "TIME", dubDelayDivision.toFloat(), 0f, 6f, colorMaster,
+            { value -> dubDelayDivision = value.roundToInt().coerceIn(0, 6); scheduleUpdate() },
+            { divisionNames[dubDelayDivision] }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val feedbackDial = RotaryControl(
+            this, "FEEDBACK", dubDelayFeedback.toFloat(), 0f, 90f, colorMaster,
+            { value -> dubDelayFeedback = value.roundToInt().coerceIn(0, 90); scheduleUpdate() },
+            { "$dubDelayFeedback%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val filterDial = RotaryControl(
+            this, "FILTER", dubDelayFilter.toFloat(), 0f, 100f, colorMaster,
+            { value -> dubDelayFilter = value.roundToInt().coerceIn(0, 100); scheduleUpdate() },
+            { "$dubDelayFilter%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val mixDial = RotaryControl(
+            this, "MIX", dubDelayMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> dubDelayMix = value.roundToInt().coerceIn(0, 100); scheduleUpdate() },
+            { "$dubDelayMix%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        delayTop.addView(delayTimeDial, LinearLayout.LayoutParams(0, dp(104), 1f))
+        delayTop.addView(feedbackDial, LinearLayout.LayoutParams(0, dp(104), 1f))
+        delayBottom.addView(filterDial, LinearLayout.LayoutParams(0, dp(104), 1f))
+        delayBottom.addView(mixDial, LinearLayout.LayoutParams(0, dp(104), 1f))
+        delayGrid.addView(delayTop, LinearLayout.LayoutParams(-1, dp(106)))
+        delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(106)))
+        delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(212)))
+        val bpmLabel = label("BPM  $dubDelayBpm", 11f, colorMaster)
+        bpmLabel.gravity = Gravity.CENTER_VERTICAL
+        delayColumn.addView(bpmLabel, LinearLayout.LayoutParams(-1, dp(20)))
+        val bpmSeek = SeekBar(this).apply {
+            max = 120
+            progress = dubDelayBpm - 60
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        dubDelayBpm = 60 + progress
+                        bpmLabel.text = "BPM  $dubDelayBpm"
+                        scheduleUpdate()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+            })
+        }
+        delayColumn.addView(bpmSeek, LinearLayout.LayoutParams(-1, dp(28)))
+        delayColumn.addView(label("RIPETIZIONI FILTRATE", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, dp(20)))
+
+        columns.addView(reverbColumn, LinearLayout.LayoutParams(0, -2, 1f))
+        val divider = View(this).apply { setBackgroundColor(Color.rgb(75,80,90)) }
+        columns.addView(divider, LinearLayout.LayoutParams(dp(1), dp(390)))
+        columns.addView(delayColumn, LinearLayout.LayoutParams(0, -2, 1f))
+        panel.addView(columns, LinearLayout.LayoutParams(-1, -2))
+
+        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 12f, colorMaster)
         fadeLabel.gravity = Gravity.CENTER_VERTICAL
-        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
+        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(24)))
         val fadeSeek = SeekBar(this).apply {
             max = 5700
             progress = (reverbFadeMs - 300).coerceIn(0, 5700)
@@ -1007,18 +1121,18 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) { save() }
             })
         }
-        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
+        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(30)))
         val closeButton = Button(this).apply {
             text = "CHIUDI"
             textSize = 11f
             setOnClickListener { reverbPopup?.dismiss() }
         }
-        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
-        val masterSection = sections["GAIN"] ?: container
-        val popupLocation = IntArray(2)
-        masterSection.getLocationInWindow(popupLocation)
-        val popupWidth = masterSection.width.coerceAtLeast(dp(260))
-        val popup = android.widget.PopupWindow(panel, popupWidth, dp(320), false).apply {
+        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(32)))
+        val availableWidth = (resources.displayMetrics.widthPixels - dp(24)).coerceAtLeast(dp(300))
+        val popupWidth = min(availableWidth, dp(980))
+        val availableHeight = (resources.displayMetrics.heightPixels - dp(32)).coerceAtLeast(dp(360))
+        val popupHeight = min(dp(500), availableHeight)
+        val popup = android.widget.PopupWindow(panel, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
             setTouchModal(false)
@@ -1030,7 +1144,7 @@ class MainActivity : Activity() {
             setOnDismissListener { save(); reverbPopup = null }
         }
         reverbPopup = popup
-        popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupLocation[1])
+        popup.showAtLocation(container, Gravity.CENTER, 0, 0)
     }
     private fun startAudioCaptureTest() {
         // Reuse the existing MediaProjection session after a track/route switch.
@@ -1082,7 +1196,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Cattura audio non autorizzata", Toast.LENGTH_SHORT).show()
             return
         }
-        if (!reverbOn) return
+        if (!reverbOn && !dubDelayOn) return
         try {
             // Android 14+ requires a running mediaProjection foreground service
             // before getMediaProjection() is called.
@@ -1173,6 +1287,7 @@ class MainActivity : Activity() {
             }
             captureTrack = track
             parallelReverbProcessor = SchroederReverb(sampleRate)
+            parallelDubDelayProcessor = DubDelay(sampleRate)
             captureRecord = record
             track.play()
             record.startRecording()
@@ -1181,6 +1296,8 @@ class MainActivity : Activity() {
                 val buffer = ShortArray(2048)
                 val wetBuffer = ShortArray(buffer.size)
                 val processor = parallelReverbProcessor ?: return@Thread
+                val delayProcessor = parallelDubDelayProcessor ?: return@Thread
+                val delayBuffer = ShortArray(buffer.size)
                 var lastUi = 0L
                 var previousReverbState = false
                 try {
@@ -1201,6 +1318,14 @@ class MainActivity : Activity() {
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs
                             )
+                            delayProcessor.process(
+                                buffer, delayBuffer, count, dubDelayOn, dubDelayDivision,
+                                dubDelayBpm, dubDelayFeedback, dubDelayFilter, dubDelayMix, reverbFadeMs
+                            )
+                            for (i in 0 until count) {
+                                wetBuffer[i] = (wetBuffer[i].toInt() + delayBuffer[i].toInt())
+                                    .coerceIn(-26000, 26000).toShort()
+                            }
                             var written = 0
                             while (written < count && captureRunning) {
                                 val n = track.write(wetBuffer, written, count - written, android.media.AudioTrack.WRITE_BLOCKING)
@@ -1252,6 +1377,7 @@ class MainActivity : Activity() {
         try { track?.stop() } catch (_: Throwable) {}
         try { track?.release() } catch (_: Throwable) {}
         parallelReverbProcessor = null
+        parallelDubDelayProcessor = null
         captureThread = null
     }
 
@@ -1259,7 +1385,7 @@ class MainActivity : Activity() {
         captureRunning = false
         handler.post {
             releaseCaptureIoOnly()
-            if (captureProjection !== projection || !reverbOn) {
+            if (captureProjection !== projection || (!reverbOn && !dubDelayOn)) {
                 captureRestartPending = false
                 return@post
             }
@@ -1273,7 +1399,7 @@ class MainActivity : Activity() {
             captureRestartPending = true
             handler.postDelayed({
                 captureRestartPending = false
-                if (captureProjection === projection && reverbOn && !captureRunning) {
+                if (captureProjection === projection && (reverbOn || dubDelayOn) && !captureRunning) {
                     beginAudioCapture(projection)
                 }
             }, waitMs)
