@@ -28,11 +28,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import kotlin.math.*
+import java.util.UUID
 
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
-    private var reverbEffect: EnvironmentalReverb? = null
+    private var reverbEffect: AudioEffect? = null
     private var reverbOn = false
     private var reverbMix = 28
     private var reverbDecay = 1800
@@ -114,7 +115,7 @@ class MainActivity : Activity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
-        reverbOn = prefs.getBoolean("reverb_on", false)
+        reverbOn = false // manual activation only in this test build
         reverbMix = prefs.getInt("reverb_mix", 28).coerceIn(0,100)
         reverbDecay = prefs.getInt("reverb_decay", 1800).coerceIn(100,8000)
         reverbSize = prefs.getInt("reverb_size", 650).coerceIn(0,1000)
@@ -857,13 +858,34 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), dp(4))
         }
-        val enabledSwitch = Switch(this).apply {
-            text = "REVERB ON"
-            textSize = 14f
-            isChecked = false
-            isEnabled = false // test build: no audio effect activation
+        val reverbState = label("INSERT REVERB • DISATTIVATO", 13f, Color.LTGRAY)
+        panel.addView(reverbState, LinearLayout.LayoutParams(-1, dp(34)))
+        val insertButton = Button(this).apply {
+            text = "ATTIVA INSERT REVERB • SESSIONE 0"
+            setOnClickListener {
+                if (reverbEffect == null) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("ATTIVARE INSERT REVERB?")
+                        .setMessage("La prova abilita l'effetto Insert sulla sessione audio globale 0 e può modificare tutto l'audio in uscita. In caso di problemi, premi DISATTIVA TEST o chiudi FREQUALIZER TEST.")
+                        .setNegativeButton("ANNULLA", null)
+                        .setPositiveButton("ATTIVA") { _, _ ->
+                            try {
+                                setInsertReverbActive(true)
+                                reverbState.text = "INSERT REVERB • ATTIVO"
+                                text = "DISATTIVA TEST REVERB"
+                            } catch (t: Throwable) {
+                                reverbState.text = "ERRORE • " + t.javaClass.simpleName + ": " + (t.message ?: "attivazione non riuscita")
+                                text = "RIPROVA ATTIVAZIONE"
+                            }
+                        }.show()
+                } else {
+                    setInsertReverbActive(false)
+                    reverbState.text = "INSERT REVERB • DISATTIVATO"
+                    text = "ATTIVA INSERT REVERB • SESSIONE 0"
+                }
+            }
         }
-        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(48)))
+        panel.addView(insertButton, LinearLayout.LayoutParams(-1, dp(48)))
         fun addReverbSlider(title:String, min:Int, max:Int, initial:Int, suffix:String, changed:(Int)->Unit) {
             val valueLabel = label("$title  $initial$suffix", 13f, colorMaster)
             valueLabel.gravity = Gravity.CENTER_VERTICAL
@@ -900,11 +922,6 @@ class MainActivity : Activity() {
             .setView(ScrollView(this).apply { addView(panel) })
             .setNegativeButton("CHIUDI") { _, _ -> save(); scheduleUpdate() }
             .create()
-        enabledSwitch.setOnCheckedChangeListener { _, checked ->
-            reverbOn = checked
-            save()
-            scheduleUpdate()
-        }
         dialog.show()
     }
 
@@ -986,9 +1003,35 @@ class MainActivity : Activity() {
         try{
             val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
-            reverbEffect = null // disabled in the safe diagnostic build; instantiated only on explicit diagnostic request
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
+    }
+
+    private fun setInsertReverbActive(active:Boolean) {
+        if (active) {
+            if (reverbEffect != null) return
+            val effect = GlobalInsertReverb(0)
+            try {
+                effect.enabled = appEnabled
+                reverbEffect = effect
+                reverbOn = true
+                if (::status.isInitialized) status.text = "INSERT REVERB ON • SESSIONE 0"
+                save()
+            } catch (t:Throwable) {
+                try { effect.enabled = false; effect.release() } catch (_:Throwable) {}
+                reverbEffect = null
+                reverbOn = false
+                throw t
+            }
+        } else {
+            val old = reverbEffect
+            reverbEffect = null
+            reverbOn = false
+            try { old?.enabled = false } catch (_:Throwable) {}
+            try { old?.release() } catch (_:Throwable) {}
+            if (::status.isInitialized) status.text = "INSERT REVERB OFF"
+            save()
+        }
     }
 
     private fun applyDsp(){ scheduleUpdate() }
@@ -1058,16 +1101,8 @@ class MainActivity : Activity() {
             }
             fx.enabled=appEnabled && (eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn)
             reverbEffect?.let { rev ->
-                try {
-                    rev.setRoomLevel((-1000).toShort())
-                    rev.setRoomHFLevel((-1500).toShort())
-                    rev.setDecayTime(reverbDecay)
-                    rev.setDecayHFRatio(reverbDamping.toShort())
-                    rev.setDiffusion(reverbSize.toShort())
-                    rev.setDensity(reverbSize.toShort())
-                    rev.setReverbLevel((-9000 + reverbMix * 85).coerceIn(-9000,0).toShort())
-                    rev.enabled = appEnabled && reverbOn && reverbMix > 0
-                } catch(_:Throwable) { runOnUiThread { if(::status.isInitialized) status.text="REVERB non supportato dal driver audio" } }
+                try { rev.enabled = appEnabled && reverbOn }
+                catch(t:Throwable) { runOnUiThread { if(::status.isInitialized) status.text = "INSERT REVERB: " + t.javaClass.simpleName } }
             }
 
             val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
@@ -1261,6 +1296,14 @@ private class RotaryControl(
     }
     override fun performClick():Boolean{super.performClick();return true}
 }
+
+// Insert-mode Environmental Reverb for the explicit session-0 test only.
+private class GlobalInsertReverb(session:Int) : AudioEffect(
+    UUID.fromString("c2e5d5f0-94bd-4763-9cac-4e234d06839e"),
+    UUID.fromString("c7a511a0-a3bb-11df-860e-0002a5d5c51b"),
+    0,
+    session
+)
 
 // Experimental master compressor prototype: Android DynamicsProcessing MBC.
 
