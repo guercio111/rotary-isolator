@@ -52,7 +52,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     }
 
     // Slightly different, mutually-prime-ish delay lengths make the tail denser.
-    private val combs = intArrayOf(
+    private val combs = floatArrayOf(
         0.0297f, 0.0311f, 0.0337f, 0.0353f,
         0.0371f, 0.0389f, 0.0411f, 0.0437f
     ).map { Comb((sampleRate * it).toInt()) }.toTypedArray()
