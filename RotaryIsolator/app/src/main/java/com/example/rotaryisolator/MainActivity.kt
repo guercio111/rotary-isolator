@@ -1083,6 +1083,8 @@ class MainActivity : Activity() {
             val config = android.media.AudioPlaybackCaptureConfiguration.Builder(projection)
                 .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
                 .addMatchingUsage(android.media.AudioAttributes.USAGE_GAME)
+                // Capture other apps (Morphe), never FREQUALIZER's own wet return.
+                .excludeUid(android.os.Process.myUid())
                 .build()
             val record = android.media.AudioRecord.Builder()
                 .setAudioFormat(format)
@@ -1103,12 +1105,12 @@ class MainActivity : Activity() {
                 .setSampleRate(sampleRate)
                 .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
                 .build()
-            // Keep the wet return out of the MediaProjection capture filter.
-            // Otherwise the AudioTrack can be captured again as USAGE_MEDIA and
-            // recursively feed its own reverb back into the processor (ringing/whistle).
+            // Route the wet return as normal media so it follows the selected
+            // music output (including Bluetooth). The capture config excludes
+            // this app UID to prevent recursive feedback.
             val outputAttributes = android.media.AudioAttributes.Builder()
-                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
                 .build()
             val track = android.media.AudioTrack.Builder()
                 .setAudioAttributes(outputAttributes)
