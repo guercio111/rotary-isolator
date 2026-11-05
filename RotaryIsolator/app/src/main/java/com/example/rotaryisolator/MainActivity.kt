@@ -11,6 +11,10 @@ import android.graphics.Typeface
 import android.content.res.ColorStateList
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.EnvironmentalReverb
+import android.media.audiofx.AudioEffect
+import android.media.AudioManager
+import android.content.ClipboardManager
+import android.content.ClipData
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -856,7 +860,8 @@ class MainActivity : Activity() {
         val enabledSwitch = Switch(this).apply {
             text = "REVERB ON"
             textSize = 14f
-            isChecked = reverbOn
+            isChecked = false
+            isEnabled = false // test build: no audio effect activation
         }
         panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(48)))
         fun addReverbSlider(title:String, min:Int, max:Int, initial:Int, suffix:String, changed:(Int)->Unit) {
@@ -885,6 +890,11 @@ class MainActivity : Activity() {
         addReverbSlider("DECAY",100,8000,reverbDecay," ms"){reverbDecay=it}
         addReverbSlider("ROOM SIZE",0,1000,reverbSize,"%"){reverbSize=it}
         addReverbSlider("DAMPING",100,1000,reverbDamping,"%"){reverbDamping=it}
+        val diagnosticButton = Button(this).apply {
+            text = "ESEGUI DIAGNOSTICA SICURA"
+            setOnClickListener { runReverbDiagnostics() }
+        }
+        panel.addView(diagnosticButton, LinearLayout.LayoutParams(-1, dp(44)))
         val dialog = AlertDialog.Builder(this)
             .setTitle("REVERB • EXPERIMENTAL")
             .setView(ScrollView(this).apply { addView(panel) })
@@ -897,12 +907,86 @@ class MainActivity : Activity() {
         }
         dialog.show()
     }
+
+    private fun runReverbDiagnostics() {
+        val progress = AlertDialog.Builder(this)
+            .setTitle("DIAGNOSTICA REVERB")
+            .setMessage("Controllo delle capacità audio. Nessun effetto verrà attivato.")
+            .setCancelable(false)
+            .create()
+        progress.show()
+        Thread {
+            val report = StringBuilder()
+            report.append("FREQUALIZER • SAFE REVERB DIAGNOSTICS\\n")
+            report.append("DEVICE: ${Build.MANUFACTURER} ${Build.MODEL}\\n")
+            report.append("ANDROID: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\\n\\n")
+            try {
+                val manager = getSystemService(AUDIO_SERVICE) as AudioManager
+                report.append("OUTPUT DEVICES:\\n")
+                for (device in manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+                    report.append("- ${device.productName} | type=${device.type} | id=${device.id}\\n")
+                }
+            } catch (t: Throwable) {
+                report.append("OUTPUT DEVICE ERROR: ${t.javaClass.name}: ${t.message}\\n")
+            }
+            report.append("\\nREVERB EFFECT DESCRIPTORS:\\n")
+            try {
+                val descriptors = AudioEffect.queryEffects()
+                val matches = descriptors?.filter { it.name.contains("reverb", true) } ?: emptyList()
+                if (matches.isEmpty()) report.append("No reverb descriptor returned\\n")
+                for (d in matches) {
+                    report.append("- name=${d.name} | implementor=${d.implementor} | uuid=${d.uuid} | type=${d.type} | mode=${d.connectMode}\\n")
+                }
+            } catch (t: Throwable) {
+                report.append("DESCRIPTOR ERROR: ${t.javaClass.name}: ${t.message}\\n")
+                report.append(android.util.Log.getStackTraceString(t)).append("\\n")
+            }
+            report.append("\\nSESSION 0 CONSTRUCTOR TEST (effect remains disabled):\\n")
+            try {
+                val effect = EnvironmentalReverb(0, 0)
+                report.append("CREATE: OK\\n")
+                report.append("ENABLED: ${effect.enabled}\\n")
+                try {
+                    report.append("PROPERTIES: ${effect.getProperties()}\\n")
+                } catch (t: Throwable) {
+                    report.append("PROPERTY READ ERROR: ${t.javaClass.name}: ${t.message}\\n")
+                    report.append(android.util.Log.getStackTraceString(t)).append("\\n")
+                }
+                try { effect.enabled = false } catch (_: Throwable) {}
+                effect.release()
+                report.append("RELEASE: OK\\n")
+            } catch (t: Throwable) {
+                report.append("CREATE ERROR: ${t.javaClass.name}: ${t.message}\\n")
+                report.append(android.util.Log.getStackTraceString(t)).append("\\n")
+            }
+            runOnUiThread {
+                try { progress.dismiss() } catch (_: Throwable) {}
+                val output = TextView(this).apply {
+                    text = report.toString()
+                    textSize = 12f
+                    setTextIsSelectable(true)
+                    setPadding(dp(14), dp(10), dp(14), dp(10))
+                }
+                val scroll = ScrollView(this).apply { addView(output) }
+                AlertDialog.Builder(this)
+                    .setTitle("RISULTATO DIAGNOSTICA")
+                    .setView(scroll)
+                    .setPositiveButton("COPIA RISULTATO") { _, _ ->
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("FREQUALIZER Reverb diagnostics", report.toString()))
+                    }
+                    .setNegativeButton("CHIUDI", null)
+                    .show()
+            }
+        }.start()
+    }
+
     private fun connectAudio(){
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
             val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
-            try { reverbEffect=EnvironmentalReverb(0,0).also{it.enabled=false} } catch(_:Throwable) { reverbEffect=null }
+            reverbEffect = null // disabled in the safe diagnostic build; instantiated only on explicit diagnostic request
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
     }
