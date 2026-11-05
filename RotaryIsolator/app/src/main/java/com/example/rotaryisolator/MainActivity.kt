@@ -917,47 +917,47 @@ class MainActivity : Activity() {
         progress.show()
         Thread {
             val report = StringBuilder()
-            report.append("FREQUALIZER • SAFE REVERB DIAGNOSTICS\\n")
-            report.append("DEVICE: ${Build.MANUFACTURER} ${Build.MODEL}\\n")
-            report.append("ANDROID: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\\n\\n")
+            report.append("FREQUALIZER • SAFE REVERB DIAGNOSTICS\n")
+            report.append("DEVICE: ${Build.MANUFACTURER} ${Build.MODEL}\n")
+            report.append("ANDROID: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n\n")
             try {
                 val manager = getSystemService(AUDIO_SERVICE) as AudioManager
-                report.append("OUTPUT DEVICES:\\n")
+                report.append("OUTPUT DEVICES:\n")
                 for (device in manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
-                    report.append("- ${device.productName} | type=${device.type} | id=${device.id}\\n")
+                    report.append("- ${device.productName} | type=${device.type} | id=${device.id}\n")
                 }
             } catch (t: Throwable) {
-                report.append("OUTPUT DEVICE ERROR: ${t.javaClass.name}: ${t.message}\\n")
+                report.append("OUTPUT DEVICE ERROR: ${t.javaClass.name}: ${t.message}\n")
             }
-            report.append("\\nREVERB EFFECT DESCRIPTORS:\\n")
+            report.append("\nREVERB EFFECT DESCRIPTORS:\n")
             try {
                 val descriptors = AudioEffect.queryEffects()
                 val matches = descriptors?.filter { it.name.contains("reverb", true) } ?: emptyList()
-                if (matches.isEmpty()) report.append("No reverb descriptor returned\\n")
+                if (matches.isEmpty()) report.append("No reverb descriptor returned\n")
                 for (d in matches) {
-                    report.append("- name=${d.name} | implementor=${d.implementor} | uuid=${d.uuid} | type=${d.type} | mode=${d.connectMode}\\n")
+                    report.append("- name=${d.name} | implementor=${d.implementor} | uuid=${d.uuid} | type=${d.type} | mode=${d.connectMode}\n")
                 }
             } catch (t: Throwable) {
-                report.append("DESCRIPTOR ERROR: ${t.javaClass.name}: ${t.message}\\n")
-                report.append(android.util.Log.getStackTraceString(t)).append("\\n")
+                report.append("DESCRIPTOR ERROR: ${t.javaClass.name}: ${t.message}\n")
+                report.append(android.util.Log.getStackTraceString(t)).append("\n")
             }
-            report.append("\\nSESSION 0 CONSTRUCTOR TEST (effect remains disabled):\\n")
+            report.append("\nSESSION 0 CONSTRUCTOR TEST (effect remains disabled):\n")
             try {
                 val effect = EnvironmentalReverb(0, 0)
-                report.append("CREATE: OK\\n")
-                report.append("ENABLED: ${effect.enabled}\\n")
+                report.append("CREATE: OK\n")
+                report.append("ENABLED: ${effect.enabled}\n")
                 try {
-                    report.append("PROPERTIES: ${effect.getProperties()}\\n")
+                    report.append("PROPERTIES: ${effect.getProperties()}\n")
                 } catch (t: Throwable) {
-                    report.append("PROPERTY READ ERROR: ${t.javaClass.name}: ${t.message}\\n")
-                    report.append(android.util.Log.getStackTraceString(t)).append("\\n")
+                    report.append("PROPERTY READ ERROR: ${t.javaClass.name}: ${t.message}\n")
+                    report.append(android.util.Log.getStackTraceString(t)).append("\n")
                 }
                 try { effect.enabled = false } catch (_: Throwable) {}
                 effect.release()
-                report.append("RELEASE: OK\\n")
+                report.append("RELEASE: OK\n")
             } catch (t: Throwable) {
-                report.append("CREATE ERROR: ${t.javaClass.name}: ${t.message}\\n")
-                report.append(android.util.Log.getStackTraceString(t)).append("\\n")
+                report.append("CREATE ERROR: ${t.javaClass.name}: ${t.message}\n")
+                report.append(android.util.Log.getStackTraceString(t)).append("\n")
             }
             runOnUiThread {
                 try { progress.dismiss() } catch (_: Throwable) {}
