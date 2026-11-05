@@ -1,6 +1,6 @@
 # Tablet stable APK rebuild trigger
 name: Build Rotary Isolator APK
-# Build denser smoother Traktor-style reverb test 246
+# Simplified reverb controls and stable audio-return test 247
 
 on:
   push:
