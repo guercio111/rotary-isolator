@@ -22,6 +22,7 @@ internal class DubDelay(private val sampleRate: Int) {
     private var energyFloor = 0.00002
     private var sampleClock = 0L
     private var lastOnsetSample = -1L
+    private var wasAboveThreshold = false
     private val beatIntervals = ArrayDeque<Long>()
     private var smoothedBpm = 120f
     private var hasDetectedTempo = false
@@ -42,7 +43,8 @@ internal class DubDelay(private val sampleRate: Int) {
         val energy = windowEnergy / windowSamples
         val threshold = max(0.000004, energyFloor * 1.55)
         val refractory = sampleRate / 4L
-        if (energy > threshold && energy > 0.000025 &&
+        val aboveThreshold = energy > threshold
+        if (aboveThreshold && !wasAboveThreshold && energy > 0.000025 &&
             (lastOnsetSample < 0L || sampleClock - lastOnsetSample > refractory)) {
             if (lastOnsetSample >= 0L) {
                 val interval = sampleClock - lastOnsetSample
@@ -69,6 +71,7 @@ internal class DubDelay(private val sampleRate: Int) {
             }
             lastOnsetSample = sampleClock
         }
+        wasAboveThreshold = aboveThreshold
         energyFloor = energyFloor * 0.97 + energy * 0.03
         windowSamples = 0
         windowEnergy = 0.0
@@ -135,6 +138,7 @@ internal class DubDelay(private val sampleRate: Int) {
         energyFloor = 0.00002
         sampleClock = 0L
         lastOnsetSample = -1L
+        wasAboveThreshold = false
         beatIntervals.clear()
         smoothedBpm = 120f
         hasDetectedTempo = false
