@@ -161,7 +161,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             lpY += lpA * (hpOut2 - lpY)
 
             smoothedMix += (mixTarget - smoothedMix) * mixSmoothing
-            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.30f
+            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.32f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -183,7 +183,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             wet *= 0.35355339f
             for (diffuser in outputDiffusers) wet = diffuser.tick(wet)
 
-            val raw = wet * smoothedMix * 0.86f
+            val raw = wet * smoothedMix * 0.92f
             val magnitude = abs(raw)
             val target = if (magnitude > 0.78f) 0.78f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
