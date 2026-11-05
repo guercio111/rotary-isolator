@@ -1,6 +1,6 @@
-# Tablet reverb refinement test 250
-name: Build FREQUALIZER TEST 251 APK
-# Decouple FDN input/output modes for smoother tail; add 3 seconds fade; keep projection alive
+# Tablet reverb refinement test 252
+name: Build FREQUALIZER TEST 252 APK
+# Decouple FDN input/output modes for smoother tail; add 2 seconds fade; extend max fade to 6 seconds; +30% DEPTH/TIME DSP; keep projection alive
 
 on:
   push:
@@ -44,7 +44,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 251"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 252"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
@@ -169,7 +169,7 @@ jobs:
           s = p.read_text()
           if p.name.endswith(".kts"):
               block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test251"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test252"'
           else:
               block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
               app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test251"'
