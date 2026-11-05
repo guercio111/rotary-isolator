@@ -59,7 +59,7 @@ jobs:
           sudo apt-get install -y python3-pil
           /usr/bin/python3 .github/scripts/generate_app_icon.py extracted/RotaryIsolator
 
-      - name: Use maintained Kotlin source and Shizuku service
+      - name: Use maintained Kotlin source and isolated reverb test service
         run: |
           mkdir -p extracted/RotaryIsolator/app/src/main/aidl/com/example/rotaryisolator
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
@@ -144,10 +144,10 @@ jobs:
           s = p.read_text()
           if p.name.endswith(".kts"):
               block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test239"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test240"'
           else:
               block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test239"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test240"'
           if "defaultConfig {" not in s:
               raise SystemExit("defaultConfig block not found")
           s = s.replace("defaultConfig {", app_id_suffix, 1)
