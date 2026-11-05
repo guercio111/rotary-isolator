@@ -147,7 +147,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             for (n in 0 until 8) {
                 val delayed = lines[n].read(damping)
                 matrix[n] = delayed
-                wet += delayed
+                val polarity = if ((n and 1) == 0) 1f else -1f
+                wet += delayed * polarity
             }
 
             // Orthogonal feedback disperses energy across all delay paths instead
