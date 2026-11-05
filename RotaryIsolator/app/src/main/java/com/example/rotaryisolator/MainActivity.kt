@@ -1166,7 +1166,6 @@ class MainActivity : Activity() {
             track.play()
             record.startRecording()
             captureRunning = true
-            captureRestartAttempts = 0
             captureThread = Thread({
                 val buffer = ShortArray(2048)
                 val wetBuffer = ShortArray(buffer.size)
@@ -1336,7 +1335,6 @@ class MainActivity : Activity() {
 
     private fun stopAudioCaptureTest() {
         captureRunning = false
-        handler.removeCallbacksAndMessages(null)
         releaseCaptureIoOnly()
         captureRestartAttempts = 0
         val projection = captureProjection
