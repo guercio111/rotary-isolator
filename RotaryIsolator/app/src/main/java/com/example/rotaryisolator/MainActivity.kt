@@ -1133,7 +1133,7 @@ class MainActivity : Activity() {
 
         columns.addView(reverbColumn, LinearLayout.LayoutParams(0, -2, 1f))
         val divider = View(this).apply { setBackgroundColor(Color.rgb(75,80,90)) }
-        columns.addView(divider, LinearLayout.LayoutParams(dp(1), dp(352)))
+        columns.addView(divider, LinearLayout.LayoutParams(dp(1), dp(390)))
         columns.addView(delayColumn, LinearLayout.LayoutParams(0, -2, 1f))
         panel.addView(columns, LinearLayout.LayoutParams(-1, -2))
 
@@ -1165,7 +1165,7 @@ class MainActivity : Activity() {
         val availableWidth = (resources.displayMetrics.widthPixels - dp(24)).coerceAtLeast(dp(300))
         val popupWidth = min(availableWidth, dp(980))
         val availableHeight = (resources.displayMetrics.heightPixels - dp(32)).coerceAtLeast(dp(360))
-        val popupHeight = min(dp(500), availableHeight)
+        val popupHeight = min(dp(560), availableHeight)
         val popup = android.widget.PopupWindow(panel, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
