@@ -142,7 +142,7 @@ jobs:
           manifest = Path("extracted/RotaryIsolator/app/src/main/AndroidManifest.xml")
           xml = manifest.read_text()
           required = "orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density"
-          tags = list(re.finditer(r'<activity\\b[^>]*>', xml))
+          tags = list(re.finditer(r'<activity\b[^>]*>', xml))
           match = next((m for m in tags if "MainActivity" in m.group(0)), None)
           if match is None:
               raise SystemExit("MainActivity declaration not found in manifest")
@@ -152,7 +152,7 @@ jobs:
           else:
               tag = tag[:-1] + ' android:configChanges="' + required + '">'
           xml = xml[:match.start()] + tag + xml[match.end():]
-          xml = re.sub(r'(<service\\b(?=[^>]*AudioCaptureForegroundService)[^>]*)(/?>)', lambda m: m.group(1) + (' android:stopWithTask="false"' if 'android:stopWithTask=' not in m.group(1) else '') + m.group(2), xml, count=1)
+          xml = re.sub(r'(<service\b(?=[^>]*AudioCaptureForegroundService)[^>]*)(/?>)', lambda m: m.group(1) + (' android:stopWithTask="false"' if 'android:stopWithTask=' not in m.group(1) else '') + m.group(2), xml, count=1)
           manifest.write_text(xml)
           PY
 
