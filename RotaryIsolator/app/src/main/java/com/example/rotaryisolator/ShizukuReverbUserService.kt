@@ -46,24 +46,24 @@ class ShizukuReverbUserService : IShizukuReverbService.Stub() {
             val safeMix = mix.coerceIn(0, 100)
             // Softer room and early reflections reduce the metallic/ringing character.
             // Shorter decay with high diffusion/density gives a smoother, less tonal tail.
-            val safeDecay = decay.coerceIn(250, 1200)
+            val safeDecay = decay.coerceIn(300, 1800)
             val safeDamping = damping.coerceIn(300, 650)
-            val wetLevel = (-7600 + safeMix * 26).coerceIn(-7600, -5000)
+            val wetLevel = (-6000 + safeMix * 35).coerceIn(-6000, -2500)
 
-            putShort(0, -2800)                 // room level
-            putShort(1, -2600)                 // room HF level
+            putShort(0, -1800)                 // room level
+            putShort(1, -1900)                 // room HF level
             putInt(2, safeDecay)               // decay time (ms)
             putShort(3, safeDamping)           // decay HF ratio
-            putShort(4, -6500)                 // reflections level
-            putInt(5, 8)                       // reflections delay (ms)
+            putShort(4, -5200)                 // reflections level
+            putInt(5, 12)                       // reflections delay (ms)
             putShort(6, wetLevel)              // reverb level
-            putInt(7, 18)                      // reverb delay (ms)
-            putShort(8, 950)                   // diffusion
-            putShort(9, 950)                   // density
+            putInt(7, 22)                      // reverb delay (ms)
+            putShort(8, 850)                   // diffusion
+            putShort(9, 850)                   // density
 
             stage = "attivazione Insert Reverb"
             created.enabled = safeMix > 0
-            return "INSERT REVERB ATTIVO\nUID PROCESSO=${Process.myUid()} (2000=ADB/SHELL)\nPID=${Process.myPid()}\nID=${created.id}\nENABLED=${created.enabled}\nHAS CONTROL=${created.hasControl()}\nIMPLEMENTATION=$implementation\nSESSIONE=0 (OUTPUT MIX)\nPARAMETRI: MIX=$safeMix / DECAY=$safeDecay ms / DAMPING=$safeDamping / DIFFUSION=950 / DENSITY=950 / WET=$wetLevel dB\n\nProva YouTube Morphe. Se senti ancora una risonanza marcata, interrompi con STOP / DISATTIVA."
+            return "INSERT REVERB ATTIVO\nUID PROCESSO=${Process.myUid()} (2000=ADB/SHELL)\nPID=${Process.myPid()}\nID=${created.id}\nENABLED=${created.enabled}\nHAS CONTROL=${created.hasControl()}\nIMPLEMENTATION=$implementation\nSESSIONE=0 (OUTPUT MIX)\nPARAMETRI: MIX=$safeMix / DECAY=$safeDecay ms / DAMPING=$safeDamping / DIFFUSION=850 / DENSITY=850 / WET=$wetLevel dB\n\nProva YouTube Morphe. Se senti ancora una risonanza marcata, interrompi con STOP / DISATTIVA."
         } catch (t: Throwable) {
             stopReverb()
             return "ERRORE SHIZUKU INSERT REVERB\nFASE: $stage\nUID PROCESSO=${Process.myUid()}\nPID=${Process.myPid()}\n\n${Log.getStackTraceString(t)}"
