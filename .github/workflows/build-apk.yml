@@ -1,5 +1,5 @@
 # Tablet reverb refinement test 248
-name: Build FREQUALIZER TEST 248 APK
+name: Build FREQUALIZER TEST 249 APK
 # Persistent capture on resize; smoother mid/high reverb and round power
 
 on:
@@ -44,7 +44,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 248"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 249"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
@@ -169,10 +169,10 @@ jobs:
           s = p.read_text()
           if p.name.endswith(".kts"):
               block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test248"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test249"'
           else:
               block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test248"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test249"'
           if "defaultConfig {" not in s:
               raise SystemExit("defaultConfig block not found")
           s = s.replace("defaultConfig {", app_id_suffix, 1)
@@ -187,5 +187,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: frequalizer-test248
+          name: frequalizer-test249
           path: extracted/RotaryIsolator/app/build/outputs/apk/debug/app-debug.apk
