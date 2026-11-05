@@ -54,6 +54,7 @@ class MainActivity : Activity() {
     private var captureThread: Thread? = null
     @Volatile private var captureRunning = false
     @Volatile private var captureRestartAttempts = 0
+    @Volatile private var captureRestartPending = false
     private var captureDialog: AlertDialog? = null
     private var captureStatusView: TextView? = null
     private val captureRequestCode = 7420
@@ -1027,9 +1028,14 @@ class MainActivity : Activity() {
         popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupLocation[1])
     }
     private fun startAudioCaptureTest() {
-        // Keep the current MediaProjection session alive when the meter dialog is
-        // closed. Reopening the panel must not request a second Android approval.
-        if (captureRunning) return
+        // Reuse the existing MediaProjection session after a track/route switch.
+        // Only request Android approval when no live session exists.
+        if (captureRunning || captureRestartPending) return
+        captureProjection?.let { existingProjection ->
+            captureRestartAttempts = 0
+            beginAudioCapture(existingProjection)
+            return
+        }
         if (Build.VERSION.SDK_INT < 29) {
             AlertDialog.Builder(this).setTitle("TEST NON SUPPORTATO")
                 .setMessage("La cattura audio interna richiede Android 10 o superiore.")
@@ -1248,7 +1254,10 @@ class MainActivity : Activity() {
         captureRunning = false
         handler.post {
             releaseCaptureIoOnly()
-            if (captureProjection !== projection || !reverbOn) return@post
+            if (captureProjection !== projection || !reverbOn) {
+                captureRestartPending = false
+                return@post
+            }
             if (captureRestartAttempts >= 8) {
                 showCaptureError("IL FLUSSO AUDIO NON SI È RIPRISTINATO DOPO IL CAMBIO TRACCIA", error)
                 stopAudioCaptureTest()
@@ -1256,7 +1265,9 @@ class MainActivity : Activity() {
             }
             captureRestartAttempts++
             val waitMs = 400L + captureRestartAttempts * 300L
+            captureRestartPending = true
             handler.postDelayed({
+                captureRestartPending = false
                 if (captureProjection === projection && reverbOn && !captureRunning) {
                     beginAudioCapture(projection)
                 }
@@ -1335,6 +1346,7 @@ class MainActivity : Activity() {
 
     private fun stopAudioCaptureTest() {
         captureRunning = false
+        captureRestartPending = false
         releaseCaptureIoOnly()
         captureRestartAttempts = 0
         val projection = captureProjection
