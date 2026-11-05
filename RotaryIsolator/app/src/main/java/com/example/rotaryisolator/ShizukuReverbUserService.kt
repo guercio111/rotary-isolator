@@ -19,7 +19,7 @@ class ShizukuReverbUserService : IShizukuReverbService.Stub() {
         var environmental: EnvironmentalReverb? = null
         report.append("\n--- TEST 1: ENVIRONMENTAL REVERB UFFICIALE ---\n")
         try {
-            environmental = EnvironmentalReverb(0)
+            environmental = EnvironmentalReverb(0, 0)
             report.append("EnvironmentalReverb(0): OK | ID=${environmental.id} | HAS CONTROL=${environmental.hasControl()}\n")
         } catch (t: Throwable) {
             report.append("EnvironmentalReverb(0): FALLITO\n${Log.getStackTraceString(t)}\n")
@@ -31,7 +31,7 @@ class ShizukuReverbUserService : IShizukuReverbService.Stub() {
         report.append("\n--- TEST 2: PRESET REVERB UFFICIALE ---\n")
         var preset: PresetReverb? = null
         try {
-            preset = PresetReverb(0)
+            preset = PresetReverb(0, 0)
             report.append("PresetReverb(0): OK | ID=${preset.id} | HAS CONTROL=${preset.hasControl()}\n")
             preset.preset = PresetReverb.PRESET_LARGEHALL
             preset.enabled = true
