@@ -14,6 +14,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.EnvironmentalReverb
 import android.os.Build
@@ -40,8 +41,8 @@ class MainActivity : Activity() {
     // Legacy values retained only for the dormant Shizuku diagnostic path.
     private var reverbDecay = 1800
     private var reverbDamping = 550
-    @Volatile private var reverbHpHz = 180
-    @Volatile private var reverbLpHz = 9000
+    @Volatile private var reverbHpHz = 420
+    @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFreeze = false
     @Volatile private var reverbFadeMs = 1400
     private var reverbPopup: android.widget.PopupWindow? = null
@@ -163,8 +164,16 @@ class MainActivity : Activity() {
         reverbOn = prefs.getBoolean("reverb_on", false)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
-        reverbHpHz = prefs.getInt("reverb_hp_hz", 180).coerceIn(20,1200)
-        reverbLpHz = prefs.getInt("reverb_lp_hz", 9000).coerceIn(1000,20000)
+        val toneDefaults = prefs.getBoolean("reverb_tone_defaults_v1", false)
+        if (toneDefaults) {
+            reverbHpHz = prefs.getInt("reverb_hp_hz", 420).coerceIn(20,1200)
+            reverbLpHz = prefs.getInt("reverb_lp_hz", 14000).coerceIn(1000,20000)
+        } else {
+            reverbHpHz = 420
+            reverbLpHz = 14000
+            prefs.edit().putInt("reverb_hp_hz", reverbHpHz).putInt("reverb_lp_hz", reverbLpHz)
+                .putBoolean("reverb_tone_defaults_v1", true).apply()
+        }
         reverbFreeze = false
         reverbFadeMs = prefs.getInt("reverb_fade_ms", 1400).coerceIn(300, 4000)
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
@@ -278,6 +287,23 @@ class MainActivity : Activity() {
         save()
         prefs.edit().putBoolean("session_in_background", true).apply()
         super.onPause()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Keep the Activity and its one-shot MediaProjection token through
+        // orientation and freeform-window size changes.
+        val reopenReverb = reverbPopup?.isShowing == true
+        reverbPopup?.dismiss()
+        val w = newConfig.screenWidthDp
+        val h = newConfig.screenHeightDp
+        if (w > 0 && h > 0) {
+            phonePortrait = min(w, h) < 600
+            wideLayout = w > h
+        }
+        lastWindowWidthPx = 0
+        buildUi()
+        if (reopenReverb) handler.post { if (!isFinishing) showReverbPopup() }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -904,18 +930,37 @@ class MainActivity : Activity() {
         reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(14), dp(10), dp(14), dp(8))
             setBackgroundColor(Color.rgb(25,28,34))
         }
-        val enabledSwitch = Switch(this).apply {
-            text = "REVERB  ON / OFF"
-            textSize = 14f
-            isChecked = reverbOn
+        val power = TextView(this).apply {
+            fun paintState() {
+                text = if (reverbOn) "ON" else "OFF"
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                contentDescription = if (reverbOn) "Reverb acceso, tocca per spegnere" else "Reverb spento, tocca per accendere"
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(if (reverbOn) Color.rgb(28,170,75) else Color.rgb(185,42,48))
+                    setStroke(dp(2), if (reverbOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+                }
+                elevation = dp(4).toFloat()
+            }
+            paintState()
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                reverbOn = !reverbOn
+                paintState()
+                save()
+                scheduleUpdate()
+                if (reverbOn && !captureRunning) startAudioCaptureTest()
+            }
         }
-        panel.addView(enabledSwitch, LinearLayout.LayoutParams(-1, dp(42)))
-
-        // Two club-style controls: DEPTH sets the wet amount, TIME sets the
-        // feedback/tail length. Both update the live DSP without restarting capture.
+        panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
         val parameterRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -923,23 +968,18 @@ class MainActivity : Activity() {
         val depthDial = RotaryControl(
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbMix = value.roundToInt().coerceIn(0, 100); scheduleUpdate() },
-            { "$reverbMix%" },
-            onEnd = { save() },
-            titleInside = true,
+            { "$reverbMix%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val timeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0, 1000); scheduleUpdate() },
-            { "\${(reverbSize / 10f).roundToInt()}%" },
-            onEnd = { save() },
-            titleInside = true,
+            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
         parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
         panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
-
         val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 13f, colorMaster)
         fadeLabel.gravity = Gravity.CENTER_VERTICAL
         panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
@@ -959,15 +999,6 @@ class MainActivity : Activity() {
             })
         }
         panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
-        val startButton = Button(this).apply {
-            text = if (captureRunning) "AUDIO ATTIVO" else "AVVIA AUDIO"
-            textSize = 11f
-            setOnClickListener {
-                startAudioCaptureTest()
-                text = if (captureRunning) "AUDIO ATTIVO" else "AVVIA AUDIO"
-            }
-        }
-        panel.addView(startButton, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(5) })
         val closeButton = Button(this).apply {
             text = "CHIUDI"
             textSize = 11f
@@ -978,7 +1009,7 @@ class MainActivity : Activity() {
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
         val popupWidth = masterSection.width.coerceAtLeast(dp(260))
-        val popup = android.widget.PopupWindow(panel, popupWidth, dp(350), false).apply {
+        val popup = android.widget.PopupWindow(panel, popupWidth, dp(320), false).apply {
             isOutsideTouchable = false
             isTouchable = true
             setTouchModal(false)
@@ -989,21 +1020,13 @@ class MainActivity : Activity() {
             elevation = dp(12).toFloat()
             setOnDismissListener { save(); reverbPopup = null }
         }
-        enabledSwitch.setOnCheckedChangeListener { _, checked ->
-            reverbOn = checked
-            save()
-            scheduleUpdate()
-        }
         reverbPopup = popup
         popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupLocation[1])
     }
     private fun startAudioCaptureTest() {
         // Keep the current MediaProjection session alive when the meter dialog is
         // closed. Reopening the panel must not request a second Android approval.
-        if (captureRunning) {
-            showCaptureMeter()
-            return
-        }
+        if (captureRunning) return
         if (Build.VERSION.SDK_INT < 29) {
             AlertDialog.Builder(this).setTitle("TEST NON SUPPORTATO")
                 .setMessage("La cattura audio interna richiede Android 10 o superiore.")
@@ -1040,9 +1063,12 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
+            reverbOn = false
+            save()
             Toast.makeText(this, "Cattura audio non autorizzata", Toast.LENGTH_SHORT).show()
             return
         }
+        if (!reverbOn) return
         try {
             // Android 14+ requires a running mediaProjection foreground service
             // before getMediaProjection() is called.
@@ -1134,7 +1160,6 @@ class MainActivity : Activity() {
             captureTrack = track
             parallelReverbProcessor = SchroederReverb(sampleRate)
             captureRecord = record
-            showCaptureMeter()
             track.play()
             record.startRecording()
             captureRunning = true
