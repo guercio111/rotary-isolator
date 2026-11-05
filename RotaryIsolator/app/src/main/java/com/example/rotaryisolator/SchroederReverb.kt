@@ -58,26 +58,33 @@ internal class SchroederReverb(private val sampleRate: Int) {
     }
 
     // Incommensurate delay lengths reduce obvious periodic ringing.
+    // Longer incommensurate delays disperse the tail and reduce the
+    // beat-like, metallic comb pattern.
     private val delayTimes = floatArrayOf(
-        0.0293f, 0.0317f, 0.0341f, 0.0367f,
-        0.0391f, 0.0419f, 0.0443f, 0.0473f
+        0.0411f, 0.0469f, 0.0537f, 0.0611f,
+        0.0689f, 0.0773f, 0.0869f, 0.0971f
     )
     private val lines = delayTimes.map { DelayLine((sampleRate * it).toInt()) }.toTypedArray()
     private val inputDiffusers = arrayOf(
-        AllPass((sampleRate * 0.0031f).toInt(), 0.62f),
-        AllPass((sampleRate * 0.0047f).toInt(), 0.62f),
-        AllPass((sampleRate * 0.0073f).toInt(), 0.62f)
+        AllPass((sampleRate * 0.0029f).toInt(), 0.58f),
+        AllPass((sampleRate * 0.0043f).toInt(), 0.58f),
+        AllPass((sampleRate * 0.0067f).toInt(), 0.58f),
+        AllPass((sampleRate * 0.0091f).toInt(), 0.58f)
     )
     private val outputDiffusers = arrayOf(
-        AllPass((sampleRate * 0.0053f).toInt(), 0.68f),
-        AllPass((sampleRate * 0.0079f).toInt(), 0.68f),
-        AllPass((sampleRate * 0.0107f).toInt(), 0.68f),
-        AllPass((sampleRate * 0.0131f).toInt(), 0.68f)
+        AllPass((sampleRate * 0.0037f).toInt(), 0.64f),
+        AllPass((sampleRate * 0.0059f).toInt(), 0.64f),
+        AllPass((sampleRate * 0.0083f).toInt(), 0.64f),
+        AllPass((sampleRate * 0.0117f).toInt(), 0.64f),
+        AllPass((sampleRate * 0.0151f).toInt(), 0.64f),
+        AllPass((sampleRate * 0.0187f).toInt(), 0.64f)
     )
 
     private val matrix = FloatArray(8)
     private var hpX = 0f
     private var hpY = 0f
+    private var hp2X = 0f
+    private var hp2Y = 0f
     private var lpY = 0f
     private var limiter = 1f
     private var smoothedMix = 0f
@@ -89,6 +96,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         matrix.fill(0f)
         hpX = 0f
         hpY = 0f
+        hp2X = 0f
+        hp2Y = 0f
         lpY = 0f
         limiter = 1f
         smoothedMix = 0f
@@ -136,18 +145,23 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
-        val feedback = if (freeze) 0.985f else (0.885f + size * 0.078f).coerceIn(0.885f, 0.963f)
-        val damping = if (freeze) 0.025f else (0.08f + (1f - size) * 0.24f)
+        val feedback = if (freeze) 0.965f else (0.80f + size * 0.14f).coerceIn(0.80f, 0.94f)
+        val damping = if (freeze) 0.035f else (0.09f + (1f - size) * 0.16f)
 
         for (i in 0 until count) {
             val x = input[i] / 32768f
-            val hpOut = hpA * (hpY + x - hpX)
+            // Two gentle high-pass stages keep kick/sub energy out of the
+            // reverb excitation while retaining a natural mid/high body.
+            val hpOut1 = hpA * (hpY + x - hpX)
             hpX = x
-            hpY = hpOut
-            lpY += lpA * (hpOut - lpY)
+            hpY = hpOut1
+            val hpOut2 = hpA * (hp2Y + hpOut1 - hp2X)
+            hp2X = hpOut1
+            hp2Y = hpOut2
+            lpY += lpA * (hpOut2 - lpY)
 
             smoothedMix += (mixTarget - smoothedMix) * mixSmoothing
-            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.34f
+            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.30f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -169,7 +183,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             wet *= 0.35355339f
             for (diffuser in outputDiffusers) wet = diffuser.tick(wet)
 
-            val raw = wet * smoothedMix * 0.92f
+            val raw = wet * smoothedMix * 0.86f
             val magnitude = abs(raw)
             val target = if (magnitude > 0.78f) 0.78f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
