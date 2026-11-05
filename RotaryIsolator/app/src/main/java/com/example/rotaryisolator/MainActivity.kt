@@ -182,6 +182,9 @@ class MainActivity : Activity() {
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
         reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
         if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
+        val fadePlusTwoSecondsApplied = prefs.getBoolean("reverb_fade_plus2sec_v2", false)
+        reverbFadeMs = (reverbFadeMs + if (fadePlusTwoSecondsApplied) 0 else 2000).coerceIn(300, 6000)
+        if (!fadePlusTwoSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus2sec_v2", true).apply()
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -990,8 +993,8 @@ class MainActivity : Activity() {
         fadeLabel.gravity = Gravity.CENTER_VERTICAL
         panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
         val fadeSeek = SeekBar(this).apply {
-            max = 3700
-            progress = (reverbFadeMs - 300).coerceIn(0, 3700)
+            max = 5700
+            progress = (reverbFadeMs - 300).coerceIn(0, 5700)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
