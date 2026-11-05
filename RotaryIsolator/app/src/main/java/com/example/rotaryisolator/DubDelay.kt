@@ -25,6 +25,9 @@ internal class DubDelay(private val sampleRate: Int) {
     private val beatIntervals = ArrayDeque<Long>()
     private var smoothedBpm = 120f
     private var hasDetectedTempo = false
+    private var tempoWasReported = false
+    @Volatile var tempoLocked: Boolean = false
+        private set
     @Volatile var detectedBpm: Int = 120
         private set
     var onTempoChanged: ((Int) -> Unit)? = null
@@ -55,9 +58,11 @@ internal class DubDelay(private val sampleRate: Int) {
                     val medianBpm = (60.0 * sampleRate / medianInterval).toFloat().coerceIn(60f, 180f)
                     smoothedBpm = if (hasDetectedTempo) smoothedBpm * 0.72f + medianBpm * 0.28f else medianBpm
                     hasDetectedTempo = true
+                    tempoLocked = true
                     val rounded = smoothedBpm.roundToInt().coerceIn(60, 180)
-                    if (rounded != detectedBpm) {
+                    if (rounded != detectedBpm || !tempoWasReported) {
                         detectedBpm = rounded
+                        tempoWasReported = true
                         onTempoChanged?.invoke(rounded)
                     }
                 }
@@ -133,6 +138,8 @@ internal class DubDelay(private val sampleRate: Int) {
         beatIntervals.clear()
         smoothedBpm = 120f
         hasDetectedTempo = false
+        tempoWasReported = false
+        tempoLocked = false
         detectedBpm = 120
     }
 }
