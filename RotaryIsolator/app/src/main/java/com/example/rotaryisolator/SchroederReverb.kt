@@ -128,7 +128,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     ) {
         val mixTarget = if (inputEnabled) mixPercent.coerceIn(0, 100) / 100f else 0f
         val fadeSeconds = fadeMs.coerceIn(300, 4000) / 1000f
-        val mixSmoothing = (1.0 - exp(-1.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
+        val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
         val size = roomSize.coerceIn(0, 1000) / 1000f
         val hp = hpHz.coerceIn(20, 1200).toFloat()
         val lp = lpHz.coerceIn(1000, 20000).toFloat()
