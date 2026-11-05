@@ -51,6 +51,8 @@ class MainActivity : Activity() {
     @Volatile private var dubDelayFilter = 45
     @Volatile private var dubDelayMix = 65
     @Volatile private var dubDelayBpm = 120
+    @Volatile private var dubDelayAutoSync = true
+    @Volatile private var dubDelayStatusView: TextView? = null
     private var reverbPopup: android.widget.PopupWindow? = null
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
@@ -177,6 +179,7 @@ class MainActivity : Activity() {
         dubDelayFilter = prefs.getInt("dub_delay_filter", 45).coerceIn(0, 100)
         dubDelayMix = prefs.getInt("dub_delay_mix", 65).coerceIn(0, 100)
         dubDelayBpm = prefs.getInt("dub_delay_bpm", 120).coerceIn(60, 180)
+        dubDelayAutoSync = prefs.getBoolean("dub_delay_auto_sync", true)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         val toneDefaults = prefs.getBoolean("reverb_tone_defaults_v1", false)
@@ -488,7 +491,7 @@ class MainActivity : Activity() {
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
             .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz)
-            .putBoolean("dub_delay_on",dubDelayOn).putInt("dub_delay_division",dubDelayDivision).putInt("dub_delay_feedback",dubDelayFeedback).putInt("dub_delay_filter",dubDelayFilter).putInt("dub_delay_mix",dubDelayMix).putInt("dub_delay_bpm",dubDelayBpm)
+            .putBoolean("dub_delay_on",dubDelayOn).putInt("dub_delay_division",dubDelayDivision).putInt("dub_delay_feedback",dubDelayFeedback).putInt("dub_delay_filter",dubDelayFilter).putInt("dub_delay_mix",dubDelayMix).putInt("dub_delay_bpm",dubDelayBpm).putBoolean("dub_delay_auto_sync",dubDelayAutoSync)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1075,17 +1078,48 @@ class MainActivity : Activity() {
         delayGrid.addView(delayTop, LinearLayout.LayoutParams(-1, dp(106)))
         delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(106)))
         delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(212)))
-        val bpmLabel = label("BPM  $dubDelayBpm", 11f, colorMaster)
+        val bpmLabel = label(
+            if (dubDelayAutoSync) {
+                if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${parallelDubDelayProcessor?.detectedBpm}"
+                else "SYNC AUTO • ricerca beat"
+            } else "MANUAL • BPM $dubDelayBpm",
+            11f, colorMaster
+        )
         bpmLabel.gravity = Gravity.CENTER_VERTICAL
+        dubDelayStatusView = bpmLabel
         delayColumn.addView(bpmLabel, LinearLayout.LayoutParams(-1, dp(20)))
+        val syncRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        syncRow.addView(label("SYNC AUTOMATICO", 10f, Color.WHITE),
+            LinearLayout.LayoutParams(0, dp(30), 1f))
+        val syncSwitch = Switch(this).apply {
+            isChecked = dubDelayAutoSync
+            text = "AUTO"
+            textSize = 10f
+            setOnCheckedChangeListener { _, checked ->
+                dubDelayAutoSync = checked
+                bpmSeek.isEnabled = !checked
+                bpmLabel.text = if (checked) {
+                    if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${parallelDubDelayProcessor?.detectedBpm}"
+                    else "SYNC AUTO • ricerca beat"
+                } else "MANUAL • BPM $dubDelayBpm"
+                save()
+                scheduleUpdate()
+            }
+        }
+        syncRow.addView(syncSwitch)
+        delayColumn.addView(syncRow, LinearLayout.LayoutParams(-1, dp(30)))
         val bpmSeek = SeekBar(this).apply {
             max = 120
             progress = dubDelayBpm - 60
+            isEnabled = !dubDelayAutoSync
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
                         dubDelayBpm = 60 + progress
-                        bpmLabel.text = "BPM  $dubDelayBpm"
+                        bpmLabel.text = "MANUAL • BPM $dubDelayBpm"
                         scheduleUpdate()
                     }
                 }
@@ -1141,7 +1175,7 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             })
             elevation = dp(12).toFloat()
-            setOnDismissListener { save(); reverbPopup = null }
+            setOnDismissListener { save(); reverbPopup = null; dubDelayStatusView = null }
         }
         reverbPopup = popup
         popup.showAtLocation(container, Gravity.CENTER, 0, 0)
@@ -1287,7 +1321,13 @@ class MainActivity : Activity() {
             }
             captureTrack = track
             parallelReverbProcessor = SchroederReverb(sampleRate)
-            parallelDubDelayProcessor = DubDelay(sampleRate)
+            parallelDubDelayProcessor = DubDelay(sampleRate).also { delay ->
+                delay.onTempoChanged = { detected ->
+                    dubDelayStatusView?.post {
+                        if (dubDelayAutoSync) dubDelayStatusView?.text = "SYNC AUTO • BPM $detected"
+                    }
+                }
+            }
             captureRecord = record
             track.play()
             record.startRecording()
@@ -1320,11 +1360,11 @@ class MainActivity : Activity() {
                             )
                             delayProcessor.process(
                                 buffer, delayBuffer, count, dubDelayOn, dubDelayDivision,
-                                dubDelayBpm, dubDelayFeedback, dubDelayFilter, dubDelayMix, reverbFadeMs
+                                dubDelayBpm, dubDelayAutoSync, dubDelayFeedback, dubDelayFilter, dubDelayMix, reverbFadeMs
                             )
                             for (i in 0 until count) {
                                 wetBuffer[i] = (wetBuffer[i].toInt() + delayBuffer[i].toInt())
-                                    .coerceIn(-26000, 26000).toShort()
+                                    .coerceIn(-30000, 30000).toShort()
                             }
                             var written = 0
                             while (written < count && captureRunning) {
