@@ -24,8 +24,8 @@ class AudioCaptureForegroundService : Service() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }.setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("FREQUALIZER • Test cattura audio")
-            .setContentText("Servizio di acquisizione audio in esecuzione")
+            .setContentTitle("FREQUALIZER • REVERB ATTIVO")
+            .setContentText("Elaborazione audio in background")
             .setOngoing(true)
             .build()
 
@@ -36,7 +36,7 @@ class AudioCaptureForegroundService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
