@@ -80,6 +80,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var hpY = 0f
     private var lpY = 0f
     private var limiter = 1f
+    private var smoothedMix = 0f
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -90,6 +91,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         hpY = 0f
         lpY = 0f
         limiter = 1f
+        smoothedMix = 0f
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -120,9 +122,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
         roomSize: Int,
         hpHz: Int,
         lpHz: Int,
-        freeze: Boolean
+        freeze: Boolean,
+        inputEnabled: Boolean,
+        fadeMs: Int
     ) {
-        val mix = mixPercent.coerceIn(0, 100) / 100f
+        val mixTarget = if (inputEnabled) mixPercent.coerceIn(0, 100) / 100f else 0f
+        val fadeSeconds = fadeMs.coerceIn(300, 4000) / 1000f
+        val mixSmoothing = (1.0 - exp(-1.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
         val size = roomSize.coerceIn(0, 1000) / 1000f
         val hp = hpHz.coerceIn(20, 1200).toFloat()
         val lp = lpHz.coerceIn(1000, 20000).toFloat()
@@ -140,7 +146,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             hpY = hpOut
             lpY += lpA * (hpOut - lpY)
 
-            var excitation = if (freeze) 0f else lpY * 0.34f
+            smoothedMix += (mixTarget - smoothedMix) * mixSmoothing
+            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.34f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -162,7 +169,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             wet *= 0.35355339f
             for (diffuser in outputDiffusers) wet = diffuser.tick(wet)
 
-            val raw = wet * mix * 0.92f
+            val raw = wet * smoothedMix * 0.92f
             val magnitude = abs(raw)
             val target = if (magnitude > 0.78f) 0.78f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
