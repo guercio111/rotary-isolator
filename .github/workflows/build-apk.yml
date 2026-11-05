@@ -1,6 +1,6 @@
-# Tablet stable APK rebuild trigger
-name: Build Rotary Isolator APK
-# Simplified reverb controls and stable audio-return test 247
+# Tablet reverb refinement test 248
+name: Build FREQUALIZER TEST 248 APK
+# Persistent capture on resize; smoother mid/high reverb and round power
 
 on:
   push:
@@ -44,7 +44,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 247"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 248"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
@@ -134,6 +134,28 @@ jobs:
               manifest.write_text(xml)
           PY
 
+      - name: Preserve MediaProjection during window resize
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          manifest = Path("extracted/RotaryIsolator/app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text()
+          required = "orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density"
+          tags = list(re.finditer(r'<activity\\b[^>]*>', xml))
+          match = next((m for m in tags if "MainActivity" in m.group(0)), None)
+          if match is None:
+              raise SystemExit("MainActivity declaration not found in manifest")
+          tag = match.group(0)
+          if "android:configChanges=" in tag:
+              tag = re.sub(r'android:configChanges="([^"]*)"', lambda m: 'android:configChanges="' + "|".join(dict.fromkeys((m.group(1) + "|" + required).split("|"))) + '"', tag, count=1)
+          else:
+              tag = tag[:-1] + ' android:configChanges="' + required + '">'
+          xml = xml[:match.start()] + tag + xml[match.end():]
+          xml = re.sub(r'(<service\\b(?=[^>]*AudioCaptureForegroundService)[^>]*)(/?>)', lambda m: m.group(1) + (' android:stopWithTask="false"' if 'android:stopWithTask=' not in m.group(1) else '') + m.group(2), xml, count=1)
+          manifest.write_text(xml)
+          PY
+
       - name: Set Java compatibility to 17
         run: |
           python3 - <<'PY'
@@ -144,10 +166,10 @@ jobs:
           s = p.read_text()
           if p.name.endswith(".kts"):
               block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test247"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test248"'
           else:
               block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test247"'
+              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test248"'
           if "defaultConfig {" not in s:
               raise SystemExit("defaultConfig block not found")
           s = s.replace("defaultConfig {", app_id_suffix, 1)
@@ -162,5 +184,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rotary-isolator-debug-apk
+          name: frequalizer-test248
           path: extracted/RotaryIsolator/app/build/outputs/apk/debug/app-debug.apk
