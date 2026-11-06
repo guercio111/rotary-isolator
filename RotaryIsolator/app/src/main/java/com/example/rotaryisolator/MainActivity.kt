@@ -898,6 +898,8 @@ class MainActivity : Activity() {
     }
 
 
+    private fun effectsActive() = reverbOn || delayMix > 0
+
     private fun registerDelayTap(): Int {
         val now = android.os.SystemClock.elapsedRealtime()
         if (lastDelayTapMs != 0L) {
@@ -956,7 +958,8 @@ class MainActivity : Activity() {
                 paintState()
                 save()
                 scheduleUpdate()
-                if (reverbOn && !captureRunning) startAudioCaptureTest()
+                if (effectsActive() && !captureRunning) startAudioCaptureTest()
+                else if (!effectsActive() && captureRunning) stopAudioCaptureTest()
             }
         }
         val depthDial = RotaryControl(
@@ -974,7 +977,11 @@ class MainActivity : Activity() {
         val delayDial = RotaryControl(
             this, "DELAY", delayMix.toFloat(), 0f, 100f, colorMaster,
             { value -> delayMix = value.roundToInt().coerceIn(0, 100) },
-            { "$delayMix%" }, onEnd = { prefs.edit().putInt("reverb_delay_mix", delayMix).apply() }, titleInside = true,
+            { "$delayMix%" }, onEnd = {
+                prefs.edit().putInt("reverb_delay_mix", delayMix).apply()
+                if (effectsActive() && !captureRunning) startAudioCaptureTest()
+                else if (!effectsActive() && captureRunning) stopAudioCaptureTest()
+            }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val tapButton = Button(this).apply {
@@ -1173,7 +1180,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Cattura audio non autorizzata", Toast.LENGTH_SHORT).show()
             return
         }
-        if (!reverbOn) return
+        if (!effectsActive()) return
         try {
             // Android 14+ requires a running mediaProjection foreground service
             // before getMediaProjection() is called.
@@ -1350,7 +1357,7 @@ class MainActivity : Activity() {
         captureRunning = false
         handler.post {
             releaseCaptureIoOnly()
-            if (captureProjection !== projection || !reverbOn) {
+            if (captureProjection !== projection || !effectsActive()) {
                 captureRestartPending = false
                 return@post
             }
@@ -1364,7 +1371,7 @@ class MainActivity : Activity() {
             captureRestartPending = true
             handler.postDelayed({
                 captureRestartPending = false
-                if (captureProjection === projection && reverbOn && !captureRunning) {
+                if (captureProjection === projection && effectsActive() && !captureRunning) {
                     beginAudioCapture(projection)
                 }
             }, waitMs)
