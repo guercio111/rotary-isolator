@@ -985,7 +985,7 @@ class MainActivity : Activity() {
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val tapButton = Button(this).apply {
-            text = "TAP\\n${delayBpm} BPM"
+            text = "TAP\n${delayBpm} BPM"
             textSize = if (landscapePhone) 9f else 11f
             isAllCaps = false
             setTextColor(Color.WHITE)
@@ -999,7 +999,7 @@ class MainActivity : Activity() {
             }
             setOnClickListener {
                 val bpm = registerDelayTap()
-                text = "TAP\\n${bpm} BPM"
+                text = "TAP\n${bpm} BPM"
                 if (delayTapIntervals.isEmpty()) Toast.makeText(this@MainActivity, "Batti il tempo con TAP", Toast.LENGTH_SHORT).show()
             }
         }
