@@ -156,12 +156,16 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayBpm: Int = 120,
         delayEnabled: Boolean = false,
         delayFadeMs: Int = 1400,
-        delayDivision: Int = 3
+        delayDivision: Int = 3,
+        delayMode: Int = 2
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.30f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f else 0f
         val beatFraction = when (delayDivision.coerceIn(0, 3)) { 0 -> 0.25f; 1 -> 0.5f; 2 -> 0.75f; else -> 1f }
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60, 180)) * beatFraction).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        // V10-style SEND voicings: short, long and dub echo use progressively longer time and feedback.
+        val modeTime = when (delayMode.coerceIn(0, 2)) { 0 -> 0.5f; 1 -> 1.5f; else -> 1f }
+        val modeFeedback = when (delayMode.coerceIn(0, 2)) { 0 -> 0.22f; 1 -> 0.32f; else -> 0.46f }
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60, 180)) * beatFraction * modeTime).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
         val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
@@ -214,7 +218,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val readIndex = (delayWriteIndex - smoothedDelaySamples.toInt() + delayBuffer.size) % delayBuffer.size
             val delayed = delayBuffer[readIndex]
             // Controlled dub feedback: audible repeats without runaway buildup.
-            delayBuffer[delayWriteIndex] = (x * 0.48f + delayed * 0.38f).coerceIn(-0.82f, 0.82f)
+            delayBuffer[delayWriteIndex] = (x * 0.48f + delayed * modeFeedback).coerceIn(-0.82f, 0.82f)
             delayWriteIndex++
             if (delayWriteIndex == delayBuffer.size) delayWriteIndex = 0
             val reverbReturn = wet * smoothedMix * 0.92f
