@@ -1070,15 +1070,15 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, dp(68)))
-        reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, dp(68)))
+        reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1f))
         val reverbFeedbackDial = RotaryControl(
             this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, dp(68)))
+        reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
@@ -1147,16 +1147,16 @@ class MainActivity : Activity() {
                 save(); scheduleUpdate(); updateEffectsCapture()
             }
         }
-        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(42), dp(34)))
-        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(28), dp(34)))
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(42), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
-        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(30), dp(34)).apply { leftMargin = dp(2); rightMargin = dp(2) })
-        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(40), 1f))
-        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(44)))
+        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
+        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(34), dp(42)))
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
+        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.6f))
         val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
-        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(15)).apply { topMargin = dp(2) })
+        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.65f).apply { topMargin = dp(2) })
         val fineSeek = SeekBar(this).apply {
             max = 200
             progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
@@ -1176,7 +1176,7 @@ class MainActivity : Activity() {
             })
         }
         bpmFineSeek = fineSeek
-        delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, dp(20)).apply { topMargin = dp(2); bottomMargin = dp(2) })
+        delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, 0, 0.9f).apply { topMargin = dp(2); bottomMargin = dp(2) })
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1198,9 +1198,10 @@ class MainActivity : Activity() {
         modeLabels.forEachIndexed { index, caption ->
             val button = TextView(this).apply {
                 text = caption
-                textSize = 7f
+                textSize = 9f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
+                setPadding(dp(3), 0, dp(3), 0)
                 setOnClickListener {
                     selectedBeatFx = index
                     delayMode = index
@@ -1209,12 +1210,12 @@ class MainActivity : Activity() {
                 }
             }
             modeViews.add(button)
-            modeRow.addView(button, LinearLayout.LayoutParams(0, dp(22), 1f).apply {
-                if (index > 0) leftMargin = dp(2)
+            modeRow.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                if (index > 0) leftMargin = dp(3)
             })
         }
         paintModeButtons()
-        delayControls.addView(modeRow, LinearLayout.LayoutParams(-1, dp(24)).apply { topMargin = dp(2); bottomMargin = dp(2) })
+        delayControls.addView(modeRow, LinearLayout.LayoutParams(-1, 0, 1.1f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         val divisions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1246,12 +1247,12 @@ class MainActivity : Activity() {
                 }
             }
             divisionViews.add(button)
-            divisions.addView(button, LinearLayout.LayoutParams(0, dp(25), 1f).apply {
-                if (index > 0) leftMargin = dp(2)
+            divisions.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                if (index > 0) leftMargin = dp(3)
             })
         }
         paintDivisionButtons()
-        delayControls.addView(divisions, LinearLayout.LayoutParams(-1, dp(24)).apply { topMargin = dp(2); bottomMargin = dp(2) })
+        delayControls.addView(divisions, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         val frequencyRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1283,12 +1284,12 @@ class MainActivity : Activity() {
                 }
             }
             frequencyViews.add(button)
-            frequencyRow.addView(button, LinearLayout.LayoutParams(0, dp(24), 1f).apply {
-                if (index > 0) leftMargin = dp(3)
+            frequencyRow.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                if (index > 0) leftMargin = dp(4)
             })
         }
         paintFrequencyButtons()
-        delayControls.addView(frequencyRow, LinearLayout.LayoutParams(-1, dp(24)).apply { topMargin = dp(2); bottomMargin = dp(2) })
+        delayControls.addView(frequencyRow, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
 
 
@@ -1314,26 +1315,21 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(76), 1f))
-        delayRow.addView(delayTimeDial, LinearLayout.LayoutParams(0, dp(76), 1f))
-        delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, dp(76), 1f))
-        delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, dp(76), 1f))
+        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, -1, 1f))
+        delayRow.addView(delayTimeDial, LinearLayout.LayoutParams(0, -1, 1f))
+        delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
+        delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, -1, 1f))
         val reverbColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(2), dp(2), dp(2), dp(2))
         }
-        val reverbTitle = label("REVERB", 11f, Color.WHITE).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, Typeface.BOLD)
-        }
-        reverbColumn.addView(reverbTitle, LinearLayout.LayoutParams(-1, dp(20)))
         val reverbControlsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        reverbControlsRow.addView(reverbPower, LinearLayout.LayoutParams(dp(42), dp(34)).apply {
-            rightMargin = dp(3)
+        reverbControlsRow.addView(reverbPower, LinearLayout.LayoutParams(dp(50), dp(42)).apply {
+            rightMargin = dp(5)
         })
         reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
         reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -1342,14 +1338,14 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(3), dp(2), dp(3), dp(2))
         }
-        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, dp(78)))
-        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, dp(145)))
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, 0.40f))
-        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, 0.60f))
+        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, 0.43f))
+        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, 0.57f))
         panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
 
         // The popup initially occupies exactly the MASTER section. It never
