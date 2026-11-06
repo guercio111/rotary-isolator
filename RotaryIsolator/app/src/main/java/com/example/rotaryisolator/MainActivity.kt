@@ -1125,6 +1125,29 @@ class MainActivity : Activity() {
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(40), 1f))
         delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(30), dp(34)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(42)))
+        val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(14)))
+        val bpmFineSeek = SeekBar(this).apply {
+            max = 200
+            progress = (100 + delayBpmCorrection.roundToInt() * 10).coerceIn(0,200)
+            setPadding(0, 0, 0, 0)
+            splitTrack = false
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        delayBpmCorrection = (progress - 100) * 0.1f
+                        delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                        bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+                        scheduleUpdate()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+            })
+        }
+        delayControls.addView(bpmFineSeek, LinearLayout.LayoutParams(-1, dp(20)))
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1267,8 +1290,8 @@ class MainActivity : Activity() {
         delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, dp(76), 1f))
         delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, dp(76), 1f))
         panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(78)))
-        panel.addView(delayControls, LinearLayout.LayoutParams(-1, dp(118)))
-        panel.addView(fadeRow("DUB FADE", delayFadeMs) { delayFadeMs = it },
+        panel.addView(delayControls, LinearLayout.LayoutParams(-1, dp(152)))
+        panel.addView(fadeRow("DELAY / ECHO FADE", delayFadeMs) { delayFadeMs = it },
             LinearLayout.LayoutParams(-1, dp(42)))
 
         // Anchor and size strictly to MASTER: EQ, ISOLATOR and FILTERS remain uncovered.
