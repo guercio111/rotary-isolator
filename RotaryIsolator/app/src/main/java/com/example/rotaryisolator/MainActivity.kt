@@ -1960,8 +1960,13 @@ private class RotaryControl(
             }
             MotionEvent.ACTION_MOVE->{
                 val delta=downY-e.y
-                if(abs(delta)>dp(4f)) dragged=true
-                if(dragged){val sensitivity=(maxV-minV)*2.2f/height.coerceAtLeast(1);v=quantize(downV+delta*sensitivity);changed(v);invalidate()}
+                if(abs(delta)>dp(if(step>0f)1f else 4f)) dragged=true
+                if(dragged){
+                    // Effect dials use a deliberately fine 1-unit-per-step feel;
+                    // the other mixer controls retain their original response.
+                    val sensitivity=(maxV-minV)*(if(step>0f)0.25f else 2.2f)/height.coerceAtLeast(1)
+                    v=quantize(downV+delta*sensitivity);changed(v);invalidate()
+                }
                 return true
             }
             MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);onEnd();performClick();return true}
@@ -1972,7 +1977,7 @@ private class RotaryControl(
     override fun onGenericMotionEvent(e:MotionEvent):Boolean{
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
-            v=(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f)).coerceIn(minV,maxV)
+            v=quantize(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f))
             changed(v);invalidate();onEnd();return true
         }
         return super.onGenericMotionEvent(e)
