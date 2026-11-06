@@ -155,7 +155,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         inputEnabled: Boolean,
         fadeMs: Int,
         delayMixPercent: Int = 0,
-        delayBpm: Int = 120,
+        delayBpm: Float = 120f,
         delayEnabled: Boolean = false,
         delayFadeMs: Int = 1400,
         delayDivision: Int = 3,
@@ -173,7 +173,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val modeFeedback = when (mode) { 0 -> 0.16f; 1 -> 0.30f; else -> 0.52f }
         val delayToneHz = when (mode) { 0 -> 14000f; 1 -> 10500f; else -> 6500f }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60, 180)) * beatFraction * modeTime).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction * modeTime).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
         val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
