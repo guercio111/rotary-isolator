@@ -275,6 +275,31 @@ class MainActivity : Activity() {
         prefs.edit().putInt("session_task_id", taskId).putBoolean("session_in_background", false).apply()
         buildUi()
         connectAudio()
+        // Ask Android to exempt FREQUALIZER from Doze/battery optimization.
+        // The user must confirm this in the system dialog.
+        handler.postDelayed({ if (!isFinishing && !isDestroyed) requestBatteryOptimizationExemption() }, 900)
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        try {
+            val power = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            if (power.isIgnoringBatteryOptimizations(packageName)) {
+                Toast.makeText(this, "FREQUALIZER escluso dal risparmio batteria", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val intent = android.content.Intent(
+                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                android.net.Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+        } catch (t: Throwable) {
+            try {
+                startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (_: Throwable) {
+                Toast.makeText(this, "Apri Impostazioni > App > FREQUALIZER > Batteria e seleziona Senza restrizioni", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     override fun onPause() {
@@ -1016,11 +1041,6 @@ class MainActivity : Activity() {
             }
         }
         header.addView(reverbPower, LinearLayout.LayoutParams(0, dp(28), 1f))
-        val heading = label("REVERB", 11f, Color.WHITE).apply {
-            gravity = Gravity.CENTER
-            setTypeface(typeface, Typeface.BOLD)
-        }
-        header.addView(heading, LinearLayout.LayoutParams(0, dp(28), 1.5f))
         val closeButton = TextView(this).apply {
             text = "CHIUDI"
             textSize = 10f
@@ -1304,6 +1324,11 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(2), dp(2), dp(2), dp(2))
         }
+        val reverbTitle = label("REVERB", 11f, Color.WHITE).apply {
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+        }
+        reverbColumn.addView(reverbTitle, LinearLayout.LayoutParams(-1, dp(20)))
         reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, dp(104)))
         val delayColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1312,8 +1337,6 @@ class MainActivity : Activity() {
         }
         delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, dp(88)))
         delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, dp(125)))
-        delayColumn.addView(fadeRow("DELAY / ECHO FADE", delayFadeMs) { delayFadeMs = it },
-            LinearLayout.LayoutParams(-1, dp(38)))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1328,8 +1351,14 @@ class MainActivity : Activity() {
         val masterSection = sections["GAIN"] ?: container
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
-        val popupWidth = masterSection.width.coerceAtLeast(dp(1))
-        val popupHeight = masterSection.height.coerceAtLeast(dp(1))
+        val popupWidth = masterSection.width
+        val popupHeight = masterSection.height
+        if (popupWidth <= dp(40) || popupHeight <= dp(40) || !container.isAttachedToWindow) {
+            container.post {
+                if (!isFinishing && !isDestroyed && container.isAttachedToWindow) showReverbPopup()
+            }
+            return
+        }
         val popupTop = popupLocation[1]
         val popupContent = FrameLayout(this).apply {
             clipChildren = true
@@ -1349,7 +1378,14 @@ class MainActivity : Activity() {
             setOnDismissListener { save(); reverbPopup = null }
         }
         reverbPopup = popupWindow
-        popupWindow.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupTop)
+        try {
+            popupWindow.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupTop)
+        } catch (t: Throwable) {
+            reverbPopup = null
+            try { popupWindow.dismiss() } catch (_: Throwable) {}
+            android.util.Log.e("FREQUALIZER", "Impossibile mostrare il pannello BEAT FX", t)
+            Toast.makeText(this, "Pannello BEAT FX non disponibile: riprova", Toast.LENGTH_SHORT).show()
+        }
     }
     private fun startAudioCaptureTest() {
         // Reuse the existing MediaProjection session after a track/route switch.
@@ -1797,6 +1833,12 @@ class MainActivity : Activity() {
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
         }
+        val batteryButton = Button(this).apply {
+            text = "ESCLUDI DA RISPARMIO BATTERIA"
+            textSize = 12f
+            setOnClickListener { requestBatteryOptimizationExemption() }
+        }
+        panel.addView(batteryButton, LinearLayout.LayoutParams(-1, dp(44)))
         val defaultsRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(6),dp(8),dp(4))}
         defaultsRow.addView(label("DEFAULT SETTINGS ALL'AVVIO",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(46),1f))
         val defaultsSwitch=Switch(this).apply{
