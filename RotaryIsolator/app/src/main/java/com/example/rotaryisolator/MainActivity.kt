@@ -894,26 +894,32 @@ class MainActivity : Activity() {
 
     private fun showReverbPopup(){
         reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
+        val landscapePhone = phonePortrait && wideLayout
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(14), dp(10), dp(14), dp(8))
+            gravity = Gravity.CENTER
+            setPadding(
+                dp(if (landscapePhone) 6 else 14),
+                dp(if (landscapePhone) 5 else 10),
+                dp(if (landscapePhone) 6 else 14),
+                dp(if (landscapePhone) 5 else 8)
+            )
             setBackgroundColor(Color.rgb(25,28,34))
         }
         val power = TextView(this).apply {
             fun paintState() {
                 text = if (reverbOn) "ON" else "OFF"
                 setTextColor(Color.WHITE)
-                textSize = 16f
+                textSize = if (landscapePhone) 12f else 16f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
                 contentDescription = if (reverbOn) "Reverb acceso, tocca per spegnere" else "Reverb spento, tocca per accendere"
                 background = android.graphics.drawable.GradientDrawable().apply {
                     shape = android.graphics.drawable.GradientDrawable.OVAL
                     setColor(if (reverbOn) Color.rgb(28,170,75) else Color.rgb(185,42,48))
-                    setStroke(dp(2), if (reverbOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+                    setStroke(dp(if (landscapePhone) 1 else 2), if (reverbOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
                 }
-                elevation = dp(4).toFloat()
+                elevation = dp(3).toFloat()
             }
             paintState()
             isClickable = true
@@ -925,11 +931,6 @@ class MainActivity : Activity() {
                 scheduleUpdate()
                 if (reverbOn && !captureRunning) startAudioCaptureTest()
             }
-        }
-        panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
-        val parameterRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
         }
         val depthDial = RotaryControl(
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
@@ -943,12 +944,8 @@ class MainActivity : Activity() {
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
-        parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
-        panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
-        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 13f, colorMaster)
+        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", if (landscapePhone) 10f else 13f, colorMaster)
         fadeLabel.gravity = Gravity.CENTER_VERTICAL
-        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
         val fadeSeek = SeekBar(this).apply {
             max = 5700
             progress = (reverbFadeMs - 300).coerceIn(0, 5700)
@@ -964,16 +961,55 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) { save() }
             })
         }
-        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
         val closeButton = Button(this).apply {
             text = "CHIUDI"
-            textSize = 11f
+            textSize = if (landscapePhone) 12f else 11f
+            isAllCaps = false
+            setPadding(dp(4), 0, dp(4), 0)
+            minHeight = dp(if (landscapePhone) 40 else 34)
             setOnClickListener { reverbPopup?.dismiss() }
         }
-        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
-        // The popup is constrained to the exact MASTER section bounds in both
-        // orientations. Its contents scale uniformly when the phone's MASTER
-        // quadrant is shorter than the natural control stack.
+
+        if (landscapePhone) {
+            // Wide-phone layout: keep the two dials full-sized and place the
+            // fade control beside a generously sized CLOSE button underneath.
+            val controlsRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            controlsRow.addView(power, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(5) })
+            controlsRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(96), 1f))
+            controlsRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(96), 1f))
+            panel.addView(controlsRow, LinearLayout.LayoutParams(-1, dp(98)))
+            val bottomRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val fadeColumn = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            fadeColumn.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(19)))
+            fadeColumn.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(29)))
+            bottomRow.addView(fadeColumn, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(5) })
+            bottomRow.addView(closeButton, LinearLayout.LayoutParams(dp(82), dp(40)))
+            panel.addView(bottomRow, LinearLayout.LayoutParams(-1, dp(50)))
+        } else {
+            panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
+            val parameterRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
+            parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
+            panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
+            panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
+            panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
+            panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
+        }
+
+        // The popup stays inside MASTER. Landscape uses a dedicated compact
+        // horizontal control arrangement instead of shrinking every button.
         val masterSection = sections["GAIN"] ?: container
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
