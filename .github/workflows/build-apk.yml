@@ -59,9 +59,53 @@ jobs:
           sudo apt-get install -y python3-pil
           /usr/bin/python3 .github/scripts/generate_app_icon.py extracted/RotaryIsolator
 
-      - name: Use maintained Kotlin source
+      - name: Use tablet layout with shared V10-inspired effects engine
         run: |
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
+
+      - name: Configure internal audio capture and preserve popup through rotation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          app = Path("extracted/RotaryIsolator/app")
+          manifest = app / "src/main/AndroidManifest.xml"
+          xml = manifest.read_text()
+          permissions = [
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />',
+          ]
+          for permission in permissions:
+              name = permission.split('"')[1]
+              if name not in xml:
+                  xml = xml.replace("<application", permission + "\\n    <application", 1)
+          service = '''        <service
+              android:name=".AudioCaptureForegroundService"
+              android:exported="false"
+              android:foregroundServiceType="mediaProjection" />
+          '''
+          if "AudioCaptureForegroundService" not in xml:
+              xml = xml.replace("</application>", service + "\\n    </application>", 1)
+          required = "orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density"
+          tags = list(re.finditer(r'<activity\\b[^>]*>', xml))
+          match = next((m for m in tags if "MainActivity" in m.group(0)), None)
+          if match is None:
+              raise SystemExit("MainActivity declaration not found in manifest")
+          tag = match.group(0)
+          if "android:configChanges=" in tag:
+              tag = re.sub(r'android:configChanges="([^"]*)"', lambda m: 'android:configChanges="' + "|".join(dict.fromkeys((m.group(1) + "|" + required).split("|"))) + '"', tag, count=1)
+          else:
+              closing = "/>" if tag.rstrip().endswith("/>") else ">"
+              body = tag.rstrip()[:-2].rstrip() if closing == "/>" else tag.rstrip()[:-1].rstrip()
+              tag = body + ' android:configChanges="' + required + '"' + closing
+          xml = xml[:match.start()] + tag + xml[match.end():]
+          import xml.etree.ElementTree as ET
+          ET.fromstring(xml)
+          manifest.write_text(xml)
+          PY
 
       - name: Set Java compatibility to 17
         run: |
