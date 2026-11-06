@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFreeze = false
     @Volatile private var reverbFadeMs = 1400
+    @Volatile private var dubDelayFadeMs = 1400
     @Volatile private var dubDelayOn = false
     @Volatile private var dubDelayDivision = 3
     @Volatile private var dubDelayFeedback = 58
@@ -53,6 +54,7 @@ class MainActivity : Activity() {
     @Volatile private var dubDelayBpm = 120
     @Volatile private var dubDelayAutoSync = true
     @Volatile private var dubDelayStatusView: TextView? = null
+    @Volatile private var effectsTempoView: TextView? = null
     private var reverbPopup: android.widget.PopupWindow? = null
     private var insertReverbTest: android.media.audiofx.AudioEffect? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
@@ -180,6 +182,7 @@ class MainActivity : Activity() {
         dubDelayMix = prefs.getInt("dub_delay_mix", 65).coerceIn(0, 100)
         dubDelayBpm = prefs.getInt("dub_delay_bpm", 120).coerceIn(60, 180)
         dubDelayAutoSync = prefs.getBoolean("dub_delay_auto_sync", true)
+        dubDelayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300, 6000)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         val toneDefaults = prefs.getBoolean("reverb_tone_defaults_v1", false)
@@ -491,7 +494,7 @@ class MainActivity : Activity() {
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
             .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz)
-            .putBoolean("dub_delay_on",dubDelayOn).putInt("dub_delay_division",dubDelayDivision).putInt("dub_delay_feedback",dubDelayFeedback).putInt("dub_delay_filter",dubDelayFilter).putInt("dub_delay_mix",dubDelayMix).putInt("dub_delay_bpm",dubDelayBpm).putBoolean("dub_delay_auto_sync",dubDelayAutoSync)
+            .putBoolean("dub_delay_on",dubDelayOn).putInt("dub_delay_division",dubDelayDivision).putInt("dub_delay_feedback",dubDelayFeedback).putInt("dub_delay_filter",dubDelayFilter).putInt("dub_delay_mix",dubDelayMix).putInt("dub_delay_bpm",dubDelayBpm).putBoolean("dub_delay_auto_sync",dubDelayAutoSync).putInt("dub_delay_fade_ms",dubDelayFadeMs)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1080,14 +1083,14 @@ class MainActivity : Activity() {
         delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(212)))
         val bpmLabel = label(
             if (dubDelayAutoSync) {
-                if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${parallelDubDelayProcessor?.detectedBpm}"
+                if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${String.format(java.util.Locale.ITALY, "%.1f", parallelDubDelayProcessor?.detectedBpmPrecise ?: 0f)}"
                 else "SYNC AUTO • ricerca beat"
-            } else "MANUAL • BPM $dubDelayBpm",
+            } else "SYNC MANUALE • BPM ${String.format(java.util.Locale.ITALY, "%.1f", dubDelayBpm.toFloat())}",
             11f, colorMaster
         )
         bpmLabel.gravity = Gravity.CENTER_VERTICAL
         dubDelayStatusView = bpmLabel
-        delayColumn.addView(bpmLabel, LinearLayout.LayoutParams(-1, dp(20)))
+        effectsTempoView = bpmLabel
         val bpmSeek = SeekBar(this).apply {
             max = 120
             progress = dubDelayBpm - 60
@@ -1096,7 +1099,7 @@ class MainActivity : Activity() {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
                         dubDelayBpm = 60 + progress
-                        bpmLabel.text = "MANUAL • BPM $dubDelayBpm"
+                        bpmLabel.text = "SYNC MANUALE • BPM ${String.format(java.util.Locale.ITALY, "%.1f", dubDelayBpm.toFloat())}"
                         scheduleUpdate()
                     }
                 }
@@ -1104,30 +1107,7 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) { save() }
             })
         }
-        val syncRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        syncRow.addView(label("SYNC AUTOMATICO", 10f, Color.WHITE),
-            LinearLayout.LayoutParams(0, dp(30), 1f))
-        val syncSwitch = Switch(this).apply {
-            isChecked = dubDelayAutoSync
-            text = "AUTO"
-            textSize = 10f
-            setOnCheckedChangeListener { _, checked ->
-                dubDelayAutoSync = checked
-                bpmSeek.isEnabled = !checked
-                bpmLabel.text = if (checked) {
-                    if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${parallelDubDelayProcessor?.detectedBpm}"
-                    else "SYNC AUTO • ricerca beat"
-                } else "MANUAL • BPM $dubDelayBpm"
-                save()
-                scheduleUpdate()
-            }
-        }
-        syncRow.addView(syncSwitch)
-        delayColumn.addView(syncRow, LinearLayout.LayoutParams(-1, dp(30)))
-        delayColumn.addView(bpmSeek, LinearLayout.LayoutParams(-1, dp(28)))
+        // Shared master tempo controls are added below both effect columns.
         delayColumn.addView(label("RIPETIZIONI FILTRATE", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, dp(20)))
 
@@ -1136,26 +1116,55 @@ class MainActivity : Activity() {
         columns.addView(divider, LinearLayout.LayoutParams(dp(1), dp(390)))
         columns.addView(delayColumn, LinearLayout.LayoutParams(0, -2, 1f))
         panel.addView(columns, LinearLayout.LayoutParams(-1, -2))
-
-        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 12f, colorMaster)
-        fadeLabel.gravity = Gravity.CENTER_VERTICAL
-        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(24)))
-        val fadeSeek = SeekBar(this).apply {
-            max = 5700
-            progress = (reverbFadeMs - 300).coerceIn(0, 5700)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    if (fromUser) {
-                        reverbFadeMs = 300 + progress
-                        fadeLabel.text = "DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s"
-                        scheduleUpdate()
-                    }
-                }
-                override fun onStartTrackingTouch(bar: SeekBar?) {}
-                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
-            })
+        val sharedSyncRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(30)))
+        sharedSyncRow.addView(label("MASTER SYNC • UNICO BPM", 11f, Color.WHITE),
+            LinearLayout.LayoutParams(0, dp(32), 1f))
+        val sharedSyncSwitch = Switch(this).apply {
+            isChecked = dubDelayAutoSync
+            text = "AUTO"
+            textSize = 10f
+            setOnCheckedChangeListener { _, checked ->
+                dubDelayAutoSync = checked
+                bpmSeek.isEnabled = !checked
+                bpmLabel.text = if (checked) {
+                    if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM " + String.format(java.util.Locale.ITALY, "%.1f", parallelDubDelayProcessor?.detectedBpmPrecise ?: 0f)
+                    else "SYNC AUTO • ricerca beat"
+                } else "SYNC MANUALE • BPM " + String.format(java.util.Locale.ITALY, "%.1f", dubDelayBpm.toFloat())
+                save()
+                scheduleUpdate()
+            }
+        }
+        sharedSyncRow.addView(sharedSyncSwitch)
+        panel.addView(sharedSyncRow, LinearLayout.LayoutParams(-1, dp(32)))
+        panel.addView(bpmLabel, LinearLayout.LayoutParams(-1, dp(20)))
+        panel.addView(bpmSeek, LinearLayout.LayoutParams(-1, dp(28)))
+
+        fun addFadeControl(target: LinearLayout, title: String, getValue: () -> Int, setValue: (Int) -> Unit) {
+            val fadeLabel = label("$title  " + String.format(java.util.Locale.ITALY, "%.1f", getValue() / 1000f) + " s", 11f, colorMaster)
+            fadeLabel.gravity = Gravity.CENTER_VERTICAL
+            target.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(22)))
+            val fadeSeek = SeekBar(this).apply {
+                max = 5700
+                progress = (getValue() - 300).coerceIn(0, 5700)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            setValue(300 + progress)
+                            fadeLabel.text = "$title  " + String.format(java.util.Locale.ITALY, "%.1f", getValue() / 1000f) + " s"
+                            scheduleUpdate()
+                        }
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar?) {}
+                    override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+                })
+            }
+            target.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(28)))
+        }
+        addFadeControl(reverbColumn, "FADE REVERB", { reverbFadeMs }, { reverbFadeMs = it })
+        addFadeControl(delayColumn, "FADE DUB DELAY", { dubDelayFadeMs }, { dubDelayFadeMs = it })
         val closeButton = Button(this).apply {
             text = "CHIUDI"
             textSize = 11f
@@ -1165,7 +1174,7 @@ class MainActivity : Activity() {
         val availableWidth = (resources.displayMetrics.widthPixels - dp(24)).coerceAtLeast(dp(300))
         val popupWidth = min(availableWidth, dp(980))
         val availableHeight = (resources.displayMetrics.heightPixels - dp(32)).coerceAtLeast(dp(360))
-        val popupHeight = min(dp(560), availableHeight)
+        val popupHeight = min(dp(660), availableHeight)
         val popup = android.widget.PopupWindow(panel, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
@@ -1175,10 +1184,10 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             })
             elevation = dp(12).toFloat()
-            setOnDismissListener { save(); reverbPopup = null; dubDelayStatusView = null }
+            setOnDismissListener { save(); reverbPopup = null; dubDelayStatusView = null; effectsTempoView = null }
         }
         reverbPopup = popup
-        popup.showAtLocation(container, Gravity.CENTER, 0, 0)
+        popup.showAtLocation(container, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, dp(18))
     }
     private fun startAudioCaptureTest() {
         // Reuse the existing MediaProjection session after a track/route switch.
@@ -1324,7 +1333,7 @@ class MainActivity : Activity() {
             parallelDubDelayProcessor = DubDelay(sampleRate).also { delay ->
                 delay.onTempoChanged = { detected ->
                     dubDelayStatusView?.post {
-                        if (dubDelayAutoSync) dubDelayStatusView?.text = "SYNC AUTO • BPM $detected"
+                        if (dubDelayAutoSync) effectsTempoView?.text = "SYNC AUTO • BPM ${String.format(java.util.Locale.ITALY, "%.1f", detected)}"
                     }
                 }
             }
@@ -1356,11 +1365,12 @@ class MainActivity : Activity() {
                             processor.process(
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
-                                reverbOn, reverbFadeMs
+                                reverbOn, reverbFadeMs,
+                                if (dubDelayAutoSync && delayProcessor.tempoLocked) delayProcessor.detectedBpmPrecise else dubDelayBpm.toFloat()
                             )
                             delayProcessor.process(
                                 buffer, delayBuffer, count, dubDelayOn, dubDelayDivision,
-                                dubDelayBpm, dubDelayAutoSync, dubDelayFeedback, dubDelayFilter, dubDelayMix, reverbFadeMs
+                                dubDelayBpm.toFloat(), dubDelayAutoSync, dubDelayFeedback, dubDelayFilter, dubDelayMix, dubDelayFadeMs
                             )
                             for (i in 0 until count) {
                                 wetBuffer[i] = (wetBuffer[i].toInt() + delayBuffer[i].toInt())
