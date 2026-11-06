@@ -73,6 +73,7 @@ jobs:
           app = Path("extracted/RotaryIsolator/app")
           manifest = app / "src/main/AndroidManifest.xml"
           xml = manifest.read_text()
+          nl = chr(10)
           permissions = [
               '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
               '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
@@ -81,16 +82,16 @@ jobs:
           for permission in permissions:
               name = permission.split('"')[1]
               if name not in xml:
-                  xml = xml.replace("<application", permission + "\\n    <application", 1)
+                  xml = xml.replace("<application", permission + nl + "    <application", 1)
           service = '''        <service
               android:name=".AudioCaptureForegroundService"
               android:exported="false"
               android:foregroundServiceType="mediaProjection" />
           '''
           if "AudioCaptureForegroundService" not in xml:
-              xml = xml.replace("</application>", service + "\\n    </application>", 1)
+              xml = xml.replace("</application>", service + nl + "    </application>", 1)
           required = "orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density"
-          tags = list(re.finditer(r'<activity\\b[^>]*>', xml))
+          tags = list(re.finditer(r'<activity[^>]*>', xml))
           match = next((m for m in tags if "MainActivity" in m.group(0)), None)
           if match is None:
               raise SystemExit("MainActivity declaration not found in manifest")
