@@ -1069,6 +1069,8 @@ class MainActivity : Activity() {
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
         }
+        var tappedBpm = delayBpm
+        var bpmFineSeek: SeekBar? = null
         val tapButton = TextView(this).apply {
             text = "TAP"
             textSize = 9f
@@ -1082,6 +1084,8 @@ class MainActivity : Activity() {
             }
             setOnClickListener {
                 delayBpm = registerDelayTap()
+                tappedBpm = delayBpm
+                bpmFineSeek?.progress = 10
                 bpmLabel.text = "$delayBpm"
                 save()
             }
@@ -1164,15 +1168,39 @@ class MainActivity : Activity() {
         paintDivisionButtons()
         delayControls.addView(divisions, LinearLayout.LayoutParams(-1, dp(22)))
 
+        val bpmFineCaption = label("FINE BPM  ±10", 9f, colorMaster).apply {
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(15)))
+        val fineSeek = SeekBar(this).apply {
+            max = 20
+            progress = 10
+            setPadding(0, 0, 0, 0)
+            splitTrack = false
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        delayBpm = (tappedBpm + progress - 10).coerceIn(60, 180)
+                        bpmLabel.text = "$delayBpm"
+                        scheduleUpdate()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+            })
+        }
+        bpmFineSeek = fineSeek
+        delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, dp(24)))
+
         val delayRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
         delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(82), 1.15f))
-        delayRow.addView(delayControls, LinearLayout.LayoutParams(0, dp(88), 1.85f).apply {
+        delayRow.addView(delayControls, LinearLayout.LayoutParams(0, dp(123), 1.85f).apply {
             leftMargin = dp(4)
         })
-        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(90)))
+        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(125)))
         panel.addView(fadeRow("DUB FADE", delayFadeMs) { delayFadeMs = it },
             LinearLayout.LayoutParams(-1, dp(42)))
 
