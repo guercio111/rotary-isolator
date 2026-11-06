@@ -1318,7 +1318,7 @@ class MainActivity : Activity() {
             isFillViewport = true
             clipToPadding = false
             setPadding(dp(5), dp(5), dp(5), dp(24))
-            addView(panel, ScrollView.LayoutParams(-1, -2))
+            addView(panel, FrameLayout.LayoutParams(-1, -2))
             setBackgroundColor(Color.rgb(25,28,34))
         }
         val popupContent = FrameLayout(this).apply {
