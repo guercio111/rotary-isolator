@@ -927,8 +927,11 @@ class MainActivity : Activity() {
     }
 
     private fun updateEffectsCapture() {
+        // Keep one shared MediaProjection session alive for the whole open app
+        // session. Switching either effect OFF only fades its wet return in the
+        // processor; it must not stop capture, otherwise Android asks for consent
+        // again when the other effect is enabled or a parameter is changed.
         if (effectsActive() && !captureRunning && !captureRestartPending) startAudioCaptureTest()
-        else if (!effectsActive() && captureRunning) stopAudioCaptureTest()
     }
 
     private fun showReverbPopup(){
