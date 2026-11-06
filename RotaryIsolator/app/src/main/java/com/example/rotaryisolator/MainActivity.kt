@@ -1116,7 +1116,7 @@ class MainActivity : Activity() {
         delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(88)))
         delayColumn.addView(label("TIME • BEAT", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, dp(16)))
-        delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(184)))
+        delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(176)))
         val trackBpmLabel = label(
             trackBpmCounter?.currentBpm?.let { "BPM TRACCIA  •  ${String.format(java.util.Locale.ITALY, "%.1f", it)}" } ?: "BPM TRACCIA  •  ricerca",
             15f, colorMaster
@@ -1200,8 +1200,6 @@ class MainActivity : Activity() {
         delayColumn.addView(tempoAdjustRow, LinearLayout.LayoutParams(-1, dp(76)))
         delayColumn.addView(label("TEMPO TRIM • CENTRO = 0", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, dp(18)))
-        delayColumn.addView(label("RIPETIZIONI FILTRATE", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
-            LinearLayout.LayoutParams(-1, dp(20)))
 
         columns.addView(reverbColumn, LinearLayout.LayoutParams(0, -2, 1f))
         val divider = View(this).apply { setBackgroundColor(Color.rgb(75,80,90)) }
@@ -1233,11 +1231,11 @@ class MainActivity : Activity() {
             textSize = 11f
             setOnClickListener { reverbPopup?.dismiss() }
         }
-        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(32)))
+        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(28)))
         val availableWidth = (resources.displayMetrics.widthPixels - dp(24)).coerceAtLeast(dp(300))
         val popupWidth = min(availableWidth, dp(760))
         val availableHeight = (resources.displayMetrics.heightPixels - dp(16)).coerceAtLeast(dp(360))
-        val popupHeight = min(dp(550), availableHeight)
+        val popupHeight = min(dp(540), availableHeight)
         val popup = android.widget.PopupWindow(panel, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
