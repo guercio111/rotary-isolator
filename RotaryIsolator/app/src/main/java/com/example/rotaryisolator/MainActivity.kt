@@ -1083,13 +1083,13 @@ class MainActivity : Activity() {
             }
             divisionButtons.add(beatButton)
             val row = if (index < 4) divisionTop else divisionBottom
-            row.addView(beatButton, LinearLayout.LayoutParams(0, dp(32), 1f).apply {
+            row.addView(beatButton, LinearLayout.LayoutParams(0, dp(28), 1f).apply {
                 setMargins(dp(2), dp(2), dp(2), dp(2))
             })
         }
         refreshDivisionButtons()
-        divisionSelector.addView(divisionTop, LinearLayout.LayoutParams(-1, dp(36)))
-        divisionSelector.addView(divisionBottom, LinearLayout.LayoutParams(-1, dp(36)))
+        divisionSelector.addView(divisionTop, LinearLayout.LayoutParams(-1, dp(32)))
+        divisionSelector.addView(divisionBottom, LinearLayout.LayoutParams(-1, dp(32)))
         val feedbackDial = RotaryControl(
             this, "FEEDBACK", dubDelayFeedback.toFloat(), 0f, 90f, colorMaster,
             { value -> dubDelayFeedback = value.roundToInt().coerceIn(0, 90); scheduleUpdate() },
