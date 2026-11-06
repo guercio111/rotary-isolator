@@ -103,6 +103,8 @@ internal class DubDelay(private val sampleRate: Int) {
             pendingDivisionIndex = -1
         } else if (requestedDivision != activeDivisionIndex) {
             pendingDivisionIndex = requestedDivision
+        } else {
+            pendingDivisionIndex = -1
         }
         val baseTempo = if (autoSync && hasDetectedTempo) detectedBpm else bpm
         val tempo = (baseTempo + tempoTrim.coerceIn(-6f, 6f)).coerceIn(60f, 180f)
