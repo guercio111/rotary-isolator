@@ -1038,26 +1038,26 @@ class MainActivity : Activity() {
         val depthDial = RotaryControl(
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbMix%" }, onEnd = { save() }, titleInside = true,
+            { "$reverbMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val timeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
-            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
+            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val reverbRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(82), 1f))
+        reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(94), 1f))
         reverbRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(82), 1f))
-        panel.addView(reverbRow, LinearLayout.LayoutParams(-1, dp(84)))
+        panel.addView(reverbRow, LinearLayout.LayoutParams(-1, dp(96)))
         val reverbFeedbackDial = RotaryControl(
             this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = true,
+            { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, dp(82), 1f))
@@ -1066,7 +1066,7 @@ class MainActivity : Activity() {
         val delayDial = RotaryControl(
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$delayMix%" }, onEnd = { save(); updateEffectsCapture() }, titleInside = true,
+            { "$delayMix%" }, onEnd = { save(); updateEffectsCapture() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayControls = LinearLayout(this).apply {
@@ -1277,66 +1277,101 @@ class MainActivity : Activity() {
         val delayTimeDial = RotaryControl(
             this, "TIME", delayTimePercent.toFloat(), 50f, 200f, colorMaster,
             { value -> delayTimePercent = value.roundToInt().coerceIn(50,200); scheduleUpdate() },
-            { "${delayTimePercent}%" }, onEnd = { save() }, titleInside = true,
+            { "${delayTimePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayFeedbackDial = RotaryControl(
             this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
             { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
-            { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = true,
+            { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayToneDial = RotaryControl(
             this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorMaster,
             { value -> delayTonePercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = true,
+            { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(76), 1f))
+        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(92), 1f))
         delayRow.addView(delayTimeDial, LinearLayout.LayoutParams(0, dp(76), 1f))
         delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, dp(76), 1f))
         delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, dp(76), 1f))
-        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(78)))
+        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(94)))
         panel.addView(delayControls, LinearLayout.LayoutParams(-1, dp(152)))
         panel.addView(fadeRow("DELAY / ECHO FADE", delayFadeMs) { delayFadeMs = it },
             LinearLayout.LayoutParams(-1, dp(42)))
 
-        // Anchor and size strictly to MASTER: EQ, ISOLATOR and FILTERS remain uncovered.
+        // The popup initially occupies exactly the MASTER section. It never
+        // grows automatically: if the user wants more room, the bottom-right
+        // grip can be dragged to resize it manually.
         val masterSection = sections["GAIN"] ?: container
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
-        // On tablets the MASTER quadrant is the popup viewport in both portrait and landscape.
-        // The panel is measured against this live viewport and uniformly fitted below, so no
-        // knob, TAP control, BPM fader, or close button can be clipped after rotation.
         val popupWidth = masterSection.width.coerceAtLeast(dp(1))
-        // Give the effects panel the full usable tablet height instead of forcing
-        // the long control stack into the smaller MASTER quadrant.
-        val popupHeight = (container.height - dp(24)).coerceAtLeast(masterSection.height).coerceAtLeast(dp(1))
-        val popupTop = (popupLocation[1] + masterSection.height / 2 - popupHeight / 2)
-            .coerceIn(0, (container.height - popupHeight).coerceAtLeast(0))
+        val popupHeight = masterSection.height.coerceAtLeast(dp(1))
+        val popupTop = popupLocation[1]
+        val popupScroll = ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            setPadding(dp(5), dp(5), dp(5), dp(24))
+            addView(panel, ScrollView.LayoutParams(-1, -2))
+            setBackgroundColor(Color.rgb(25,28,34))
+        }
         val popupContent = FrameLayout(this).apply {
             clipChildren = true
             clipToPadding = true
             setBackgroundColor(Color.rgb(25,28,34))
-            addView(panel, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
-            addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                if (view.width > 0 && view.height > 0 && panel.measuredWidth > 0 && panel.measuredHeight > 0) {
-                    val fit = min(1f, min(
-                        view.width.toFloat() / panel.measuredWidth.toFloat(),
-                        view.height.toFloat() / panel.measuredHeight.toFloat()
-                    ))
-                    panel.pivotX = panel.measuredWidth / 2f
-                    panel.pivotY = panel.measuredHeight / 2f
-                    panel.scaleX = fit
-                    panel.scaleY = fit
-                }
+            addView(popupScroll, FrameLayout.LayoutParams(-1, -1))
+        }
+        val resizeGrip = TextView(this).apply {
+            text = "↘"
+            textSize = 19f
+            setTextColor(colorMaster)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(5).toFloat()
+                setColor(Color.rgb(43,49,59))
+                setStroke(dp(1), colorMaster)
             }
         }
-        val popup = android.widget.PopupWindow(popupContent, popupWidth, popupHeight, false).apply {
+        popupContent.addView(resizeGrip, FrameLayout.LayoutParams(dp(30), dp(25), Gravity.BOTTOM or Gravity.END).apply {
+            rightMargin = dp(3); bottomMargin = dp(3)
+        })
+        lateinit var popupWindow: android.widget.PopupWindow
+        var resizeDownX = 0f
+        var resizeDownY = 0f
+        var resizeStartWidth = popupWidth
+        var resizeStartHeight = popupHeight
+        resizeGrip.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    resizeDownX = event.rawX
+                    resizeDownY = event.rawY
+                    resizeStartWidth = popupWindow.width
+                    resizeStartHeight = popupWindow.height
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val maxWidth = (container.width - popupLocation[0]).coerceAtLeast(popupWidth)
+                    val maxHeight = (container.height - popupTop).coerceAtLeast(popupHeight)
+                    val newWidth = (resizeStartWidth + (event.rawX - resizeDownX).roundToInt())
+                        .coerceIn(popupWidth, maxWidth)
+                    val newHeight = (resizeStartHeight + (event.rawY - resizeDownY).roundToInt())
+                        .coerceIn(popupHeight, maxHeight)
+                    if (newWidth != popupWindow.width || newHeight != popupWindow.height) {
+                        popupWindow.update(popupLocation[0], popupTop, newWidth, newHeight)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> true
+                else -> true
+            }
+        }
+        popupWindow = android.widget.PopupWindow(popupContent, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
             setTouchModal(false)
@@ -1347,8 +1382,8 @@ class MainActivity : Activity() {
             elevation = dp(10).toFloat()
             setOnDismissListener { save(); reverbPopup = null }
         }
-        reverbPopup = popup
-        popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupTop)
+        reverbPopup = popupWindow
+        popupWindow.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupTop)
     }
     private fun startAudioCaptureTest() {
         // Reuse the existing MediaProjection session after a track/route switch.
@@ -1880,7 +1915,8 @@ private class RotaryControl(
     private val wheelMultiplier:()->Float = {1f},
     private val portraitDialFit:Boolean = false,
     private val bottomTextLift:Float = 0f,
-    private val step:Float = 0f
+    private val step:Float = 0f,
+    private val spaciousText:Boolean = false
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -1898,9 +1934,9 @@ private class RotaryControl(
         // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
         // for title and value. The dial itself is sized from the remaining square
         // area, so the LOW face cannot be squeezed into an oval or cut by its labels.
-        val dialTextReserve=if(portraitDialFit) dp(27f) else dp(18f)
+        val dialTextReserve=if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f)
         val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .94f
-        val cy=if(portraitDialFit) (height-dp(27f))/2f else (height-dp(26f))/2f
+        val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
     init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
@@ -1933,9 +1969,9 @@ private class RotaryControl(
         p.textAlign=Paint.Align.CENTER
         val titleSize=min(dp(11f),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
         p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
-        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp(17f+bottomTextLift),p)}
+        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)25f else 17f)+bottomTextLift),p)}
         val value=valueText()
-        p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp(4f+bottomTextLift),p)
+        p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
     }
     private fun quantize(value:Float):Float {
         if (step <= 0f) return value.coerceIn(minV,maxV)
@@ -1977,7 +2013,13 @@ private class RotaryControl(
     override fun onGenericMotionEvent(e:MotionEvent):Boolean{
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
-            v=quantize(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f))
+            val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            // Effect controls move exactly one integer unit per mouse-wheel notch,
+            // independently of the general mixer wheel-sensitivity preference.
+            val delta = if(step > 0f) {
+                when { wheel > 0f -> step; wheel < 0f -> -step; else -> 0f }
+            } else wheel*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f)
+            v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
         return super.onGenericMotionEvent(e)
