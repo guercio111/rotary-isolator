@@ -41,7 +41,7 @@ class MainActivity : Activity() {
     @Volatile private var delayDivision = 3 // 1/4, 1/2, 3/4, 1 beat
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
     @Volatile private var delayMix = 0
-    @Volatile private var delayBpm = 120
+    @Volatile private var delayBpm = 120f
     private var lastDelayTapMs = 0L
     private val delayTapIntervals = ArrayDeque<Long>()
     private var reverbPopup: android.widget.PopupWindow? = null
@@ -143,7 +143,7 @@ class MainActivity : Activity() {
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,3)
         delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
-        delayBpm = prefs.getInt("reverb_delay_bpm", 120).coerceIn(60,180)
+        delayBpm = (prefs.all["reverb_delay_bpm"] as? Number)?.toFloat()?.coerceIn(60f,180f) ?: 120f
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
         reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
         if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
@@ -440,7 +440,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("reverb_delay_bpm",delayBpm).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putFloat("reverb_delay_bpm",delayBpm).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -909,7 +909,7 @@ class MainActivity : Activity() {
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
     private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
 
-    private fun registerDelayTap(): Int {
+    private fun registerDelayTap(): Float {
         val now = android.os.SystemClock.elapsedRealtime()
         if (lastDelayTapMs != 0L) {
             val interval = now - lastDelayTapMs
@@ -920,8 +920,8 @@ class MainActivity : Activity() {
                 val median = if (sorted.size % 2 == 0)
                     (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2L
                 else sorted[sorted.size / 2]
-                delayBpm = (60000L / median).toInt().coerceIn(60,180)
-                prefs.edit().putInt("reverb_delay_bpm", delayBpm).apply()
+                delayBpm = (60000.0 / median.toDouble()).toFloat().coerceIn(60f,180f)
+                prefs.edit().putFloat("reverb_delay_bpm", delayBpm).apply()
             } else delayTapIntervals.clear()
         } else delayTapIntervals.clear()
         lastDelayTapMs = now
@@ -1063,7 +1063,7 @@ class MainActivity : Activity() {
         }
         delayTop.addView(delayPower, LinearLayout.LayoutParams(0, dp(26), 0.75f))
         val bpmLabel = TextView(this).apply {
-            text = "$delayBpm"
+            text = String.format(java.util.Locale.US, "%.1f", delayBpm)
             textSize = 10f
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
@@ -1085,8 +1085,8 @@ class MainActivity : Activity() {
             setOnClickListener {
                 delayBpm = registerDelayTap()
                 tappedBpm = delayBpm
-                bpmFineSeek?.progress = 10
-                bpmLabel.text = "$delayBpm"
+                bpmFineSeek?.progress = 100
+                bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save()
             }
         }
@@ -1173,15 +1173,15 @@ class MainActivity : Activity() {
         }
         delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(15)))
         val fineSeek = SeekBar(this).apply {
-            max = 20
-            progress = 10
+            max = 200
+            progress = 100
             setPadding(0, 0, 0, 0)
             splitTrack = false
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
-                        delayBpm = (tappedBpm + progress - 10).coerceIn(60, 180)
-                        bpmLabel.text = "$delayBpm"
+                        delayBpm = (tappedBpm + (progress - 100) * 0.1f).coerceIn(60f, 180f)
+                        bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                         scheduleUpdate()
                     }
                 }
