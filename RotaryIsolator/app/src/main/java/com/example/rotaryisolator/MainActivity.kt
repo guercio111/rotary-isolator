@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     @Volatile private var reverbHpHz = 420
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFadeMs = 1400
+    @Volatile private var reverbFeedbackPercent = 50
     @Volatile private var delayOn = false
     @Volatile private var delayFadeMs = 1400
     @Volatile private var delayDivision = 3 // 1/4, 1/2, 3/4, 1, 2, 4, 8 beats
@@ -145,6 +146,7 @@ class MainActivity : Activity() {
         reverbOn = prefs.getBoolean("reverb_on", false)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
+        reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
         delayMix = prefs.getInt("reverb_delay_mix", 0).coerceIn(0,100)
         delayTimePercent = prefs.getInt("beat_fx_delay_time", 100).coerceIn(50,200)
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
@@ -455,7 +457,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1052,9 +1054,15 @@ class MainActivity : Activity() {
         reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(82), 1f))
         reverbRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(82), 1f))
         panel.addView(reverbRow, LinearLayout.LayoutParams(-1, dp(84)))
-        panel.addView(fadeRow("REVERB FADE", reverbFadeMs) { reverbFadeMs = it },
-            LinearLayout.LayoutParams(-1, dp(42)))
-
+        val reverbFeedbackDial = RotaryControl(
+            this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, dp(82), 1f))
+        // The Reverb fade strip is intentionally replaced by this third rotary control.
+        // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
@@ -1407,7 +1415,18 @@ class MainActivity : Activity() {
                     captureProjection = projection
                     projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
                         override fun onStop() {
-                            runOnUiThread { stopAudioCaptureTest() }
+                            // Android may revoke MediaProjection independently (system UI,
+                            // resource pressure, or user stop). Release only the dead I/O
+                            // session here; do not call projection.stop() recursively or
+                            // discard the effect settings. The next explicit effect tap
+                            // can request a fresh session if Android has revoked this one.
+                            runOnUiThread {
+                                captureRunning = false
+                                captureRestartPending = false
+                                releaseCaptureIoOnly()
+                                if (captureProjection === projection) captureProjection = null
+                                try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
+                            }
                         }
                     }, handler)
                     beginAudioCapture(projection)
@@ -1507,7 +1526,8 @@ class MainActivity : Activity() {
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency
+                                delayOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
+                                reverbFeedbackPercent
                             )
                             var written = 0
                             while (written < count && captureRunning) {
