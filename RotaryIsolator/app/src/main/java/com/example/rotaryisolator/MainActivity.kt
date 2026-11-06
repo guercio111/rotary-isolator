@@ -955,7 +955,7 @@ class MainActivity : Activity() {
     }
 
     private fun showReverbPopup(){
-        reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
+        reverbPopup?.let { if (it.isShowing) return }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -1053,7 +1053,6 @@ class MainActivity : Activity() {
         }
         reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(94), 1f))
         reverbRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(82), 1f))
-        panel.addView(reverbRow, LinearLayout.LayoutParams(-1, dp(96)))
         val reverbFeedbackDial = RotaryControl(
             this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
@@ -1134,11 +1133,11 @@ class MainActivity : Activity() {
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(42), dp(42)).apply { leftMargin = dp(2); rightMargin = dp(2) })
         delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(30), dp(34)).apply { leftMargin = dp(2); rightMargin = dp(2) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(40), 1f))
-        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(42)))
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(36)))
         val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
-        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(14)))
+        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(12)))
         val fineSeek = SeekBar(this).apply {
             max = 200
             progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
@@ -1158,7 +1157,7 @@ class MainActivity : Activity() {
             })
         }
         bpmFineSeek = fineSeek
-        delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, dp(20)))
+        delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, dp(17)))
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1196,7 +1195,7 @@ class MainActivity : Activity() {
             })
         }
         paintModeButtons()
-        delayControls.addView(modeRow, LinearLayout.LayoutParams(-1, dp(23)))
+        delayControls.addView(modeRow, LinearLayout.LayoutParams(-1, dp(20)))
 
         val divisions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1233,7 +1232,7 @@ class MainActivity : Activity() {
             })
         }
         paintDivisionButtons()
-        delayControls.addView(divisions, LinearLayout.LayoutParams(-1, dp(22)))
+        delayControls.addView(divisions, LinearLayout.LayoutParams(-1, dp(20)))
 
         val frequencyRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1270,7 +1269,7 @@ class MainActivity : Activity() {
             })
         }
         paintFrequencyButtons()
-        delayControls.addView(frequencyRow, LinearLayout.LayoutParams(-1, dp(26)))
+        delayControls.addView(frequencyRow, LinearLayout.LayoutParams(-1, dp(20)))
 
 
 
@@ -1296,14 +1295,32 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(92), 1f))
-        delayRow.addView(delayTimeDial, LinearLayout.LayoutParams(0, dp(76), 1f))
-        delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, dp(76), 1f))
-        delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, dp(76), 1f))
-        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(94)))
-        panel.addView(delayControls, LinearLayout.LayoutParams(-1, dp(152)))
-        panel.addView(fadeRow("DELAY / ECHO FADE", delayFadeMs) { delayFadeMs = it },
-            LinearLayout.LayoutParams(-1, dp(42)))
+        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(86), 1f))
+        delayRow.addView(delayTimeDial, LinearLayout.LayoutParams(0, dp(86), 1f))
+        delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, dp(86), 1f))
+        delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, dp(86), 1f))
+        val reverbColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+        }
+        reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, dp(104)))
+        val delayColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(3), dp(2), dp(3), dp(2))
+        }
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, dp(88)))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, dp(125)))
+        delayColumn.addView(fadeRow("DELAY / ECHO FADE", delayFadeMs) { delayFadeMs = it },
+            LinearLayout.LayoutParams(-1, dp(38)))
+        val effectsBody = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, 0.40f))
+        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, 0.60f))
+        panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
 
         // The popup initially occupies exactly the MASTER section. It never
         // grows automatically: if the user wants more room, the bottom-right
@@ -1314,64 +1331,13 @@ class MainActivity : Activity() {
         val popupWidth = masterSection.width.coerceAtLeast(dp(1))
         val popupHeight = masterSection.height.coerceAtLeast(dp(1))
         val popupTop = popupLocation[1]
-        val popupScroll = ScrollView(this).apply {
-            isFillViewport = true
-            clipToPadding = false
-            setPadding(dp(5), dp(5), dp(5), dp(24))
-            addView(panel, FrameLayout.LayoutParams(-1, -2))
-            setBackgroundColor(Color.rgb(25,28,34))
-        }
         val popupContent = FrameLayout(this).apply {
             clipChildren = true
             clipToPadding = true
             setBackgroundColor(Color.rgb(25,28,34))
-            addView(popupScroll, FrameLayout.LayoutParams(-1, -1))
+            addView(panel, FrameLayout.LayoutParams(-1, -1))
         }
-        val resizeGrip = TextView(this).apply {
-            text = "↘"
-            textSize = 19f
-            setTextColor(colorMaster)
-            gravity = Gravity.CENTER
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(5).toFloat()
-                setColor(Color.rgb(43,49,59))
-                setStroke(dp(1), colorMaster)
-            }
-        }
-        popupContent.addView(resizeGrip, FrameLayout.LayoutParams(dp(30), dp(25), Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = dp(3); bottomMargin = dp(3)
-        })
-        lateinit var popupWindow: android.widget.PopupWindow
-        var resizeDownX = 0f
-        var resizeDownY = 0f
-        var resizeStartWidth = popupWidth
-        var resizeStartHeight = popupHeight
-        resizeGrip.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    resizeDownX = event.rawX
-                    resizeDownY = event.rawY
-                    resizeStartWidth = popupWindow.width
-                    resizeStartHeight = popupWindow.height
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val maxWidth = (container.width - popupLocation[0]).coerceAtLeast(popupWidth)
-                    val maxHeight = (container.height - popupTop).coerceAtLeast(popupHeight)
-                    val newWidth = (resizeStartWidth + (event.rawX - resizeDownX).roundToInt())
-                        .coerceIn(popupWidth, maxWidth)
-                    val newHeight = (resizeStartHeight + (event.rawY - resizeDownY).roundToInt())
-                        .coerceIn(popupHeight, maxHeight)
-                    if (newWidth != popupWindow.width || newHeight != popupWindow.height) {
-                        popupWindow.update(popupLocation[0], popupTop, newWidth, newHeight)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> true
-                else -> true
-            }
-        }
-        popupWindow = android.widget.PopupWindow(popupContent, popupWidth, popupHeight, false).apply {
+        val popupWindow = android.widget.PopupWindow(popupContent, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
             setTouchModal(false)
@@ -2014,10 +1980,10 @@ private class RotaryControl(
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
             val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
-            // Effect controls move exactly one integer unit per mouse-wheel notch,
-            // independently of the general mixer wheel-sensitivity preference.
+            // Keep integer precision on effect controls while matching the
+            // main-screen wheel speed and the user's configured sensitivity.
             val delta = if(step > 0f) {
-                when { wheel > 0f -> step; wheel < 0f -> -step; else -> 0f }
+                wheel * step * wheelMultiplier().coerceIn(1f,10f)
             } else wheel*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f)
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
