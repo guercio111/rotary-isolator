@@ -1124,8 +1124,8 @@ class MainActivity : Activity() {
         delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(42), dp(34)))
         delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(28), dp(34)))
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(42), dp(42)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(30), dp(34)).apply { leftMargin = dp(2); rightMargin = dp(2) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(40), 1f))
-        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(30), dp(34)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(42)))
         val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
