@@ -909,7 +909,7 @@ class MainActivity : Activity() {
                 while (delayTapIntervals.size > 4) delayTapIntervals.removeFirst()
                 val sorted = delayTapIntervals.toList().sorted()
                 val median = if (sorted.size % 2 == 0) (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2L else sorted[sorted.size / 2]
-                delayBpm = (60000L / median).roundToInt().coerceIn(60,180)
+                delayBpm = (60000L / median).toInt().coerceIn(60,180)
                 prefs.edit().putInt("reverb_delay_bpm", delayBpm).apply()
             } else {
                 delayTapIntervals.clear()
