@@ -42,6 +42,10 @@ class MainActivity : Activity() {
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
     @Volatile private var selectedBeatFx = 2 // 0 SHORT, 1 LONG, 2 DUB ECHO, 3 REVERB
     @Volatile private var delayMix = 0
+    @Volatile private var delayTimePercent = 100
+    @Volatile private var delayFeedbackPercent = 52
+    @Volatile private var delayTonePercent = 50
+    @Volatile private var fxFrequency = 1 // LOW, MID, HIGH
     @Volatile private var delayBpm = 120f
     @Volatile private var delayTapBpm = 120f
     @Volatile private var delayBpmCorrection = 0f
@@ -142,6 +146,10 @@ class MainActivity : Activity() {
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         delayMix = prefs.getInt("reverb_delay_mix", 0).coerceIn(0,100)
+        delayTimePercent = prefs.getInt("beat_fx_delay_time", 100).coerceIn(50,200)
+        delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
+        delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
+        fxFrequency = prefs.getInt("beat_fx_frequency", 1).coerceIn(0,2)
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,6)
@@ -150,7 +158,7 @@ class MainActivity : Activity() {
         delayBpm = (prefs.all["reverb_delay_bpm"] as? Number)?.toFloat()?.coerceIn(60f,180f) ?: 120f
         delayTapBpm = prefs.getFloat("reverb_delay_tap_bpm", (delayBpm - delayBpmCorrection).coerceIn(60f,180f)).coerceIn(60f,180f)
         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
-        selectedBeatFx = prefs.getInt("beat_fx_selected", if (reverbOn) 3 else delayMode).coerceIn(0,3)
+        selectedBeatFx = prefs.getInt("beat_fx_selected", delayMode).coerceIn(0,2)
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
         reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
         if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
@@ -447,7 +455,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -998,21 +1006,15 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         val reverbPower = TextView(this).apply {
-            styleToggle(this, if (selectedBeatFx == 3) reverbOn else delayOn)
+            styleToggle(this, reverbOn)
             setOnClickListener {
-                if (selectedBeatFx == 3) {
-                    reverbOn = !reverbOn
-                    if (reverbOn) delayOn = false
-                } else {
-                    delayOn = !delayOn
-                    if (delayOn) reverbOn = false
-                }
-                styleToggle(this, if (selectedBeatFx == 3) reverbOn else delayOn)
+                reverbOn = !reverbOn
+                styleToggle(this, reverbOn)
                 save(); scheduleUpdate(); updateEffectsCapture()
             }
         }
         header.addView(reverbPower, LinearLayout.LayoutParams(0, dp(28), 1f))
-        val heading = label("BEAT FX", 11f, Color.WHITE).apply {
+        val heading = label("REVERB", 11f, Color.WHITE).apply {
             gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
         }
@@ -1109,8 +1111,17 @@ class MainActivity : Activity() {
                 save(); scheduleUpdate()
             }
         }
-        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(30), dp(34)))
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(42), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        val delayPower = TextView(this).apply {
+            styleToggle(this, delayOn)
+            setOnClickListener {
+                delayOn = !delayOn
+                styleToggle(this, delayOn)
+                save(); scheduleUpdate(); updateEffectsCapture()
+            }
+        }
+        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(42), dp(34)))
+        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(28), dp(34)))
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(42), dp(42)).apply { leftMargin = dp(2); rightMargin = dp(2) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(40), 1f))
         delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(30), dp(34)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(42)))
@@ -1119,7 +1130,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val modeLabels = arrayOf("SHORT", "LONG", "DUB ECHO", "REVERB")
+        val modeLabels = arrayOf("SHORT DELAY", "LONG DELAY", "DUB ECHO")
         val modeViews = ArrayList<TextView>()
         fun paintModeButtons() {
             modeViews.forEachIndexed { index, button ->
@@ -1140,15 +1151,9 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setOnClickListener {
                     selectedBeatFx = index
-                    if (index == 3) {
-                        delayOn = false
-                    } else {
-                        delayMode = index
-                        reverbOn = false
-                    }
-                    styleToggle(reverbPower, if (selectedBeatFx == 3) reverbOn else delayOn)
+                    delayMode = index
                     paintModeButtons()
-                    save(); scheduleUpdate(); updateEffectsCapture()
+                    save(); scheduleUpdate()
                 }
             }
             modeViews.add(button)
@@ -1196,17 +1201,73 @@ class MainActivity : Activity() {
         paintDivisionButtons()
         delayControls.addView(divisions, LinearLayout.LayoutParams(-1, dp(22)))
 
+        val frequencyRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val frequencyLabels = arrayOf("FX LOW", "FX MID", "FX HIGH")
+        val frequencyViews = ArrayList<TextView>()
+        fun paintFrequencyButtons() {
+            frequencyViews.forEachIndexed { index, button ->
+                val active = fxFrequency == index
+                button.background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(4).toFloat()
+                    setColor(if (active) colorMaster else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorMaster)
+                }
+                button.setTextColor(if (active) Color.BLACK else Color.WHITE)
+            }
+        }
+        frequencyLabels.forEachIndexed { index, caption ->
+            val button = TextView(this).apply {
+                text = caption
+                textSize = 9f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setOnClickListener {
+                    fxFrequency = index
+                    paintFrequencyButtons()
+                    save(); scheduleUpdate()
+                }
+            }
+            frequencyViews.add(button)
+            frequencyRow.addView(button, LinearLayout.LayoutParams(0, dp(24), 1f).apply {
+                if (index > 0) leftMargin = dp(3)
+            })
+        }
+        paintFrequencyButtons()
+        delayControls.addView(frequencyRow, LinearLayout.LayoutParams(-1, dp(26)))
 
 
+
+        val delayTimeDial = RotaryControl(
+            this, "TIME", delayTimePercent.toFloat(), 50f, 200f, colorMaster,
+            { value -> delayTimePercent = value.roundToInt().coerceIn(50,200); scheduleUpdate() },
+            { "${delayTimePercent}%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val delayFeedbackDial = RotaryControl(
+            this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
+            { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
+            { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val delayToneDial = RotaryControl(
+            this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> delayTonePercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
         val delayRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(82), 1.15f))
-        delayRow.addView(delayControls, LinearLayout.LayoutParams(0, dp(123), 1.85f).apply {
-            leftMargin = dp(4)
-        })
-        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(125)))
+        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(76), 1f))
+        delayRow.addView(delayTimeDial, LinearLayout.LayoutParams(0, dp(76), 1f))
+        delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, dp(76), 1f))
+        delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, dp(76), 1f))
+        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(78)))
+        panel.addView(delayControls, LinearLayout.LayoutParams(-1, dp(118)))
         panel.addView(fadeRow("DUB FADE", delayFadeMs) { delayFadeMs = it },
             LinearLayout.LayoutParams(-1, dp(42)))
 
@@ -1420,7 +1481,7 @@ class MainActivity : Activity() {
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision, delayMode
+                                delayOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency
                             )
                             var written = 0
                             while (written < count && captureRunning) {
