@@ -1208,6 +1208,9 @@ class MainActivity : Activity() {
         val masterSection = sections["GAIN"] ?: container
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
+        // On tablets the MASTER quadrant is the popup viewport in both portrait and landscape.
+        // The panel is measured against this live viewport and uniformly fitted below, so no
+        // knob, TAP control, BPM fader, or close button can be clipped after rotation.
         val popupWidth = masterSection.width.coerceAtLeast(dp(1))
         val popupHeight = masterSection.height.coerceAtLeast(dp(1))
         val popupContent = FrameLayout(this).apply {
