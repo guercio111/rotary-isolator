@@ -50,8 +50,10 @@ class MainActivity : Activity() {
     @Volatile private var dubDelayFeedback = 58
     @Volatile private var dubDelayFilter = 45
     @Volatile private var dubDelayMix = 65
-    @Volatile private var dubDelayBpm = 120
+    @Volatile private var dubDelayBpm = 120f
     @Volatile private var dubDelayTempoTrim = 0f
+    @Volatile private var dubDelayPhaseNudgeMs = 0f
+    @Volatile private var dubDelayBeatLock = false
     @Volatile private var dubDelayAutoSync = true
     @Volatile private var dubDelayStatusView: TextView? = null
     private var reverbPopup: android.widget.PopupWindow? = null
@@ -182,8 +184,10 @@ class MainActivity : Activity() {
         dubDelayFeedback = prefs.getInt("dub_delay_feedback", 58).coerceIn(0, 90)
         dubDelayFilter = prefs.getInt("dub_delay_filter", 45).coerceIn(0, 100)
         dubDelayMix = prefs.getInt("dub_delay_mix", 65).coerceIn(0, 100)
-        dubDelayBpm = prefs.getInt("dub_delay_bpm", 120).coerceIn(60, 180)
+        dubDelayBpm = ((prefs.all["dub_delay_bpm"] as? Number)?.toFloat() ?: 120f).coerceIn(60f, 180f)
         dubDelayTempoTrim = prefs.getFloat("dub_delay_tempo_trim", 0f).coerceIn(-6f, 6f)
+        dubDelayPhaseNudgeMs = prefs.getFloat("dub_delay_phase_nudge_ms", 0f).coerceIn(-100f, 100f)
+        dubDelayBeatLock = prefs.getBoolean("dub_delay_beat_lock", false)
         dubDelayAutoSync = prefs.getBoolean("dub_delay_auto_sync", true)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
@@ -496,7 +500,7 @@ class MainActivity : Activity() {
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
             .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz)
-            .putBoolean("dub_delay_on",dubDelayOn).putInt("dub_delay_division",dubDelayDivision).putInt("dub_delay_feedback",dubDelayFeedback).putInt("dub_delay_filter",dubDelayFilter).putInt("dub_delay_mix",dubDelayMix).putInt("dub_delay_bpm",dubDelayBpm).putFloat("dub_delay_tempo_trim",dubDelayTempoTrim).putBoolean("dub_delay_auto_sync",dubDelayAutoSync)
+            .putBoolean("dub_delay_on",dubDelayOn).putInt("dub_delay_division",dubDelayDivision).putInt("dub_delay_feedback",dubDelayFeedback).putInt("dub_delay_filter",dubDelayFilter).putInt("dub_delay_mix",dubDelayMix).putFloat("dub_delay_bpm",dubDelayBpm).putFloat("dub_delay_tempo_trim",dubDelayTempoTrim).putFloat("dub_delay_phase_nudge_ms",dubDelayPhaseNudgeMs).putBoolean("dub_delay_auto_sync",dubDelayAutoSync).putBoolean("dub_delay_beat_lock",dubDelayBeatLock)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1132,21 +1136,21 @@ class MainActivity : Activity() {
             if (dubDelayAutoSync) {
                 if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${String.format(java.util.Locale.ITALY, "%.1f", (parallelDubDelayProcessor?.detectedBpm ?: 120f) + dubDelayTempoTrim)}"
                 else "SYNC AUTO • ricerca beat"
-            } else "MANUAL • BPM $dubDelayBpm",
+            } else "MANUAL • BPM ${String.format(java.util.Locale.ITALY, "%.1f", dubDelayBpm + dubDelayTempoTrim)}",
             11f, colorMaster
         )
         bpmLabel.gravity = Gravity.CENTER_VERTICAL
         dubDelayStatusView = bpmLabel
         delayColumn.addView(bpmLabel, LinearLayout.LayoutParams(-1, dp(20)))
         val bpmSeek = SeekBar(this).apply {
-            max = 120
-            progress = dubDelayBpm - 60
+            max = 1200
+            progress = ((dubDelayBpm - 60f) * 10f).roundToInt().coerceIn(0, 1200)
             isEnabled = !dubDelayAutoSync
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
-                        dubDelayBpm = 60 + progress
-                        bpmLabel.text = "MANUAL • BPM $dubDelayBpm"
+                        dubDelayBpm = 60f + progress / 10f
+                        bpmLabel.text = "MANUAL • BPM ${String.format(java.util.Locale.ITALY, "%.1f", dubDelayBpm + dubDelayTempoTrim)}"
                         scheduleUpdate()
                     }
                 }
@@ -1170,19 +1174,43 @@ class MainActivity : Activity() {
                 bpmLabel.text = if (checked) {
                     if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${String.format(java.util.Locale.ITALY, "%.1f", (parallelDubDelayProcessor?.detectedBpm ?: 120f) + dubDelayTempoTrim)}"
                     else "SYNC AUTO • ricerca beat"
-                } else "MANUAL • BPM $dubDelayBpm"
+                } else "MANUAL • BPM ${String.format(java.util.Locale.ITALY, "%.1f", dubDelayBpm + dubDelayTempoTrim)}"
                 save()
                 scheduleUpdate()
             }
         }
         syncRow.addView(syncSwitch)
+        val beatLockButton = TextView(this).apply {
+            textSize = 10f
+            gravity = Gravity.CENTER
+            setPadding(dp(10), 0, dp(10), 0)
+            isClickable = true
+            isFocusable = true
+            fun paintLock() {
+                text = if (dubDelayBeatLock) "LOCK ON" else "LOCK"
+                setTextColor(if (dubDelayBeatLock) Color.BLACK else Color.WHITE)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(7).toFloat()
+                    setColor(if (dubDelayBeatLock) colorMaster else Color.rgb(48,53,62))
+                    setStroke(dp(1), colorMaster)
+                }
+            }
+            paintLock()
+            setOnClickListener {
+                dubDelayBeatLock = !dubDelayBeatLock
+                paintLock()
+                save()
+                scheduleUpdate()
+            }
+        }
+        syncRow.addView(beatLockButton)
         delayColumn.addView(syncRow, LinearLayout.LayoutParams(-1, dp(30)))
         val tempoTrimDial = RotaryControl(
             this, "TEMPO TRIM", dubDelayTempoTrim, -6f, 6f, colorMaster,
             { value ->
-                dubDelayTempoTrim = value.coerceIn(-6f, 6f)
+                dubDelayTempoTrim = ((value * 10f).roundToInt() / 10f).coerceIn(-6f, 6f)
                 val base = if (dubDelayAutoSync && parallelDubDelayProcessor?.tempoLocked == true)
-                    (parallelDubDelayProcessor?.detectedBpm ?: 120f) else dubDelayBpm.toFloat()
+                    (parallelDubDelayProcessor?.detectedBpm ?: 120f) else dubDelayBpm
                 bpmLabel.text = (if (dubDelayAutoSync) "SYNC AUTO" else "MANUAL") +
                     " • BPM " + String.format(java.util.Locale.ITALY, "%.1f", (base + dubDelayTempoTrim).coerceIn(60f,180f))
                 scheduleUpdate()
@@ -1191,15 +1219,36 @@ class MainActivity : Activity() {
             onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
+        val phaseLabel = label("FASE ${if (dubDelayPhaseNudgeMs > 0f) "+" else ""}${dubDelayPhaseNudgeMs.roundToInt()} ms", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER }
         val tempoAdjustRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
+        fun phaseNudgeButton(symbol: String, deltaMs: Float): TextView = TextView(this).apply {
+            text = symbol
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(7).toFloat()
+                setColor(Color.rgb(48,53,62))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                dubDelayPhaseNudgeMs = (dubDelayPhaseNudgeMs + deltaMs).coerceIn(-100f, 100f)
+                phaseLabel.text = "FASE ${if (dubDelayPhaseNudgeMs > 0f) "+" else ""}${dubDelayPhaseNudgeMs.roundToInt()} ms"
+                scheduleUpdate()
+                save()
+            }
+        }
+        tempoAdjustRow.addView(phaseNudgeButton("◀", -10f), LinearLayout.LayoutParams(dp(34), dp(42)))
         tempoAdjustRow.addView(bpmSeek, LinearLayout.LayoutParams(0, dp(46), 1f))
+        tempoAdjustRow.addView(phaseNudgeButton("▶", 10f), LinearLayout.LayoutParams(dp(34), dp(42)))
         tempoAdjustRow.addView(tempoTrimDial, LinearLayout.LayoutParams(dp(88), dp(88)))
         delayColumn.addView(tempoAdjustRow, LinearLayout.LayoutParams(-1, dp(76)))
-        delayColumn.addView(label("TEMPO TRIM • CENTRO = 0", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
-            LinearLayout.LayoutParams(-1, dp(18)))
+        delayColumn.addView(phaseLabel, LinearLayout.LayoutParams(-1, dp(18)))
 
         columns.addView(reverbColumn, LinearLayout.LayoutParams(0, -2, 1f))
         val divider = View(this).apply { setBackgroundColor(Color.rgb(75,80,90)) }
@@ -1458,7 +1507,7 @@ class MainActivity : Activity() {
                             )
                             delayProcessor.process(
                                 buffer, delayBuffer, count, dubDelayOn, dubDelayDivision,
-                                dubDelayBpm, dubDelayAutoSync, dubDelayFeedback, dubDelayFilter, dubDelayMix, reverbFadeMs, dubDelayTempoTrim
+                                dubDelayBpm, dubDelayAutoSync, dubDelayFeedback, dubDelayFilter, dubDelayMix, reverbFadeMs, dubDelayTempoTrim, dubDelayBeatLock, dubDelayPhaseNudgeMs
                             )
                             for (i in 0 until count) {
                                 wetBuffer[i] = (wetBuffer[i].toInt() + delayBuffer[i].toInt())
