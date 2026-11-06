@@ -971,29 +971,46 @@ class MainActivity : Activity() {
         }
 
         if (landscapePhone) {
-            // Wide-phone layout: keep the two dials full-sized and place the
-            // fade control beside a generously sized CLOSE button underneath.
+            // Landscape: larger dials take the main area; ON and CLOSE stay
+            // together in a dedicated right-hand column and remain fully visible.
             val controlsRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
             }
-            controlsRow.addView(power, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(5) })
-            controlsRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(96), 1f))
-            controlsRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(96), 1f))
-            panel.addView(controlsRow, LinearLayout.LayoutParams(-1, dp(98)))
-            val bottomRow = LinearLayout(this).apply {
+            controlsRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(136), 1f))
+            controlsRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(136), 1f))
+            val actionColumn = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+            }
+            actionColumn.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply {
+                bottomMargin = dp(8)
+            })
+            closeButton.apply {
+                textSize = 13f
+                setTypeface(typeface, Typeface.BOLD)
+                minWidth = dp(96)
+                minHeight = dp(48)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(8).toFloat()
+                    setColor(Color.rgb(65,70,78))
+                    setStroke(dp(2), colorMaster)
+                }
+                setTextColor(Color.WHITE)
+                setPadding(dp(8), 0, dp(8), 0)
+            }
+            actionColumn.addView(closeButton, LinearLayout.LayoutParams(dp(100), dp(50)))
+            controlsRow.addView(actionColumn, LinearLayout.LayoutParams(dp(108), dp(136)))
+            panel.addView(controlsRow, LinearLayout.LayoutParams(-1, dp(138)))
+
+            val fadeRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            val fadeColumn = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            fadeColumn.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(19)))
-            fadeColumn.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(29)))
-            bottomRow.addView(fadeColumn, LinearLayout.LayoutParams(0, dp(48), 1f).apply { rightMargin = dp(5) })
-            bottomRow.addView(closeButton, LinearLayout.LayoutParams(dp(82), dp(40)))
-            panel.addView(bottomRow, LinearLayout.LayoutParams(-1, dp(50)))
+            fadeLabel.textSize = 11f
+            fadeRow.addView(fadeLabel, LinearLayout.LayoutParams(dp(104), dp(34)))
+            fadeRow.addView(fadeSeek, LinearLayout.LayoutParams(0, dp(34), 1f))
+            panel.addView(fadeRow, LinearLayout.LayoutParams(-1, dp(36)))
         } else {
             panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
             val parameterRow = LinearLayout(this).apply {
