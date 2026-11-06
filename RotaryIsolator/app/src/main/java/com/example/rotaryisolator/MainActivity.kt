@@ -1108,10 +1108,10 @@ class MainActivity : Activity() {
             { "$dubDelayMix%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        delayTop.addView(divisionSelector, LinearLayout.LayoutParams(0, dp(104), 1.15f))
-        delayTop.addView(feedbackDial, LinearLayout.LayoutParams(0, dp(104), 1f))
-        delayBottom.addView(filterDial, LinearLayout.LayoutParams(0, dp(104), 1f))
-        delayBottom.addView(mixDial, LinearLayout.LayoutParams(0, dp(104), 1f))
+        delayTop.addView(divisionSelector, LinearLayout.LayoutParams(0, dp(88), 1.15f))
+        delayTop.addView(feedbackDial, LinearLayout.LayoutParams(0, dp(88), 1f))
+        delayBottom.addView(filterDial, LinearLayout.LayoutParams(0, dp(88), 1f))
+        delayBottom.addView(mixDial, LinearLayout.LayoutParams(0, dp(88), 1f))
         delayGrid.addView(delayTop, LinearLayout.LayoutParams(-1, dp(88)))
         delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(88)))
         delayColumn.addView(label("TIME • BEAT", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
