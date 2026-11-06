@@ -1479,8 +1479,12 @@ class MainActivity : Activity() {
                 return@post
             }
             if (captureRestartAttempts >= 8) {
-                showCaptureError("IL FLUSSO AUDIO NON SI È RIPRISTINATO DOPO IL CAMBIO TRACCIA", error)
-                stopAudioCaptureTest()
+                // Keep the user's MediaProjection consent and foreground service alive.
+                // A temporary AudioRecord/AudioTrack failure must not destroy the
+                // projection token: the next effect ON or route retry can rebuild I/O
+                // without showing Android's consent dialog again.
+                captureRestartPending = false
+                showCaptureError("FLUSSO AUDIO MOMENTANEAMENTE NON DISPONIBILE • SESSIONE AUTORIZZATA CONSERVATA", error)
                 return@post
             }
             captureRestartAttempts++
