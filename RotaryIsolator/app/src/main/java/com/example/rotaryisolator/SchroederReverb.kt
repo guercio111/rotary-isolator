@@ -219,7 +219,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             smoothedMix += (mixTarget - smoothedMix) * mixSmoothing
             smoothedDelayMix += (delayTarget - smoothedDelayMix) * delayMixSmoothing
             smoothedDelaySamples += (targetDelaySamples - smoothedDelaySamples) * 0.00015f
-            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.38f
+            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.45f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -245,11 +245,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // exposed in this simplified interface. Darker repeats in DUB mode
             // progressively lose top end, while SHORT stays crisp.
             delayToneState += delayToneAlpha * (delayed - delayToneState)
-            delayBuffer[delayWriteIndex] = (x * 0.55f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
+            delayBuffer[delayWriteIndex] = (x * 0.68f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
             delayWriteIndex++
             if (delayWriteIndex == delayBuffer.size) delayWriteIndex = 0
-            val reverbReturn = wet * smoothedMix * 1.04f
-            val delayReturn = delayToneState * smoothedDelayMix * 1.02f
+            val reverbReturn = wet * smoothedMix * 1.28f
+            val delayReturn = delayToneState * smoothedDelayMix * 1.28f
             val raw = reverbReturn + delayReturn
             fxLowState += fxLowAlpha * (raw - fxLowState)
             fxMidState += fxMidAlpha * (raw - fxMidState)
