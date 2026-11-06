@@ -1093,6 +1093,7 @@ class MainActivity : Activity() {
                 save(); scheduleUpdate()
             }
         }
+        var bpmFineSeek: SeekBar? = null
         fun bpmNudgeButton(symbol: String, amount: Float): TextView = TextView(this).apply {
             text = symbol
             textSize = 17f
@@ -1107,6 +1108,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 delayBpmCorrection = (delayBpmCorrection + amount).coerceIn(-10f,10f)
                 delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                bpmFineSeek?.progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
             }
@@ -1129,9 +1131,9 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(14)))
-        val bpmFineSeek = SeekBar(this).apply {
+        val fineSeek = SeekBar(this).apply {
             max = 200
-            progress = (100 + delayBpmCorrection.roundToInt() * 10).coerceIn(0,200)
+            progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
             setPadding(0, 0, 0, 0)
             splitTrack = false
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -1147,7 +1149,8 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) { save() }
             })
         }
-        delayControls.addView(bpmFineSeek, LinearLayout.LayoutParams(-1, dp(20)))
+        bpmFineSeek = fineSeek
+        delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, dp(20)))
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
