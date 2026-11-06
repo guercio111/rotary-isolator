@@ -1,5 +1,5 @@
 # TEST256: automatic tempo sync and stronger Dub Delay send
-name: Build FREQUALIZER TEST 255 APK
+name: Build FREQUALIZER TEST 256 APK
 # Decouple FDN input/output modes for smoother tail; add 2 seconds fade; extend max fade to 6 seconds; +30% DEPTH/TIME DSP; keep projection alive
 
 on:
@@ -44,7 +44,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 255"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER TEST 256"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
