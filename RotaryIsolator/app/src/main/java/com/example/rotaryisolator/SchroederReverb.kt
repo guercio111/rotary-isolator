@@ -96,6 +96,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var lpY = 0f
     private var limiter = 1f
     private var smoothedMix = 0f
+    // Independent, short feedback delay for the S25 reverb popup.
+    private val delayBuffer = FloatArray(sampleRate * 2)
+    private var delayWriteIndex = 0
+    private var smoothedDelayMix = 0f
+    private var smoothedDelaySamples = sampleRate * 0.5f
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -109,6 +114,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
         lpY = 0f
         limiter = 1f
         smoothedMix = 0f
+        delayBuffer.fill(0f)
+        delayWriteIndex = 0
+        smoothedDelayMix = 0f
+        smoothedDelaySamples = sampleRate * 0.5f
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -141,9 +150,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
         lpHz: Int,
         freeze: Boolean,
         inputEnabled: Boolean,
-        fadeMs: Int
+        fadeMs: Int,
+        delayMixPercent: Int = 0,
+        delayBpm: Int = 120
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.30f) else 0f
+        val delayTarget = delayMixPercent.coerceIn(0, 100) / 100f
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60, 180))).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
         val size = roomSize.coerceIn(0, 1000) / 1000f * 1.30f
@@ -169,6 +182,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             lpY += lpA * (hpOut2 - lpY)
 
             smoothedMix += (mixTarget - smoothedMix) * mixSmoothing
+            smoothedDelayMix += (delayTarget - smoothedDelayMix) * mixSmoothing
+            smoothedDelaySamples += (targetDelaySamples - smoothedDelaySamples) * 0.00015f
             var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.32f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
@@ -189,7 +204,16 @@ internal class SchroederReverb(private val sampleRate: Int) {
             wet *= 0.35355339f
             for (diffuser in outputDiffusers) wet = diffuser.tick(wet)
 
-            val raw = wet * smoothedMix * 0.92f
+            // A restrained quarter-note echo runs in parallel with the reverb.
+            // Low feedback keeps repeats soft and avoids building rhythmic energy.
+            val readIndex = (delayWriteIndex - smoothedDelaySamples.toInt() + delayBuffer.size) % delayBuffer.size
+            val delayed = delayBuffer[readIndex]
+            delayBuffer[delayWriteIndex] = (x * 0.30f + delayed * 0.22f).coerceIn(-0.9f, 0.9f)
+            delayWriteIndex++
+            if (delayWriteIndex == delayBuffer.size) delayWriteIndex = 0
+            val reverbReturn = wet * smoothedMix * 0.92f
+            val delayReturn = delayed * smoothedDelayMix * 0.42f
+            val raw = reverbReturn + delayReturn
             val magnitude = abs(raw)
             val target = if (magnitude > 0.78f) 0.78f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
