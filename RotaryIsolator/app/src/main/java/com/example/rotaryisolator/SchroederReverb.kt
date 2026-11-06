@@ -167,7 +167,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTimePercent: Int = 100,
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
-        fxFrequency: Int = 1
+        fxFrequency: Int = 1,
+        reverbFeedbackPercent: Int = 50
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
@@ -197,7 +198,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val fxMidAlpha = (1f - exp((-2.0 * PI * 2500f / sampleRate).toFloat())).coerceIn(0.001f,1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
-        val feedback = if (freeze) 0.965f else (0.80f + size * 0.14f).coerceIn(0.80f, 0.955f)
+        // Dedicated Reverb FEEDBACK control: 50% preserves approximately the
+        // previous tail length; lower values shorten it, higher values extend it.
+        val feedback = if (freeze) 0.965f else
+            (0.78f + size * 0.10f + reverbFeedbackPercent.coerceIn(0,100) / 100f * 0.146f).coerceIn(0.78f, 0.955f)
         val damping = if (freeze) 0.035f else (0.09f + (1f - size.coerceIn(0f, 1f)) * 0.16f)
 
         for (i in 0 until count) {
