@@ -1062,9 +1062,16 @@ class MainActivity : Activity() {
             }
         }
         delayTop.addView(delayPower, LinearLayout.LayoutParams(0, dp(26), 0.75f))
+        val bpmLabel = TextView(this).apply {
+            text = "$delayBpm"
+            textSize = 10f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }
         val tapButton = TextView(this).apply {
-            text = "TAP  $delayBpm"
-            textSize = 11f
+            text = "TAP"
+            textSize = 9f
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -1075,11 +1082,12 @@ class MainActivity : Activity() {
             }
             setOnClickListener {
                 delayBpm = registerDelayTap()
-                text = "TAP  $delayBpm"
+                bpmLabel.text = "$delayBpm"
                 save()
             }
         }
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(40), dp(40)).apply { leftMargin = dp(4) })
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(42), dp(42)).apply { leftMargin = dp(3) })
+        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(dp(30), dp(40)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(42)))
 
         val modeRow = LinearLayout(this).apply {
