@@ -24,6 +24,9 @@ internal class DubDelay(private val sampleRate: Int) {
     private var wasAboveThreshold = false
     private val beatIntervals = ArrayDeque<Long>()
     private var smoothedBpm = 120f
+    private var beatPhase = 0.0
+    private var activeDivisionIndex = 3
+    private var pendingDivisionIndex = -1
     private var hasDetectedTempo = false
     private var tempoWasReported = false
     @Volatile var tempoLocked: Boolean = false
@@ -82,18 +85,28 @@ internal class DubDelay(private val sampleRate: Int) {
         count: Int,
         enabled: Boolean,
         divisionIndex: Int,
-        bpm: Int,
+        bpm: Float,
         autoSync: Boolean,
         feedbackPercent: Int,
         filterPercent: Int,
         mixPercent: Int,
         fadeMs: Int,
-        tempoTrim: Float
+        tempoTrim: Float,
+        beatLock: Boolean,
+        phaseNudgeMs: Float
     ) {
-        val division = divisions[divisionIndex.coerceIn(0, divisions.lastIndex)]
-        val baseTempo = if (autoSync && hasDetectedTempo) detectedBpm else bpm.toFloat()
+        val requestedDivision = divisionIndex.coerceIn(0, divisions.lastIndex)
+        if (!beatLock) {
+            activeDivisionIndex = requestedDivision
+            pendingDivisionIndex = -1
+        } else if (requestedDivision != activeDivisionIndex) {
+            pendingDivisionIndex = requestedDivision
+        }
+        val baseTempo = if (autoSync && hasDetectedTempo) detectedBpm else bpm
         val tempo = (baseTempo + tempoTrim.coerceIn(-6f, 6f)).coerceIn(60f, 180f)
+        val division = divisions[activeDivisionIndex.coerceIn(0, divisions.lastIndex)]
         val delaySamples = ((60.0 / tempo.toDouble() * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
+        val phaseNudgeSamples = (phaseNudgeMs.coerceIn(-100f, 100f) * sampleRate / 1000f).roundToInt()
         val feedback = feedbackPercent.coerceIn(0, 90) / 100f
         val mix = mixPercent.coerceIn(0, 100) / 100f
         val cutoff = 12000f - filterPercent.coerceIn(0, 100) * 105f
@@ -109,8 +122,17 @@ internal class DubDelay(private val sampleRate: Int) {
             inputEnvelope += (inputTarget - inputEnvelope) * smoothing
             outputEnvelope += (outputTarget - outputEnvelope) * smoothing
 
-            var readIndex = writeIndex - delaySamples
-            if (readIndex < 0) readIndex += ring.size
+            beatPhase += tempo.toDouble() / (60.0 * sampleRate)
+            if (beatPhase >= 1.0) {
+                beatPhase -= 1.0
+                if (beatLock && pendingDivisionIndex >= 0) {
+                    activeDivisionIndex = pendingDivisionIndex
+                    pendingDivisionIndex = -1
+                }
+            }
+            var readIndex = writeIndex - delaySamples + phaseNudgeSamples
+            while (readIndex < 0) readIndex += ring.size
+            while (readIndex >= ring.size) readIndex -= ring.size
             val echo = ring[readIndex]
             filteredFeedback += filterAlpha * (echo - filteredFeedback)
             val feedbackInput = filteredFeedback * feedback
@@ -130,6 +152,9 @@ internal class DubDelay(private val sampleRate: Int) {
     fun clear() {
         ring.fill(0f)
         writeIndex = 0
+        activeDivisionIndex = 3
+        pendingDivisionIndex = -1
+        beatPhase = 0.0
         filteredFeedback = 0f
         inputEnvelope = 0f
         outputEnvelope = 0f
