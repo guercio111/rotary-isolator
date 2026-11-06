@@ -1154,7 +1154,7 @@ class MainActivity : Activity() {
                 dubDelayAutoSync = checked
                 bpmSeek.isEnabled = !checked
                 bpmLabel.text = if (checked) {
-                    if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${parallelDubDelayProcessor?.detectedBpm}"
+                    if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${String.format(java.util.Locale.ITALY, "%.1f", (parallelDubDelayProcessor?.detectedBpm ?: 120f) + dubDelayTempoTrim)}"
                     else "SYNC AUTO • ricerca beat"
                 } else "MANUAL • BPM $dubDelayBpm"
                 save()
