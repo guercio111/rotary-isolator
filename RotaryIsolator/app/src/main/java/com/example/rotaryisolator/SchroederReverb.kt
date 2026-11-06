@@ -102,6 +102,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayWriteIndex = 0
     private var smoothedDelayMix = 0f
     private var smoothedDelaySamples = sampleRate * 0.5f
+    private var delayToneState = 0f
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -119,6 +120,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayWriteIndex = 0
         smoothedDelayMix = 0f
         smoothedDelaySamples = sampleRate * 0.5f
+        delayToneState = 0f
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -162,9 +164,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.30f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f else 0f
         val beatFraction = when (delayDivision.coerceIn(0, 3)) { 0 -> 0.25f; 1 -> 0.5f; 2 -> 0.75f; else -> 1f }
-        // V10-style SEND voicings: short, long and dub echo use progressively longer time and feedback.
-        val modeTime = when (delayMode.coerceIn(0, 2)) { 0 -> 0.5f; 1 -> 1.5f; else -> 1f }
-        val modeFeedback = when (delayMode.coerceIn(0, 2)) { 0 -> 0.22f; 1 -> 0.32f; else -> 0.46f }
+        // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
+        // coefficients; these fixed voicings reproduce the documented behavior:
+        // SHORT = compact, lightly repeating; LONG = longer, more open repeats;
+        // DUB = progressively attenuated, darker echo repeats.
+        val mode = delayMode.coerceIn(0, 2)
+        val modeTime = when (mode) { 0 -> 0.25f; 1 -> 1.5f; else -> 1f }
+        val modeFeedback = when (mode) { 0 -> 0.16f; 1 -> 0.30f; else -> 0.52f }
+        val delayToneHz = when (mode) { 0 -> 14000f; 1 -> 10500f; else -> 6500f }
+        val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
         val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60, 180)) * beatFraction * modeTime).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
@@ -217,12 +225,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
 
             val readIndex = (delayWriteIndex - smoothedDelaySamples.toInt() + delayBuffer.size) % delayBuffer.size
             val delayed = delayBuffer[readIndex]
-            // Controlled dub feedback: audible repeats without runaway buildup.
-            delayBuffer[delayWriteIndex] = (x * 0.48f + delayed * modeFeedback).coerceIn(-0.82f, 0.82f)
+            // Tone is fixed per voicing for now; the V10 TONE control is not
+            // exposed in this simplified interface. Darker repeats in DUB mode
+            // progressively lose top end, while SHORT stays crisp.
+            delayToneState += delayToneAlpha * (delayed - delayToneState)
+            delayBuffer[delayWriteIndex] = (x * 0.48f + delayToneState * modeFeedback).coerceIn(-0.82f, 0.82f)
             delayWriteIndex++
             if (delayWriteIndex == delayBuffer.size) delayWriteIndex = 0
             val reverbReturn = wet * smoothedMix * 0.92f
-            val delayReturn = delayed * smoothedDelayMix * 0.78f
+            val delayReturn = delayToneState * smoothedDelayMix * 0.78f
             val raw = reverbReturn + delayReturn
             val magnitude = abs(raw)
             val target = if (magnitude > 0.78f) 0.78f / magnitude else 1f
