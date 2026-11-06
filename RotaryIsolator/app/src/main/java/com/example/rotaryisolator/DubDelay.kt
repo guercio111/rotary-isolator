@@ -3,6 +3,7 @@ package com.example.rotaryisolator
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /** Tempo-divided dub delay with lightweight kick/transient tempo estimation. */
 internal class DubDelay(private val sampleRate: Int) {
