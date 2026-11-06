@@ -36,6 +36,10 @@ class MainActivity : Activity() {
     @Volatile private var reverbHpHz = 420
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFadeMs = 1400
+    @Volatile private var delayMix = 0
+    @Volatile private var delayBpm = 120
+    private var lastDelayTapMs = 0L
+    private val delayTapIntervals = ArrayDeque<Long>()
     private var reverbPopup: android.widget.PopupWindow? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
     private var captureRecord: android.media.AudioRecord? = null
@@ -130,6 +134,8 @@ class MainActivity : Activity() {
         reverbOn = prefs.getBoolean("reverb_on", false)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
+        delayMix = prefs.getInt("reverb_delay_mix", 0).coerceIn(0,100)
+        delayBpm = prefs.getInt("reverb_delay_bpm", 120).coerceIn(60,180)
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
         reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
         if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
@@ -426,7 +432,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("reverb_delay_bpm",delayBpm)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -892,45 +898,76 @@ class MainActivity : Activity() {
     }
 
 
+    private fun effectsActive() = reverbOn || delayMix > 0
+
+    private fun registerDelayTap(): Int {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastDelayTapMs != 0L) {
+            val interval = now - lastDelayTapMs
+            if (interval in 250L..1500L) {
+                delayTapIntervals.addLast(interval)
+                while (delayTapIntervals.size > 4) delayTapIntervals.removeFirst()
+                val sorted = delayTapIntervals.toList().sorted()
+                val median = if (sorted.size % 2 == 0)
+                    (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2L
+                else sorted[sorted.size / 2]
+                delayBpm = (60000L / median).toInt().coerceIn(60,180)
+                prefs.edit().putInt("reverb_delay_bpm", delayBpm).apply()
+            } else delayTapIntervals.clear()
+        } else delayTapIntervals.clear()
+        lastDelayTapMs = now
+        return delayBpm
+    }
+
+    private fun updateEffectsCapture() {
+        if (effectsActive() && !captureRunning && !captureRestartPending) startAudioCaptureTest()
+        else if (!effectsActive() && captureRunning) stopAudioCaptureTest()
+    }
+
     private fun showReverbPopup(){
         reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(14), dp(10), dp(14), dp(8))
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(8), dp(10), dp(8))
             setBackgroundColor(Color.rgb(25,28,34))
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
         val power = TextView(this).apply {
             fun paintState() {
-                text = if (reverbOn) "ON" else "OFF"
+                text = if (reverbOn) "REVERB ON" else "REVERB OFF"
                 setTextColor(Color.WHITE)
-                textSize = 16f
+                textSize = 12f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
-                contentDescription = if (reverbOn) "Reverb acceso, tocca per spegnere" else "Reverb spento, tocca per accendere"
                 background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    cornerRadius = dp(7).toFloat()
                     setColor(if (reverbOn) Color.rgb(28,170,75) else Color.rgb(185,42,48))
-                    setStroke(dp(2), if (reverbOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+                    setStroke(dp(1), if (reverbOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
                 }
-                elevation = dp(4).toFloat()
             }
             paintState()
-            isClickable = true
-            isFocusable = true
             setOnClickListener {
                 reverbOn = !reverbOn
                 paintState()
                 save()
                 scheduleUpdate()
-                if (reverbOn && !captureRunning) startAudioCaptureTest()
+                updateEffectsCapture()
             }
         }
-        panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
-        val parameterRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
+        header.addView(power, LinearLayout.LayoutParams(0, dp(34), 1f))
+        val closeButton = Button(this).apply {
+            text = "CHIUDI"
+            textSize = 11f
+            isAllCaps = false
+            setOnClickListener { reverbPopup?.dismiss() }
         }
+        header.addView(closeButton, LinearLayout.LayoutParams(dp(88), dp(34)).apply { leftMargin = dp(8) })
+        panel.addView(header, LinearLayout.LayoutParams(-1, dp(38)))
+
         val depthDial = RotaryControl(
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbMix = value.roundToInt().coerceIn(0, 100); scheduleUpdate() },
@@ -943,12 +980,52 @@ class MainActivity : Activity() {
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
-        parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
-        panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
-        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 13f, colorMaster)
+        val reverbRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(112), 1f))
+        reverbRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(112), 1f))
+        panel.addView(reverbRow, LinearLayout.LayoutParams(-1, dp(116)))
+
+        val delayDial = RotaryControl(
+            this, "DELAY", delayMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> delayMix = value.roundToInt().coerceIn(0, 100) },
+            { "$delayMix%" }, onEnd = {
+                save()
+                updateEffectsCapture()
+            }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val tapButton = Button(this).apply {
+            text = "TAP\n${delayBpm} BPM"
+            textSize = 12f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            minHeight = dp(44)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(2), colorMaster)
+            }
+            setOnClickListener {
+                val bpm = registerDelayTap()
+                text = "TAP\n${bpm} BPM"
+            }
+        }
+        val delayRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(112), 1f))
+        delayRow.addView(tapButton, LinearLayout.LayoutParams(0, dp(52), 1f).apply {
+            leftMargin = dp(12); rightMargin = dp(12)
+        })
+        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(116)))
+
+        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 12f, colorMaster)
         fadeLabel.gravity = Gravity.CENTER_VERTICAL
-        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
         val fadeSeek = SeekBar(this).apply {
             max = 5700
             progress = (reverbFadeMs - 300).coerceIn(0, 5700)
@@ -964,18 +1041,33 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(bar: SeekBar?) { save() }
             })
         }
-        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
-        val closeButton = Button(this).apply {
-            text = "CHIUDI"
-            textSize = 11f
-            setOnClickListener { reverbPopup?.dismiss() }
-        }
-        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
+        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(24)))
+        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(32)))
+
         val masterSection = sections["GAIN"] ?: container
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
-        val popupWidth = masterSection.width.coerceAtLeast(dp(260))
-        val popup = android.widget.PopupWindow(panel, popupWidth, dp(320), false).apply {
+        val popupWidth = masterSection.width.coerceAtLeast(dp(280))
+        val popupHeight = masterSection.height.coerceAtLeast(dp(1))
+        val popupContent = FrameLayout(this).apply {
+            clipChildren = true
+            clipToPadding = true
+            setBackgroundColor(Color.rgb(25,28,34))
+            addView(panel, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
+            addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                if (view.width > 0 && view.height > 0 && panel.measuredWidth > 0 && panel.measuredHeight > 0) {
+                    val fit = min(1f, min(
+                        view.width.toFloat() / panel.measuredWidth.toFloat(),
+                        view.height.toFloat() / panel.measuredHeight.toFloat()
+                    ))
+                    panel.pivotX = panel.measuredWidth / 2f
+                    panel.pivotY = panel.measuredHeight / 2f
+                    panel.scaleX = fit
+                    panel.scaleY = fit
+                }
+            }
+        }
+        val popup = android.widget.PopupWindow(popupContent, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
             setTouchModal(false)
@@ -1156,7 +1248,7 @@ class MainActivity : Activity() {
                             processor.process(
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
-                                reverbOn, reverbFadeMs
+                                reverbOn, reverbFadeMs, delayMix, delayBpm
                             )
                             var written = 0
                             while (written < count && captureRunning) {
@@ -1216,7 +1308,7 @@ class MainActivity : Activity() {
         captureRunning = false
         handler.post {
             releaseCaptureIoOnly()
-            if (captureProjection !== projection || !reverbOn) {
+            if (captureProjection !== projection || !effectsActive()) {
                 captureRestartPending = false
                 return@post
             }
@@ -1230,7 +1322,7 @@ class MainActivity : Activity() {
             captureRestartPending = true
             handler.postDelayed({
                 captureRestartPending = false
-                if (captureProjection === projection && reverbOn && !captureRunning) {
+                if (captureProjection === projection && effectsActive() && !captureRunning) {
                     beginAudioCapture(projection)
                 }
             }, waitMs)
