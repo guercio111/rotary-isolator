@@ -3,7 +3,6 @@ package com.example.rotaryisolator
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.max
-import kotlin.math.roundToInt
 
 /** Tempo-divided dub delay with lightweight kick/transient tempo estimation. */
 internal class DubDelay(private val sampleRate: Int) {
@@ -29,9 +28,9 @@ internal class DubDelay(private val sampleRate: Int) {
     private var tempoWasReported = false
     @Volatile var tempoLocked: Boolean = false
         private set
-    @Volatile var detectedBpm: Int = 120
+    @Volatile var detectedBpm: Float = 120f
         private set
-    var onTempoChanged: ((Int) -> Unit)? = null
+    var onTempoChanged: ((Float) -> Unit)? = null
 
     private fun analyzeForTempo(sample: Float) {
         lowFrequencyState += 0.12f * (sample - lowFrequencyState)
@@ -61,11 +60,11 @@ internal class DubDelay(private val sampleRate: Int) {
                     smoothedBpm = if (hasDetectedTempo) smoothedBpm * 0.72f + medianBpm * 0.28f else medianBpm
                     hasDetectedTempo = true
                     tempoLocked = true
-                    val rounded = smoothedBpm.roundToInt().coerceIn(60, 180)
-                    if (rounded != detectedBpm || !tempoWasReported) {
-                        detectedBpm = rounded
+                    val precise = smoothedBpm.coerceIn(60f, 180f)
+                    if (kotlin.math.abs(precise - detectedBpm) >= 0.05f || !tempoWasReported) {
+                        detectedBpm = precise
                         tempoWasReported = true
-                        onTempoChanged?.invoke(rounded)
+                        onTempoChanged?.invoke(precise)
                     }
                 }
             }
@@ -88,11 +87,13 @@ internal class DubDelay(private val sampleRate: Int) {
         feedbackPercent: Int,
         filterPercent: Int,
         mixPercent: Int,
-        fadeMs: Int
+        fadeMs: Int,
+        tempoTrim: Float
     ) {
         val division = divisions[divisionIndex.coerceIn(0, divisions.lastIndex)]
-        val tempo = (if (autoSync && hasDetectedTempo) detectedBpm else bpm).coerceIn(60, 180)
-        val delaySamples = ((60.0 / tempo * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
+        val baseTempo = if (autoSync && hasDetectedTempo) detectedBpm else bpm.toFloat()
+        val tempo = (baseTempo + tempoTrim.coerceIn(-6f, 6f)).coerceIn(60f, 180f)
+        val delaySamples = ((60.0 / tempo.toDouble() * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
         val feedback = feedbackPercent.coerceIn(0, 90) / 100f
         val mix = mixPercent.coerceIn(0, 100) / 100f
         val cutoff = 12000f - filterPercent.coerceIn(0, 100) * 105f
@@ -144,6 +145,6 @@ internal class DubDelay(private val sampleRate: Int) {
         hasDetectedTempo = false
         tempoWasReported = false
         tempoLocked = false
-        detectedBpm = 120
+        detectedBpm = 120f
     }
 }
