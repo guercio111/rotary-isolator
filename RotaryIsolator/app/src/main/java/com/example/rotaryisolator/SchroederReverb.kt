@@ -141,7 +141,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         lpHz: Int,
         freeze: Boolean,
         inputEnabled: Boolean,
-        fadeMs: Int
+        fadeMs: Int,
+        bpm: Float
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.30f) else 0f
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
@@ -153,7 +154,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
-        val feedback = if (freeze) 0.965f else (0.80f + size * 0.14f).coerceIn(0.80f, 0.955f)
+        // Keep the diffuse FDN structure; derive its decay time from musical beats.
+        val decayBeats = 0.5f + size * 15.5f
+        val decaySeconds = (60f / bpm.coerceIn(60f, 180f)) * decayBeats
+        val averageDelaySeconds = 0.095f
+        val tempoFeedback = Math.pow(0.001, (3.0 * averageDelaySeconds / decaySeconds).toDouble()).toFloat()
+        val feedback = if (freeze) 0.965f else tempoFeedback.coerceIn(0.80f, 0.955f)
         val damping = if (freeze) 0.035f else (0.09f + (1f - size.coerceIn(0f, 1f)) * 0.16f)
 
         for (i in 0 until count) {
