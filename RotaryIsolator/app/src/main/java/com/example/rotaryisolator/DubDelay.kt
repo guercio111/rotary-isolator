@@ -26,6 +26,7 @@ internal class DubDelay(private val sampleRate: Int) {
     private val beatIntervals = ArrayDeque<Long>()
     private var smoothedBpm = 120f
     private var beatPhase = 0.0
+    private var lastPhaseNudgeMs = 0f
     private var activeDivisionIndex = 3
     private var pendingDivisionIndex = -1
     private var hasDetectedTempo = false
@@ -105,9 +106,25 @@ internal class DubDelay(private val sampleRate: Int) {
         }
         val baseTempo = if (autoSync && hasDetectedTempo) detectedBpm else bpm
         val tempo = (baseTempo + tempoTrim.coerceIn(-6f, 6f)).coerceIn(60f, 180f)
-        val division = divisions[activeDivisionIndex.coerceIn(0, divisions.lastIndex)]
-        val delaySamples = ((60.0 / tempo.toDouble() * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
-        val phaseNudgeSamples = (phaseNudgeMs.coerceIn(-100f, 100f) * sampleRate / 1000f).roundToInt()
+        var division = divisions[activeDivisionIndex.coerceIn(0, divisions.lastIndex)]
+        var delaySamples = ((60.0 / tempo.toDouble() * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
+        val safeNudgeMs = phaseNudgeMs.coerceIn(-100f, 100f)
+        val phaseNudgeSamples = (safeNudgeMs * sampleRate / 1000f).roundToInt()
+        val nudgeDeltaMs = safeNudgeMs - lastPhaseNudgeMs
+        if (nudgeDeltaMs != 0f) {
+            beatPhase += nudgeDeltaMs.toDouble() * tempo / 60000.0
+            while (beatPhase >= 1.0) {
+                beatPhase -= 1.0
+                if (beatLock && pendingDivisionIndex >= 0) {
+                    activeDivisionIndex = pendingDivisionIndex
+                    pendingDivisionIndex = -1
+                }
+            }
+            while (beatPhase < 0.0) beatPhase += 1.0
+            lastPhaseNudgeMs = safeNudgeMs
+            division = divisions[activeDivisionIndex.coerceIn(0, divisions.lastIndex)]
+            delaySamples = ((60.0 / tempo.toDouble() * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
+        }
         val feedback = feedbackPercent.coerceIn(0, 90) / 100f
         val mix = mixPercent.coerceIn(0, 100) / 100f
         val cutoff = 12000f - filterPercent.coerceIn(0, 100) * 105f
@@ -129,6 +146,8 @@ internal class DubDelay(private val sampleRate: Int) {
                 if (beatLock && pendingDivisionIndex >= 0) {
                     activeDivisionIndex = pendingDivisionIndex
                     pendingDivisionIndex = -1
+                    division = divisions[activeDivisionIndex.coerceIn(0, divisions.lastIndex)]
+                    delaySamples = ((60.0 / tempo.toDouble() * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
                 }
             }
             var readIndex = writeIndex - delaySamples + phaseNudgeSamples
@@ -156,6 +175,7 @@ internal class DubDelay(private val sampleRate: Int) {
         activeDivisionIndex = 3
         pendingDivisionIndex = -1
         beatPhase = 0.0
+        lastPhaseNudgeMs = 0f
         filteredFeedback = 0f
         inputEnvelope = 0f
         outputEnvelope = 0f
