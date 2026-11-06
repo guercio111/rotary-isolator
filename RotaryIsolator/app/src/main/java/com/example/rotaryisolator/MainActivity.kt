@@ -1112,8 +1112,8 @@ class MainActivity : Activity() {
         delayTop.addView(feedbackDial, LinearLayout.LayoutParams(0, dp(104), 1f))
         delayBottom.addView(filterDial, LinearLayout.LayoutParams(0, dp(104), 1f))
         delayBottom.addView(mixDial, LinearLayout.LayoutParams(0, dp(104), 1f))
-        delayGrid.addView(delayTop, LinearLayout.LayoutParams(-1, dp(106)))
-        delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(106)))
+        delayGrid.addView(delayTop, LinearLayout.LayoutParams(-1, dp(88)))
+        delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(88)))
         delayColumn.addView(label("TIME • BEAT", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, dp(16)))
         delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(184)))
