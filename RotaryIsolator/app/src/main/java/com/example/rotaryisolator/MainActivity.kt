@@ -1233,7 +1233,8 @@ class MainActivity : Activity() {
         }
         panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(28)))
         val availableWidth = (resources.displayMetrics.widthPixels - dp(24)).coerceAtLeast(dp(300))
-        val popupWidth = min(availableWidth, dp(760))
+        val masterColumnWidth = sections["GAIN"]?.width ?: dp(320)
+        val popupWidth = min(availableWidth, (masterColumnWidth * 2).coerceIn(dp(520), dp(700)))
         val availableHeight = (resources.displayMetrics.heightPixels - dp(16)).coerceAtLeast(dp(360))
         val popupHeight = min(dp(540), availableHeight)
         val popup = android.widget.PopupWindow(panel, popupWidth, popupHeight, false).apply {
