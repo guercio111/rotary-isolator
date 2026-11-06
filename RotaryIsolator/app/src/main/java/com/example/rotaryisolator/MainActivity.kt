@@ -36,6 +36,10 @@ class MainActivity : Activity() {
     @Volatile private var reverbHpHz = 420
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFadeMs = 1400
+    @Volatile private var delayMix = 0
+    @Volatile private var delayBpm = 120
+    private var lastDelayTapMs = 0L
+    private val delayTapIntervals = ArrayDeque<Long>()
     private var reverbPopup: android.widget.PopupWindow? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
     private var captureRecord: android.media.AudioRecord? = null
@@ -130,6 +134,8 @@ class MainActivity : Activity() {
         reverbOn = prefs.getBoolean("reverb_on", false)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
+        delayMix = prefs.getInt("reverb_delay_mix", 0).coerceIn(0,100)
+        delayBpm = prefs.getInt("reverb_delay_bpm", 120).coerceIn(60,180)
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
         reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
         if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
@@ -892,6 +898,27 @@ class MainActivity : Activity() {
     }
 
 
+    private fun registerDelayTap(): Int {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastDelayTapMs != 0L) {
+            val interval = now - lastDelayTapMs
+            if (interval in 250L..1500L) {
+                delayTapIntervals.addLast(interval)
+                while (delayTapIntervals.size > 4) delayTapIntervals.removeFirst()
+                val sorted = delayTapIntervals.toList().sorted()
+                val median = if (sorted.size % 2 == 0) (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2L else sorted[sorted.size / 2]
+                delayBpm = (60000L / median).roundToInt().coerceIn(60,180)
+                prefs.edit().putInt("reverb_delay_bpm", delayBpm).apply()
+            } else {
+                delayTapIntervals.clear()
+            }
+        } else {
+            delayTapIntervals.clear()
+        }
+        lastDelayTapMs = now
+        return delayBpm
+    }
+
     private fun showReverbPopup(){
         reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
         val landscapePhone = phonePortrait && wideLayout
@@ -944,6 +971,31 @@ class MainActivity : Activity() {
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
+        val delayDial = RotaryControl(
+            this, "DELAY", delayMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> delayMix = value.roundToInt().coerceIn(0, 100) },
+            { "$delayMix%" }, onEnd = { prefs.edit().putInt("reverb_delay_mix", delayMix).apply() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val tapButton = Button(this).apply {
+            text = "TAP\\n${delayBpm} BPM"
+            textSize = if (landscapePhone) 9f else 11f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            minHeight = dp(34)
+            setPadding(dp(4), 0, dp(4), 0)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(7).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                val bpm = registerDelayTap()
+                text = "TAP\\n${bpm} BPM"
+                if (delayTapIntervals.isEmpty()) Toast.makeText(this@MainActivity, "Batti il tempo con TAP", Toast.LENGTH_SHORT).show()
+            }
+        }
         val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", if (landscapePhone) 10f else 13f, colorMaster)
         fadeLabel.gravity = Gravity.CENTER_VERTICAL
         val fadeSeek = SeekBar(this).apply {
@@ -979,6 +1031,7 @@ class MainActivity : Activity() {
             }
             controlsRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(136), 1f))
             controlsRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(136), 1f))
+            controlsRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(136), 1f))
             val actionColumn = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
@@ -1010,6 +1063,7 @@ class MainActivity : Activity() {
             fadeLabel.textSize = 11f
             fadeRow.addView(fadeLabel, LinearLayout.LayoutParams(dp(104), dp(34)))
             fadeRow.addView(fadeSeek, LinearLayout.LayoutParams(0, dp(34), 1f))
+            fadeRow.addView(tapButton, LinearLayout.LayoutParams(dp(68), dp(34)).apply { leftMargin = dp(5) })
             panel.addView(fadeRow, LinearLayout.LayoutParams(-1, dp(36)))
         } else {
             panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
@@ -1019,9 +1073,11 @@ class MainActivity : Activity() {
             }
             parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
             parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
+            parameterRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(126), 1f))
             panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
             panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
             panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
+            panel.addView(tapButton, LinearLayout.LayoutParams(-1, dp(36)))
             panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
         }
 
@@ -1234,7 +1290,7 @@ class MainActivity : Activity() {
                             processor.process(
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
-                                reverbOn, reverbFadeMs
+                                reverbOn, reverbFadeMs, delayMix, delayBpm
                             )
                             var written = 0
                             while (written < count && captureRunning) {
