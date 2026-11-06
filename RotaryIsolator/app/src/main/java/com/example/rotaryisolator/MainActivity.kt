@@ -61,6 +61,9 @@ class MainActivity : Activity() {
     private var captureTrack: android.media.AudioTrack? = null
     private var parallelReverbProcessor: SchroederReverb? = null
     private var parallelDubDelayProcessor: DubDelay? = null
+    // Independent track BPM meter: display-only, never feeds the Delay Auto Sync clock.
+    @Volatile private var trackBpmCounter: TrackBpmCounter? = null
+    @Volatile private var trackBpmView: TextView? = null
     private var captureThread: Thread? = null
     @Volatile private var captureRunning = false
     @Volatile private var captureRestartAttempts = 0
@@ -1113,7 +1116,18 @@ class MainActivity : Activity() {
         delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(106)))
         delayColumn.addView(label("TIME • BEAT", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, dp(16)))
-        delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(212)))
+        delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(184)))
+        val trackBpmLabel = label(
+            trackBpmCounter?.currentBpm?.let { "BPM TRACCIA  •  ${String.format(java.util.Locale.ITALY, "%.1f", it)}" } ?: "BPM TRACCIA  •  ricerca",
+            15f, colorMaster
+        ).apply {
+            gravity = Gravity.CENTER
+            typeface = Typeface.MONOSPACE
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, dp(1), 0, dp(1))
+        }
+        trackBpmView = trackBpmLabel
+        delayColumn.addView(trackBpmLabel, LinearLayout.LayoutParams(-1, dp(24)))
         val bpmLabel = label(
             if (dubDelayAutoSync) {
                 if (parallelDubDelayProcessor?.tempoLocked == true) "SYNC AUTO • BPM ${String.format(java.util.Locale.ITALY, "%.1f", (parallelDubDelayProcessor?.detectedBpm ?: 120f) + dubDelayTempoTrim)}"
@@ -1183,7 +1197,7 @@ class MainActivity : Activity() {
         }
         tempoAdjustRow.addView(bpmSeek, LinearLayout.LayoutParams(0, dp(46), 1f))
         tempoAdjustRow.addView(tempoTrimDial, LinearLayout.LayoutParams(dp(88), dp(88)))
-        delayColumn.addView(tempoAdjustRow, LinearLayout.LayoutParams(-1, dp(88)))
+        delayColumn.addView(tempoAdjustRow, LinearLayout.LayoutParams(-1, dp(76)))
         delayColumn.addView(label("TEMPO TRIM • CENTRO = 0", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, dp(18)))
         delayColumn.addView(label("RIPETIZIONI FILTRATE", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
@@ -1221,9 +1235,9 @@ class MainActivity : Activity() {
         }
         panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(32)))
         val availableWidth = (resources.displayMetrics.widthPixels - dp(24)).coerceAtLeast(dp(300))
-        val popupWidth = min(availableWidth, dp(980))
-        val availableHeight = (resources.displayMetrics.heightPixels - dp(32)).coerceAtLeast(dp(360))
-        val popupHeight = min(dp(560), availableHeight)
+        val popupWidth = min(availableWidth, dp(760))
+        val availableHeight = (resources.displayMetrics.heightPixels - dp(16)).coerceAtLeast(dp(360))
+        val popupHeight = min(dp(550), availableHeight)
         val popup = android.widget.PopupWindow(panel, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
@@ -1233,7 +1247,7 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             })
             elevation = dp(12).toFloat()
-            setOnDismissListener { save(); reverbPopup = null; dubDelayStatusView = null }
+            setOnDismissListener { save(); reverbPopup = null; dubDelayStatusView = null; trackBpmView = null }
         }
         reverbPopup = popup
         // Place the EFFECTS window directly over the MASTER section (the GAIN
@@ -1242,8 +1256,14 @@ class MainActivity : Activity() {
         if (masterAnchor != null && masterAnchor.isLaidOut) {
             val location = IntArray(2)
             masterAnchor.getLocationOnScreen(location)
-            val screenY = (location[1] + masterAnchor.height / 2 - popupHeight / 2).coerceAtLeast(dp(4))
-            popup.showAtLocation(container, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, screenY)
+            val screenWidth = resources.displayMetrics.widthPixels
+            val screenHeight = resources.displayMetrics.heightPixels
+            val screenX = (location[0] + masterAnchor.width / 2 - popupWidth / 2)
+                .coerceIn(dp(4), (screenWidth - popupWidth - dp(4)).coerceAtLeast(dp(4)))
+            val screenY = (location[1] + masterAnchor.height / 2 - popupHeight / 2)
+                .coerceIn(dp(4), (screenHeight - popupHeight - dp(4)).coerceAtLeast(dp(4)))
+            // Anchor both axes to MASTER: the smaller popup is centered over its exact screen position.
+            popup.showAtLocation(container, Gravity.TOP or Gravity.LEFT, screenX, screenY)
         } else {
             popup.showAtLocation(container, Gravity.CENTER, 0, 0)
         }
@@ -1389,6 +1409,15 @@ class MainActivity : Activity() {
             }
             captureTrack = track
             parallelReverbProcessor = SchroederReverb(sampleRate)
+            val independentBpmMeter = TrackBpmCounter(sampleRate)
+            trackBpmCounter = independentBpmMeter
+            independentBpmMeter.onBpmChanged = { detected ->
+                trackBpmView?.post {
+                    trackBpmView?.text = detected?.let {
+                        "BPM TRACCIA  •  ${String.format(java.util.Locale.ITALY, "%.1f", it)}"
+                    } ?: "BPM TRACCIA  •  ricerca"
+                }
+            }
             parallelDubDelayProcessor = DubDelay(sampleRate).also { delay ->
                 delay.onTempoChanged = { detected ->
                     dubDelayStatusView?.post {
@@ -1413,6 +1442,8 @@ class MainActivity : Activity() {
                         val count = record.read(buffer, 0, buffer.size)
                         if (count > 0) {
                             captureRestartAttempts = 0
+                            // Dedicated BPM meter analyzes the original track independently of Auto Sync.
+                            independentBpmMeter.process(buffer, count)
                             var peak = 0
                             var sum = 0.0
                             for (i in 0 until count) {
@@ -1905,10 +1936,87 @@ class MainActivity : Activity() {
         // Do not clear it when Android destroys a background process or rotates the device.
         if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
         stopInsertReverbTest()
+        trackBpmCounter = null
+        trackBpmView = null
         try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release();reverbEffect?.enabled=false;reverbEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
 }
+
+
+/**
+ * Independent real-time track tempo meter.
+ * It reads the original captured music signal and is display-only:
+ * it does not change the DubDelay clock or its Auto Sync state.
+ */
+private class TrackBpmCounter(private val sampleRate: Int) {
+    private val windowSize = max(1, sampleRate / 200) // 5 ms analysis windows
+    private var windowCount = 0
+    private var energySum = 0.0
+    private var lowState = 0f
+    private var adaptiveFloor = 0.0000005
+    private var sampleClock = 0L
+    private var lastBeatSample = -1L
+    private var wasAbove = false
+    private val beatIntervals = ArrayDeque<Long>()
+
+    @Volatile var currentBpm: Float? = null
+        private set
+    var onBpmChanged: ((Float?) -> Unit)? = null
+
+    fun process(input: ShortArray, count: Int) {
+        for (i in 0 until count) {
+            val sample = input[i] / 32768f
+            // Focus on kick energy; the low-pass stage rejects most high-frequency hats.
+            lowState += 0.035f * (sample - lowState)
+            energySum += lowState.toDouble() * lowState.toDouble()
+            windowCount++
+            sampleClock++
+            if (windowCount < windowSize) continue
+
+            val energy = energySum / windowCount
+            val threshold = max(0.000001, adaptiveFloor * 2.15)
+            val above = energy > threshold && energy > 0.000002
+            val refractorySamples = sampleRate * 28L / 100L
+
+            if (above && !wasAbove && (lastBeatSample < 0L || sampleClock - lastBeatSample >= refractorySamples)) {
+                if (lastBeatSample >= 0L) {
+                    val interval = sampleClock - lastBeatSample
+                    val seconds = interval.toDouble() / sampleRate
+                    if (seconds in 0.32..1.20) {
+                        beatIntervals.addLast(interval)
+                        while (beatIntervals.size > 9) beatIntervals.removeFirst()
+                        val sorted = beatIntervals.toList().sorted()
+                        val median = sorted[sorted.size / 2].toDouble()
+                        val stable = beatIntervals.filter { abs(it.toDouble() - median) <= median * 0.14 }
+                        if (stable.size >= 3) {
+                            // Average several beats for sub-BPM precision instead of rounding each beat.
+                            val meanInterval = stable.average()
+                            val measured = (60.0 * sampleRate / meanInterval).toFloat().coerceIn(50f, 190f)
+                            val previous = currentBpm
+                            val smoothed = if (previous == null) measured else previous * 0.68f + measured * 0.32f
+                            currentBpm = smoothed
+                            if (previous == null || abs(smoothed - previous) >= 0.05f) onBpmChanged?.invoke(smoothed)
+                        }
+                    }
+                }
+                lastBeatSample = sampleClock
+            }
+
+            wasAbove = above
+            adaptiveFloor = adaptiveFloor * 0.992 + energy * 0.008
+            windowCount = 0
+            energySum = 0.0
+
+            if (lastBeatSample >= 0L && sampleClock - lastBeatSample > sampleRate * 4L && currentBpm != null) {
+                currentBpm = null
+                beatIntervals.clear()
+                onBpmChanged?.invoke(null)
+            }
+        }
+    }
+}
+
 
 private class RotaryControl(
     context:android.content.Context,
