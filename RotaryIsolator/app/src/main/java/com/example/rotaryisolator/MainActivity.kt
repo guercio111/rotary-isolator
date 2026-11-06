@@ -3,6 +3,8 @@ package com.example.rotaryisolator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -27,6 +29,26 @@ import kotlin.math.*
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
+    // TEST252 diffuse parallel reverb engine.
+    @Volatile private var reverbOn = false
+    @Volatile private var reverbMix = 65
+    @Volatile private var reverbSize = 950
+    @Volatile private var reverbHpHz = 420
+    @Volatile private var reverbLpHz = 14000
+    @Volatile private var reverbFadeMs = 1400
+    private var reverbPopup: android.widget.PopupWindow? = null
+    private var captureProjection: android.media.projection.MediaProjection? = null
+    private var captureRecord: android.media.AudioRecord? = null
+    private var captureTrack: android.media.AudioTrack? = null
+    private var parallelReverbProcessor: SchroederReverb? = null
+    private var captureThread: Thread? = null
+    @Volatile private var captureRunning = false
+    @Volatile private var captureRestartAttempts = 0
+    @Volatile private var captureRestartPending = false
+    private var captureDialog: AlertDialog? = null
+    private var captureStatusView: TextView? = null
+    private val captureRequestCode = 7420
+    private val capturePermissionRequestCode = 7421
     private var audioReady = false
     private var appEnabled = true
     private var defaultSettingsOnStart = true
@@ -105,6 +127,15 @@ class MainActivity : Activity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
+        reverbOn = prefs.getBoolean("reverb_on", false)
+        reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
+        reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
+        val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
+        reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
+        if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
+        val fadePlusTwoSecondsApplied = prefs.getBoolean("reverb_fade_plus2sec_v2", false)
+        reverbFadeMs = (reverbFadeMs + if (fadePlusTwoSecondsApplied) 0 else 2000).coerceIn(300, 6000)
+        if (!fadePlusTwoSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus2sec_v2", true).apply()
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -222,6 +253,21 @@ class MainActivity : Activity() {
         save()
         prefs.edit().putBoolean("session_in_background", true).apply()
         super.onPause()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val reopenReverb = reverbPopup?.isShowing == true
+        reverbPopup?.dismiss()
+        val w = newConfig.screenWidthDp
+        val h = newConfig.screenHeightDp
+        if (w > 0 && h > 0) {
+            phonePortrait = min(w, h) < 600
+            wideLayout = w > h
+        }
+        lastWindowWidthPx = 0
+        buildUi()
+        if (reopenReverb) handler.post { if (!isFinishing) showReverbPopup() }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -380,6 +426,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -735,6 +782,22 @@ class MainActivity : Activity() {
                 box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(7)})
             }
         }
+        val reverbButton = Button(this).apply {
+            text = "REVERB"
+            textSize = 11f
+            isAllCaps = false
+            setTextColor(Color.BLACK)
+            backgroundTintList = ColorStateList.valueOf(colorButtons)
+            minHeight = dp(32)
+            minimumHeight = dp(32)
+            setPadding(dp(18), 0, dp(18), 0)
+            setOnClickListener { showReverbPopup() }
+        }
+        box.addView(reverbButton, LinearLayout.LayoutParams(-2, dp(32)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(5)
+            bottomMargin = dp(2)
+        })
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
     }
 
@@ -826,6 +889,434 @@ class MainActivity : Activity() {
                         save();refreshUi();dialog.dismiss()
                     }.setNegativeButton("ANNULLA",null).show()
             }.setNegativeButton("CHIUDI",null).show()
+    }
+
+
+    private fun showReverbPopup(){
+        reverbPopup?.let { if (it.isShowing) { it.dismiss(); return } }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(14), dp(10), dp(14), dp(8))
+            setBackgroundColor(Color.rgb(25,28,34))
+        }
+        val power = TextView(this).apply {
+            fun paintState() {
+                text = if (reverbOn) "ON" else "OFF"
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                contentDescription = if (reverbOn) "Reverb acceso, tocca per spegnere" else "Reverb spento, tocca per accendere"
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(if (reverbOn) Color.rgb(28,170,75) else Color.rgb(185,42,48))
+                    setStroke(dp(2), if (reverbOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+                }
+                elevation = dp(4).toFloat()
+            }
+            paintState()
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                reverbOn = !reverbOn
+                paintState()
+                save()
+                scheduleUpdate()
+                if (reverbOn && !captureRunning) startAudioCaptureTest()
+            }
+        }
+        panel.addView(power, LinearLayout.LayoutParams(dp(62), dp(62)).apply { bottomMargin = dp(4) })
+        val parameterRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val depthDial = RotaryControl(
+            this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbMix = value.roundToInt().coerceIn(0, 100); scheduleUpdate() },
+            { "$reverbMix%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val timeDial = RotaryControl(
+            this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
+            { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0, 1000); scheduleUpdate() },
+            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        parameterRow.addView(depthDial, LinearLayout.LayoutParams(0, dp(126), 1f))
+        parameterRow.addView(timeDial, LinearLayout.LayoutParams(0, dp(126), 1f))
+        panel.addView(parameterRow, LinearLayout.LayoutParams(-1, dp(132)))
+        val fadeLabel = label("DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s", 13f, colorMaster)
+        fadeLabel.gravity = Gravity.CENTER_VERTICAL
+        panel.addView(fadeLabel, LinearLayout.LayoutParams(-1, dp(28)))
+        val fadeSeek = SeekBar(this).apply {
+            max = 5700
+            progress = (reverbFadeMs - 300).coerceIn(0, 5700)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        reverbFadeMs = 300 + progress
+                        fadeLabel.text = "DISSOLVENZA  " + "%.1f".format(reverbFadeMs / 1000f) + " s"
+                        scheduleUpdate()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+            })
+        }
+        panel.addView(fadeSeek, LinearLayout.LayoutParams(-1, dp(38)))
+        val closeButton = Button(this).apply {
+            text = "CHIUDI"
+            textSize = 11f
+            setOnClickListener { reverbPopup?.dismiss() }
+        }
+        panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
+        val masterSection = sections["GAIN"] ?: container
+        val popupLocation = IntArray(2)
+        masterSection.getLocationInWindow(popupLocation)
+        val popupWidth = masterSection.width.coerceAtLeast(dp(260))
+        val popup = android.widget.PopupWindow(panel, popupWidth, dp(320), false).apply {
+            isOutsideTouchable = false
+            isTouchable = true
+            setTouchModal(false)
+            setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.rgb(25,28,34)); cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), colorMaster)
+            })
+            elevation = dp(12).toFloat()
+            setOnDismissListener { save(); reverbPopup = null }
+        }
+        reverbPopup = popup
+        popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupLocation[1])
+    }
+    private fun startAudioCaptureTest() {
+        // Reuse the existing MediaProjection session after a track/route switch.
+        // Only request Android approval when no live session exists.
+        if (captureRunning || captureRestartPending) return
+        captureProjection?.let { existingProjection ->
+            captureRestartAttempts = 0
+            beginAudioCapture(existingProjection)
+            return
+        }
+        if (Build.VERSION.SDK_INT < 29) {
+            AlertDialog.Builder(this).setTitle("TEST NON SUPPORTATO")
+                .setMessage("La cattura audio interna richiede Android 10 o superiore.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), capturePermissionRequestCode)
+            return
+        }
+        try {
+            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+            startActivityForResult(manager.createScreenCaptureIntent(), captureRequestCode)
+        } catch (t: Throwable) {
+            showCaptureError("IMPOSSIBILE AVVIARE LA RICHIESTA DI CATTURA", t)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == capturePermissionRequestCode) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startAudioCaptureTest()
+            } else {
+                AlertDialog.Builder(this).setTitle("PERMESSO NEGATO")
+                    .setMessage("Senza il permesso microfono Android non consente di avviare il test di cattura audio.")
+                    .setPositiveButton("OK", null).show()
+            }
+        }
+    }
+
+    @Deprecated("Deprecated in Android API  Activity Result migration is not required for this diagnostic")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != captureRequestCode) return
+        if (resultCode != RESULT_OK || data == null) {
+            reverbOn = false
+            save()
+            Toast.makeText(this, "Cattura audio non autorizzata", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!reverbOn) return
+        try {
+            // Android 14+ requires a running mediaProjection foreground service
+            // before getMediaProjection() is called.
+            val serviceIntent = android.content.Intent(this, AudioCaptureForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+            handler.postDelayed({
+                try {
+                    val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                    val projection = manager.getMediaProjection(resultCode, data)
+                    if (projection == null) {
+                        showCaptureError("ANDROID NON HA RESTITUITO LA SESSIONE DI CATTURA", null)
+                        stopAudioCaptureTest()
+                        return@postDelayed
+                    }
+                    captureProjection = projection
+                    projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
+                        override fun onStop() {
+                            runOnUiThread { stopAudioCaptureTest() }
+                        }
+                    }, handler)
+                    beginAudioCapture(projection)
+                } catch (t: Throwable) {
+                    showCaptureError("ERRORE CREAZIONE SESSIONE DI CATTURA", t)
+                    stopAudioCaptureTest()
+                }
+            }, 500)
+        } catch (t: Throwable) {
+            showCaptureError("IMPOSSIBILE AVVIARE IL SERVIZIO MEDIA PROJECTION", t)
+            stopAudioCaptureTest()
+        }
+    }
+
+    private fun beginAudioCapture(projection: android.media.projection.MediaProjection) {
+        try {
+            val sampleRate = 48000
+            val format = android.media.AudioFormat.Builder()
+                .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sampleRate)
+                .setChannelMask(android.media.AudioFormat.CHANNEL_IN_MONO)
+                .build()
+            val minBuffer = android.media.AudioRecord.getMinBufferSize(
+                sampleRate,
+                android.media.AudioFormat.CHANNEL_IN_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (minBuffer <= 0) throw IllegalStateException("AudioRecord buffer non valido: $minBuffer")
+            val config = android.media.AudioPlaybackCaptureConfiguration.Builder(projection)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_GAME)
+                // Capture other apps (Morphe), never FREQUALIZER's own wet return.
+                .excludeUid(android.os.Process.myUid())
+                .build()
+            val record = android.media.AudioRecord.Builder()
+                .setAudioFormat(format)
+                .setBufferSizeInBytes(maxOf(minBuffer * 2, 8192))
+                .setAudioPlaybackCaptureConfig(config)
+                .build()
+            if (record.state != android.media.AudioRecord.STATE_INITIALIZED) {
+                record.release()
+                throw IllegalStateException("AudioRecord non inizializzato sul dispositivo")
+            }
+            val minOut = android.media.AudioTrack.getMinBufferSize(
+                sampleRate, android.media.AudioFormat.CHANNEL_OUT_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (minOut <= 0) throw IllegalStateException("AudioTrack buffer non valido: $minOut")
+            val outputFormat = android.media.AudioFormat.Builder()
+                .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sampleRate)
+                .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
+                .build()
+            // Route the wet return as normal media so it follows the selected
+            // music output (including Bluetooth). The capture config excludes
+            // this app UID to prevent recursive feedback.
+            val outputAttributes = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            val track = android.media.AudioTrack.Builder()
+                .setAudioAttributes(outputAttributes)
+                .setAudioFormat(outputFormat)
+                .setBufferSizeInBytes(maxOf(minOut * 2, 8192))
+                .setTransferMode(android.media.AudioTrack.MODE_STREAM)
+                .build()
+            if (track.state != android.media.AudioTrack.STATE_INITIALIZED) {
+                track.release()
+                throw IllegalStateException("AudioTrack non inizializzato sull'uscita audio")
+            }
+            captureTrack = track
+            parallelReverbProcessor = SchroederReverb(sampleRate)
+            captureRecord = record
+            track.play()
+            record.startRecording()
+            captureRunning = true
+            captureThread = Thread({
+                val buffer = ShortArray(2048)
+                val wetBuffer = ShortArray(buffer.size)
+                val processor = parallelReverbProcessor ?: return@Thread
+                var lastUi = 0L
+                var previousReverbState = false
+                try {
+                    while (captureRunning) {
+                        val count = record.read(buffer, 0, buffer.size)
+                        if (count > 0) {
+                            captureRestartAttempts = 0
+                            var peak = 0
+                            var sum = 0.0
+                            for (i in 0 until count) {
+                                val sample = buffer[i].toInt()
+                                val absolute = kotlin.math.abs(sample)
+                                if (absolute > peak) peak = absolute
+                                sum += sample.toDouble() * sample.toDouble()
+                            }
+                            processor.process(
+                                buffer, wetBuffer, count,
+                                reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
+                                reverbOn, reverbFadeMs
+                            )
+                            var written = 0
+                            while (written < count && captureRunning) {
+                                val n = track.write(wetBuffer, written, count - written, android.media.AudioTrack.WRITE_BLOCKING)
+                                if (n <= 0) throw IllegalStateException("AudioTrack write non riuscita: $n")
+                                written += n
+                            }
+                            val rms = kotlin.math.sqrt(sum / count)
+                            val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
+                            val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (now - lastUi >= 400) {
+                                lastUi = now
+                                handler.post {
+                                    captureStatusView?.text =
+                                        "REVERB PARALLELO ATTIVO • 48 kHz mono\n" +
+                                        "Ingresso Morphe RMS: ${"%.1f".format(rmsDb)} dBFS\n" +
+                                        "Picco: ${"%.1f".format(peakDb)} dBFS\n" +
+                                        "DISSOLVENZA: ${"%.1f".format(reverbFadeMs / 1000f)} s • ${if (reverbOn) "ON" else "OFF"}\n\n" +
+                                        "La traccia originale resta attiva; FREQUALIZER riproduce il ritorno riverberato."
+                                }
+                            }
+                        } else if (count < 0 && captureRunning) {
+                            throw IllegalStateException("AudioRecord read: $count")
+                        }
+                    }
+                } catch (t: Throwable) {
+                    if (captureRunning) scheduleCaptureRestart(projection, t)
+                } finally {
+                    captureRunning = false
+                }
+            }, "Frequalizer-ReverbReturn").apply { priority = Thread.MAX_PRIORITY; start() }
+        } catch (t: Throwable) {
+            scheduleCaptureRestart(projection, t)
+        }
+    }
+
+    // Rebuild only the input/output audio streams after a track or route change.
+    // Keep the MediaProjection token and its foreground service alive, so Android
+    // does not ask for a new screen-capture approval for every song.
+    private fun releaseCaptureIoOnly() {
+        val record = captureRecord
+        captureRecord = null
+        try { record?.stop() } catch (_: Throwable) {}
+        try { record?.release() } catch (_: Throwable) {}
+        val track = captureTrack
+        captureTrack = null
+        try { track?.pause() } catch (_: Throwable) {}
+        try { track?.flush() } catch (_: Throwable) {}
+        try { track?.stop() } catch (_: Throwable) {}
+        try { track?.release() } catch (_: Throwable) {}
+        parallelReverbProcessor = null
+        captureThread = null
+    }
+
+    private fun scheduleCaptureRestart(projection: android.media.projection.MediaProjection, error: Throwable) {
+        captureRunning = false
+        handler.post {
+            releaseCaptureIoOnly()
+            if (captureProjection !== projection || !reverbOn) {
+                captureRestartPending = false
+                return@post
+            }
+            if (captureRestartAttempts >= 8) {
+                showCaptureError("IL FLUSSO AUDIO NON SI È RIPRISTINATO DOPO IL CAMBIO TRACCIA", error)
+                stopAudioCaptureTest()
+                return@post
+            }
+            captureRestartAttempts++
+            val waitMs = 400L + captureRestartAttempts * 300L
+            captureRestartPending = true
+            handler.postDelayed({
+                captureRestartPending = false
+                if (captureProjection === projection && reverbOn && !captureRunning) {
+                    beginAudioCapture(projection)
+                }
+            }, waitMs)
+        }
+    }
+
+    private fun showCaptureMeter() {
+        val view = TextView(this).apply {
+            text = "Richiesta di avvio Reverb parallelo…\n\nApri YouTube Morphe e fai partire un brano. FREQUALIZER elaborerà la copia catturata e riprodurrà il ritorno riverberato. L'audio originale continuerà a suonare."
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+        }
+        captureStatusView = view
+        // If the capture is already running, simply reopen its status window.
+        captureDialog?.let { if (it.isShowing) { it.dismiss() } }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("TEST CATTURA AUDIO")
+            .setView(view)
+            .setPositiveButton("FERMA TEST", null)
+            .setNegativeButton("NASCONDI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                stopAudioCaptureTest()
+                dialog.dismiss()
+            }
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { dialog.dismiss() }
+        }
+        // Dismissing or hiding this window no longer ends MediaProjection.
+        dialog.setOnDismissListener {
+            if (captureDialog === dialog) captureDialog = null
+            if (captureStatusView === view) captureStatusView = null
+        }
+        captureDialog = dialog
+        dialog.show()
+    }
+
+    private fun showCaptureError(title: String, error: Throwable?) {
+        val detail = buildString {
+            append(title)
+            if (error != null) {
+                append("\n\n")
+                append(error.javaClass.name)
+                append(": ")
+                append(error.message ?: "(nessun messaggio)")
+                append("\n\nDETTAGLI TECNICI:\n")
+                append(android.util.Log.getStackTraceString(error))
+            }
+        }
+        val detailsView = ScrollView(this).apply {
+            addView(TextView(this@MainActivity).apply {
+                text = detail
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setTextIsSelectable(true)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+            })
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("TEST CATTURA AUDIO • ERRORE")
+            .setView(detailsView)
+            .setPositiveButton("CHIUDI", null)
+            .setNeutralButton("COPIA DETTAGLI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Capture Error", detail))
+                Toast.makeText(this, "Dettagli copiati", Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun stopAudioCaptureTest() {
+        captureRunning = false
+        captureRestartPending = false
+        releaseCaptureIoOnly()
+        captureRestartAttempts = 0
+        val projection = captureProjection
+        captureProjection = null
+        try { projection?.stop() } catch (_: Throwable) {}
+        try { stopService(android.content.Intent(this, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
+        captureStatusView = null
+        captureDialog = null
     }
 
 
@@ -986,7 +1477,10 @@ class MainActivity : Activity() {
     override fun onDestroy(){
         // An intentional close starts a fresh session next time; background
         // process reclamation and configuration changes keep the saved state.
-        if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
+        if (isFinishing) {
+            prefs.edit().putBoolean("session_in_background", false).apply()
+            stopAudioCaptureTest()
+        }
         try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
