@@ -971,11 +971,36 @@ class MainActivity : Activity() {
             setOnClickListener { reverbPopup?.dismiss() }
         }
         panel.addView(closeButton, LinearLayout.LayoutParams(-1, dp(34)))
+        // The popup is constrained to the exact MASTER section bounds in both
+        // orientations. Its contents scale uniformly when the phone's MASTER
+        // quadrant is shorter than the natural control stack.
         val masterSection = sections["GAIN"] ?: container
         val popupLocation = IntArray(2)
         masterSection.getLocationInWindow(popupLocation)
-        val popupWidth = masterSection.width.coerceAtLeast(dp(260))
-        val popup = android.widget.PopupWindow(panel, popupWidth, dp(320), false).apply {
+        val popupWidth = masterSection.width.coerceAtLeast(dp(1))
+        val popupHeight = masterSection.height.coerceAtLeast(dp(1))
+        val popupContent = FrameLayout(this).apply {
+            clipChildren = true
+            clipToPadding = true
+            setBackgroundColor(Color.rgb(25,28,34))
+            addView(panel, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
+            addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                if (view.width > 0 && view.height > 0 && panel.measuredWidth > 0 && panel.measuredHeight > 0) {
+                    val fit = min(
+                        1f,
+                        min(
+                            view.width.toFloat() / panel.measuredWidth.toFloat(),
+                            view.height.toFloat() / panel.measuredHeight.toFloat()
+                        )
+                    )
+                    panel.pivotX = panel.measuredWidth / 2f
+                    panel.pivotY = panel.measuredHeight / 2f
+                    panel.scaleX = fit
+                    panel.scaleY = fit
+                }
+            }
+        }
+        val popup = android.widget.PopupWindow(popupContent, popupWidth, popupHeight, false).apply {
             isOutsideTouchable = false
             isTouchable = true
             setTouchModal(false)
