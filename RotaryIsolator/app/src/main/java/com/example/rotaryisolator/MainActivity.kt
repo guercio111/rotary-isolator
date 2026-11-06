@@ -814,7 +814,7 @@ class MainActivity : Activity() {
             }
         }
         val reverbButton = Button(this).apply {
-            text = "REVERB"
+            text = "BEAT FX"
             textSize = 11f
             isAllCaps = false
             setTextColor(Color.BLACK)
@@ -1039,13 +1039,13 @@ class MainActivity : Activity() {
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbMix%" }, onEnd = { save() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val timeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val reverbRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1058,7 +1058,7 @@ class MainActivity : Activity() {
             this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, dp(82), 1f))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
@@ -1067,7 +1067,7 @@ class MainActivity : Activity() {
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$delayMix%" }, onEnd = { save(); updateEffectsCapture() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayControls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1278,19 +1278,19 @@ class MainActivity : Activity() {
             this, "TIME", delayTimePercent.toFloat(), 50f, 200f, colorMaster,
             { value -> delayTimePercent = value.roundToInt().coerceIn(50,200); scheduleUpdate() },
             { "${delayTimePercent}%" }, onEnd = { save() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayFeedbackDial = RotaryControl(
             this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
             { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
             { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayToneDial = RotaryControl(
             this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorMaster,
             { value -> delayTonePercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, step = 1f
         )
         val delayRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1313,7 +1313,11 @@ class MainActivity : Activity() {
         // The panel is measured against this live viewport and uniformly fitted below, so no
         // knob, TAP control, BPM fader, or close button can be clipped after rotation.
         val popupWidth = masterSection.width.coerceAtLeast(dp(1))
-        val popupHeight = masterSection.height.coerceAtLeast(dp(1))
+        // Give the effects panel the full usable tablet height instead of forcing
+        // the long control stack into the smaller MASTER quadrant.
+        val popupHeight = (container.height - dp(24)).coerceAtLeast(masterSection.height).coerceAtLeast(dp(1))
+        val popupTop = (popupLocation[1] + masterSection.height / 2 - popupHeight / 2)
+            .coerceIn(0, (container.height - popupHeight).coerceAtLeast(0))
         val popupContent = FrameLayout(this).apply {
             clipChildren = true
             clipToPadding = true
@@ -1344,7 +1348,7 @@ class MainActivity : Activity() {
             setOnDismissListener { save(); reverbPopup = null }
         }
         reverbPopup = popup
-        popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupLocation[1])
+        popup.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupTop)
     }
     private fun startAudioCaptureTest() {
         // Reuse the existing MediaProjection session after a track/route switch.
@@ -1875,7 +1879,8 @@ private class RotaryControl(
     private val titleInside:Boolean = false,
     private val wheelMultiplier:()->Float = {1f},
     private val portraitDialFit:Boolean = false,
-    private val bottomTextLift:Float = 0f
+    private val bottomTextLift:Float = 0f,
+    private val step:Float = 0f
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -1932,13 +1937,17 @@ private class RotaryControl(
         val value=valueText()
         p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp(4f+bottomTextLift),p)
     }
+    private fun quantize(value:Float):Float {
+        if (step <= 0f) return value.coerceIn(minV,maxV)
+        return (minV + ((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
+    }
     private fun updateFromPoint(x:Float,y:Float){
         val r=rect;val cx=r.centerX();val cy=r.centerY()
         var degrees=Math.toDegrees(atan2((y-cy).toDouble(),(x-cx).toDouble())).toFloat()
         if(degrees<0f)degrees+=360f
         if(degrees<45f)degrees+=360f
         val fraction=((degrees.coerceIn(135f,405f)-135f)/270f).coerceIn(0f,1f)
-        v=minV+fraction*(maxV-minV)
+        v=quantize(minV+fraction*(maxV-minV))
         changed(v);invalidate()
     }
     override fun onTouchEvent(e:MotionEvent):Boolean{
@@ -1952,7 +1961,7 @@ private class RotaryControl(
             MotionEvent.ACTION_MOVE->{
                 val delta=downY-e.y
                 if(abs(delta)>dp(4f)) dragged=true
-                if(dragged){val sensitivity=(maxV-minV)*2.2f/height.coerceAtLeast(1);v=(downV+delta*sensitivity).coerceIn(minV,maxV);changed(v);invalidate()}
+                if(dragged){val sensitivity=(maxV-minV)*2.2f/height.coerceAtLeast(1);v=quantize(downV+delta*sensitivity);changed(v);invalidate()}
                 return true
             }
             MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);onEnd();performClick();return true}
