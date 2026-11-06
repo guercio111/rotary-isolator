@@ -103,6 +103,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var smoothedDelayMix = 0f
     private var smoothedDelaySamples = sampleRate * 0.5f
     private var delayToneState = 0f
+    private var fxLowState = 0f
+    private var fxMidState = 0f
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -121,6 +123,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         smoothedDelayMix = 0f
         smoothedDelaySamples = sampleRate * 0.5f
         delayToneState = 0f
+        fxLowState = 0f
+        fxMidState = 0f
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -159,10 +163,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayEnabled: Boolean = false,
         delayFadeMs: Int = 1400,
         delayDivision: Int = 3,
-        delayMode: Int = 2
+        delayMode: Int = 2,
+        delayTimePercent: Int = 100,
+        delayFeedbackPercent: Int = 52,
+        delayTonePercent: Int = 50,
+        fxFrequency: Int = 1
     ) {
-        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.30f) else 0f
-        val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f else 0f
+        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
+        val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
         val beatFraction = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 2f, 4f, 8f)[delayDivision.coerceIn(0, 6)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
         // coefficients; these fixed voicings reproduce the documented behavior:
@@ -170,10 +178,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // DUB = progressively attenuated, darker echo repeats.
         val mode = delayMode.coerceIn(0, 2)
         val modeTime = 1f // The selected beat division is the exact musical delay interval.
-        val modeFeedback = when (mode) { 0 -> 0.16f; 1 -> 0.30f; else -> 0.52f }
-        val delayToneHz = when (mode) { 0 -> 14000f; 1 -> 10500f; else -> 6500f }
+        val modeFeedbackBase = when (mode) { 0 -> 0.20f; 1 -> 0.36f; else -> 0.58f }
+        val modeFeedback = (modeFeedbackBase * (0.5f + delayFeedbackPercent.coerceIn(0,90) / 100f)).coerceIn(0.05f,0.82f)
+        val toneControlHz = 700f + delayTonePercent.coerceIn(0,100) * 130f
+        val delayToneHz = when (mode) { 0 -> toneControlHz.coerceAtLeast(5000f); 1 -> toneControlHz; else -> toneControlHz.coerceAtMost(9000f) }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction * modeTime).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction * modeTime * (delayTimePercent.coerceIn(50,200) / 100f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
         val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
@@ -183,6 +193,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val lp = lpHz.coerceIn(1000, 20000).toFloat()
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
+        val fxLowAlpha = (1f - exp((-2.0 * PI * 250f / sampleRate).toFloat())).coerceIn(0.001f,1f)
+        val fxMidAlpha = (1f - exp((-2.0 * PI * 2500f / sampleRate).toFloat())).coerceIn(0.001f,1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
         val feedback = if (freeze) 0.965f else (0.80f + size * 0.14f).coerceIn(0.80f, 0.955f)
@@ -203,7 +215,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             smoothedMix += (mixTarget - smoothedMix) * mixSmoothing
             smoothedDelayMix += (delayTarget - smoothedDelayMix) * delayMixSmoothing
             smoothedDelaySamples += (targetDelaySamples - smoothedDelaySamples) * 0.00015f
-            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.32f
+            var excitation = if (freeze || !inputEnabled) 0f else lpY * 0.38f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -229,16 +241,23 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // exposed in this simplified interface. Darker repeats in DUB mode
             // progressively lose top end, while SHORT stays crisp.
             delayToneState += delayToneAlpha * (delayed - delayToneState)
-            delayBuffer[delayWriteIndex] = (x * 0.48f + delayToneState * modeFeedback).coerceIn(-0.82f, 0.82f)
+            delayBuffer[delayWriteIndex] = (x * 0.55f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
             delayWriteIndex++
             if (delayWriteIndex == delayBuffer.size) delayWriteIndex = 0
-            val reverbReturn = wet * smoothedMix * 0.92f
-            val delayReturn = delayToneState * smoothedDelayMix * 0.78f
+            val reverbReturn = wet * smoothedMix * 1.04f
+            val delayReturn = delayToneState * smoothedDelayMix * 1.02f
             val raw = reverbReturn + delayReturn
-            val magnitude = abs(raw)
-            val target = if (magnitude > 0.78f) 0.78f / magnitude else 1f
+            fxLowState += fxLowAlpha * (raw - fxLowState)
+            fxMidState += fxMidAlpha * (raw - fxMidState)
+            val bandLimited = when (fxFrequency.coerceIn(0,2)) {
+                0 -> fxLowState
+                1 -> fxMidState - fxLowState
+                else -> raw - fxMidState
+            }
+            val magnitude = abs(bandLimited)
+            val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
-            val safe = (raw * limiter).coerceIn(-0.78f, 0.78f)
+            val safe = (bandLimited * limiter).coerceIn(-0.84f, 0.84f)
             output[i] = (safe * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
     }
