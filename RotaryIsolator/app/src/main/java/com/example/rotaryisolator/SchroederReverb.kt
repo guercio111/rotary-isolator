@@ -98,7 +98,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var smoothedMix = 0f
     // A separate, low-feedback quarter-note echo return. The reverb network
     // above is left unchanged so a zero delay setting is bit-for-bit equivalent.
-    private val delayBuffer = FloatArray(sampleRate * 2)
+    private val delayBuffer = FloatArray(sampleRate * 9)
     private var delayWriteIndex = 0
     private var smoothedDelayMix = 0f
     private var smoothedDelaySamples = sampleRate * 0.5f
@@ -163,13 +163,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.30f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f else 0f
-        val beatFraction = when (delayDivision.coerceIn(0, 3)) { 0 -> 0.25f; 1 -> 0.5f; 2 -> 0.75f; else -> 1f }
+        val beatFraction = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 2f, 4f, 8f)[delayDivision.coerceIn(0, 6)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
         // coefficients; these fixed voicings reproduce the documented behavior:
         // SHORT = compact, lightly repeating; LONG = longer, more open repeats;
         // DUB = progressively attenuated, darker echo repeats.
         val mode = delayMode.coerceIn(0, 2)
-        val modeTime = when (mode) { 0 -> 0.25f; 1 -> 1.5f; else -> 1f }
+        val modeTime = 1f // The selected beat division is the exact musical delay interval.
         val modeFeedback = when (mode) { 0 -> 0.16f; 1 -> 0.30f; else -> 0.52f }
         val delayToneHz = when (mode) { 0 -> 14000f; 1 -> 10500f; else -> 6500f }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
