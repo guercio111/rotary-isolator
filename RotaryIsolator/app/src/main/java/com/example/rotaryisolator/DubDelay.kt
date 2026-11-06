@@ -25,13 +25,15 @@ internal class DubDelay(private val sampleRate: Int) {
     private var wasAboveThreshold = false
     private val beatIntervals = ArrayDeque<Long>()
     private var smoothedBpm = 120f
+    @Volatile var detectedBpmPrecise: Float = 120f
+        private set
     private var hasDetectedTempo = false
     private var tempoWasReported = false
     @Volatile var tempoLocked: Boolean = false
         private set
     @Volatile var detectedBpm: Int = 120
         private set
-    var onTempoChanged: ((Int) -> Unit)? = null
+    var onTempoChanged: ((Float) -> Unit)? = null
 
     private fun analyzeForTempo(sample: Float) {
         lowFrequencyState += 0.12f * (sample - lowFrequencyState)
@@ -54,18 +56,19 @@ internal class DubDelay(private val sampleRate: Int) {
                     while (candidate < 60f) candidate *= 2f
                     while (candidate > 180f) candidate *= 0.5f
                     beatIntervals.addLast((60.0 * sampleRate / candidate).toLong())
-                    while (beatIntervals.size > 7) beatIntervals.removeFirst()
+                    while (beatIntervals.size > 9) beatIntervals.removeFirst()
                     val sorted = beatIntervals.toList().sorted()
                     val medianInterval = sorted[sorted.size / 2].coerceAtLeast(1L)
                     val medianBpm = (60.0 * sampleRate / medianInterval).toFloat().coerceIn(60f, 180f)
-                    smoothedBpm = if (hasDetectedTempo) smoothedBpm * 0.72f + medianBpm * 0.28f else medianBpm
+                    smoothedBpm = if (hasDetectedTempo) smoothedBpm * 0.84f + medianBpm * 0.16f else medianBpm
                     hasDetectedTempo = true
-                    tempoLocked = true
-                    val rounded = smoothedBpm.roundToInt().coerceIn(60, 180)
+                    if (beatIntervals.size >= 3) tempoLocked = true
+                    detectedBpmPrecise = smoothedBpm.coerceIn(60f, 180f)
+                    val rounded = detectedBpmPrecise.roundToInt().coerceIn(60, 180)
                     if (rounded != detectedBpm || !tempoWasReported) {
                         detectedBpm = rounded
                         tempoWasReported = true
-                        onTempoChanged?.invoke(rounded)
+                        onTempoChanged?.invoke(detectedBpmPrecise)
                     }
                 }
             }
@@ -83,7 +86,7 @@ internal class DubDelay(private val sampleRate: Int) {
         count: Int,
         enabled: Boolean,
         divisionIndex: Int,
-        bpm: Int,
+        bpm: Float,
         autoSync: Boolean,
         feedbackPercent: Int,
         filterPercent: Int,
@@ -91,8 +94,8 @@ internal class DubDelay(private val sampleRate: Int) {
         fadeMs: Int
     ) {
         val division = divisions[divisionIndex.coerceIn(0, divisions.lastIndex)]
-        val tempo = (if (autoSync && hasDetectedTempo) detectedBpm else bpm).coerceIn(60, 180)
-        val delaySamples = ((60.0 / tempo * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
+        val tempo = (if (autoSync && tempoLocked) detectedBpmPrecise else bpm).coerceIn(60f, 180f)
+        val delaySamples = ((60.0 / tempo.toDouble() * division) * sampleRate).toInt().coerceIn(1, ring.size - 2)
         val feedback = feedbackPercent.coerceIn(0, 90) / 100f
         val mix = mixPercent.coerceIn(0, 100) / 100f
         val cutoff = 12000f - filterPercent.coerceIn(0, 100) * 105f
@@ -115,10 +118,10 @@ internal class DubDelay(private val sampleRate: Int) {
             val feedbackInput = filteredFeedback * feedback
 
             // TEST254: stronger input send (+32%) while retaining internal headroom.
-            ring[writeIndex] = (dryInput * inputEnvelope * 0.95f + feedbackInput).coerceIn(-0.92f, 0.92f)
+            ring[writeIndex] = (dryInput * inputEnvelope * 1.05f + feedbackInput).coerceIn(-0.92f, 0.92f)
 
             // Stronger delay return; the main output mix remains hard-limited downstream.
-            val wet = filteredFeedback * outputEnvelope * 1.00f
+            val wet = filteredFeedback * outputEnvelope * 1.12f
             output[i] = (wet.coerceIn(-0.90f, 0.90f) * 32767f).toInt().coerceIn(-32768, 32767).toShort()
 
             writeIndex++
@@ -145,5 +148,6 @@ internal class DubDelay(private val sampleRate: Int) {
         tempoWasReported = false
         tempoLocked = false
         detectedBpm = 120
+        detectedBpmPrecise = 120f
     }
 }
