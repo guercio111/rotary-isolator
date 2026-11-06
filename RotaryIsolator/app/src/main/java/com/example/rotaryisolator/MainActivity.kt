@@ -1047,12 +1047,44 @@ class MainActivity : Activity() {
         val delayGrid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val delayTop = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         val delayBottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-        val delayTimeDial = RotaryControl(
-            this, "TIME", dubDelayDivision.toFloat(), 0f, 6f, colorMaster,
-            { value -> dubDelayDivision = value.roundToInt().coerceIn(0, 6); scheduleUpdate() },
-            { divisionNames[dubDelayDivision] }, onEnd = { save() }, titleInside = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
-        )
+        // Pioneer-style beat selector: discrete buttons avoid fractional rotary
+        // positions that made the selected division appear stuck between steps.
+        val divisionButtons = ArrayList<TextView>()
+        fun refreshDivisionButtons() {
+            divisionButtons.forEachIndexed { index, button ->
+                val selected = index == dubDelayDivision
+                button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
+                button.background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(7).toFloat()
+                    setColor(if (selected) colorMaster else Color.rgb(48,53,62))
+                    setStroke(dp(1), if (selected) Color.WHITE else Color.rgb(90,96,106))
+                }
+            }
+        }
+        val divisionSelector = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        val divisionTop = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        val divisionBottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        divisionNames.forEachIndexed { index, name ->
+            val beatButton = TextView(this).apply {
+                text = name; textSize = 11f; typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER; isClickable = true; isFocusable = true
+                setPadding(dp(3), 0, dp(3), 0)
+                setOnClickListener {
+                    dubDelayDivision = index
+                    refreshDivisionButtons()
+                    scheduleUpdate()
+                    save()
+                }
+            }
+            divisionButtons.add(beatButton)
+            val row = if (index < 4) divisionTop else divisionBottom
+            row.addView(beatButton, LinearLayout.LayoutParams(0, dp(32), 1f).apply {
+                setMargins(dp(2), dp(2), dp(2), dp(2))
+            })
+        }
+        refreshDivisionButtons()
+        divisionSelector.addView(divisionTop, LinearLayout.LayoutParams(-1, dp(36)))
+        divisionSelector.addView(divisionBottom, LinearLayout.LayoutParams(-1, dp(36)))
         val feedbackDial = RotaryControl(
             this, "FEEDBACK", dubDelayFeedback.toFloat(), 0f, 90f, colorMaster,
             { value -> dubDelayFeedback = value.roundToInt().coerceIn(0, 90); scheduleUpdate() },
@@ -1071,12 +1103,14 @@ class MainActivity : Activity() {
             { "$dubDelayMix%" }, onEnd = { save() }, titleInside = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        delayTop.addView(delayTimeDial, LinearLayout.LayoutParams(0, dp(104), 1f))
+        delayTop.addView(divisionSelector, LinearLayout.LayoutParams(0, dp(104), 1.15f))
         delayTop.addView(feedbackDial, LinearLayout.LayoutParams(0, dp(104), 1f))
         delayBottom.addView(filterDial, LinearLayout.LayoutParams(0, dp(104), 1f))
         delayBottom.addView(mixDial, LinearLayout.LayoutParams(0, dp(104), 1f))
         delayGrid.addView(delayTop, LinearLayout.LayoutParams(-1, dp(106)))
         delayGrid.addView(delayBottom, LinearLayout.LayoutParams(-1, dp(106)))
+        delayColumn.addView(label("TIME • BEAT", 9f, Color.LTGRAY).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, dp(16)))
         delayColumn.addView(delayGrid, LinearLayout.LayoutParams(-1, dp(212)))
         val bpmLabel = label(
             if (dubDelayAutoSync) {
@@ -1178,7 +1212,17 @@ class MainActivity : Activity() {
             setOnDismissListener { save(); reverbPopup = null; dubDelayStatusView = null }
         }
         reverbPopup = popup
-        popup.showAtLocation(container, Gravity.CENTER, 0, 0)
+        // Place the EFFECTS window directly over the MASTER section (the GAIN
+        // container), rather than in the centre of the whole tablet display.
+        val masterAnchor = sections["GAIN"]
+        if (masterAnchor != null && masterAnchor.isLaidOut) {
+            val location = IntArray(2)
+            masterAnchor.getLocationOnScreen(location)
+            val screenY = (location[1] + masterAnchor.height / 2 - popupHeight / 2).coerceAtLeast(dp(4))
+            popup.showAtLocation(container, Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, screenY)
+        } else {
+            popup.showAtLocation(container, Gravity.CENTER, 0, 0)
+        }
     }
     private fun startAudioCaptureTest() {
         // Reuse the existing MediaProjection session after a track/route switch.
