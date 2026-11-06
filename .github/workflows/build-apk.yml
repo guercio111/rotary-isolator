@@ -1,4 +1,4 @@
-name: Build FREQUALIZER Smartphone Test APK
+name: Build FREQUALIZER S25 Stable Reverb TEST252 APK
 # Dedicated phone test build from Stable 165. Mixer source and audio behavior remain unchanged.
 
 on:
@@ -33,7 +33,7 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
-      - name: Rename app to FREQUALIZER SMARTPHONE TEST
+      - name: Rename app to FREQUALIZER S25 STABLE REVERB
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -43,7 +43,7 @@ jobs:
               raise SystemExit("AndroidManifest.xml not found")
           for p in manifests:
               s = p.read_text()
-              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER SMARTPHONE TEST"', s, count=1)
+              s, n = re.subn(r'android:label="[^"]+"', 'android:label="FREQUALIZER S25 STABLE REVERB"', s, count=1)
               if n:
                   p.write_text(s)
                   print(f"Updated app label in {p}")
@@ -58,9 +58,53 @@ jobs:
           sudo apt-get install -y python3-pil
           /usr/bin/python3 .github/scripts/generate_app_icon.py extracted/RotaryIsolator
 
-      - name: Use Stable 165 Kotlin source
+      - name: Use exact S25 layout source plus TEST252 reverb engine
         run: |
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
+
+      - name: Configure Android internal audio capture and keep projection through rotation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          app = Path("extracted/RotaryIsolator/app")
+          manifest = app / "src/main/AndroidManifest.xml"
+          xml = manifest.read_text()
+          permissions = [
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />',
+          ]
+          for permission in permissions:
+              name = permission.split('"')[1]
+              if name not in xml:
+                  xml = xml.replace("<application", permission + "\n    <application", 1)
+          service = '''        <service
+              android:name=".AudioCaptureForegroundService"
+              android:exported="false"
+              android:foregroundServiceType="mediaProjection" />
+          '''
+          if "AudioCaptureForegroundService" not in xml:
+              xml = xml.replace("</application>", service + "\n    </application>", 1)
+          required = "orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density"
+          tags = list(re.finditer(r'<activity\b[^>]*>', xml))
+          match = next((m for m in tags if "MainActivity" in m.group(0)), None)
+          if match is None:
+              raise SystemExit("MainActivity declaration not found in manifest")
+          tag = match.group(0)
+          if "android:configChanges=" in tag:
+              tag = re.sub(r'android:configChanges="([^"]*)"', lambda m: 'android:configChanges="' + "|".join(dict.fromkeys((m.group(1) + "|" + required).split("|"))) + '"', tag, count=1)
+          else:
+              closing = "/>" if tag.rstrip().endswith("/>") else ">"
+              body = tag.rstrip()[:-2].rstrip() if closing == "/>" else tag.rstrip()[:-1].rstrip()
+              tag = body + ' android:configChanges="' + required + '"' + closing
+          xml = xml[:match.start()] + tag + xml[match.end():]
+          import xml.etree.ElementTree as ET
+          ET.fromstring(xml)
+          manifest.write_text(xml)
+          PY
 
       - name: Set Java compatibility to 17 and isolate test installation
         run: |
@@ -90,5 +134,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: frequalizer-smartphone-test-apk
+          name: frequalizer-s25-stable-reverb-test252-apk
           path: extracted/RotaryIsolator/app/build/outputs/apk/debug/app-debug.apk
