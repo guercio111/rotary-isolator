@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     @Volatile private var delayOn = false
     @Volatile private var delayFadeMs = 1400
     @Volatile private var delayDivision = 3 // 1/4, 1/2, 3/4, 1 beat
+    @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
     @Volatile private var delayMix = 0
     @Volatile private var delayBpm = 120
     private var lastDelayTapMs = 0L
@@ -141,6 +142,7 @@ class MainActivity : Activity() {
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,3)
+        delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
         delayBpm = prefs.getInt("reverb_delay_bpm", 120).coerceIn(60,180)
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
         reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
@@ -438,7 +440,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("reverb_delay_bpm",delayBpm).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("reverb_delay_bpm",delayBpm).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1062,12 +1064,12 @@ class MainActivity : Activity() {
         delayTop.addView(delayPower, LinearLayout.LayoutParams(0, dp(26), 0.75f))
         val tapButton = TextView(this).apply {
             text = "TAP  $delayBpm"
-            textSize = 10f
+            textSize = 11f
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(5).toFloat()
+                shape = android.graphics.drawable.GradientDrawable.OVAL
                 setColor(Color.rgb(55,62,72))
                 setStroke(dp(1), colorMaster)
             }
@@ -1077,8 +1079,45 @@ class MainActivity : Activity() {
                 save()
             }
         }
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(0, dp(26), 1.1f).apply { leftMargin = dp(3) })
-        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(28)))
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(40), dp(40)).apply { leftMargin = dp(4) })
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, dp(42)))
+
+        val modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val modeLabels = arrayOf("SHORT DELAY", "LONG DELAY", "DUB ECHO")
+        val modeViews = ArrayList<TextView>()
+        fun paintModeButtons() {
+            modeViews.forEachIndexed { index, button ->
+                val selected = delayMode == index
+                button.background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(4).toFloat()
+                    setColor(if (selected) colorMaster else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorMaster)
+                }
+                button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
+            }
+        }
+        modeLabels.forEachIndexed { index, caption ->
+            val button = TextView(this).apply {
+                text = caption
+                textSize = 7.5f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setOnClickListener {
+                    delayMode = index
+                    paintModeButtons()
+                    save(); scheduleUpdate()
+                }
+            }
+            modeViews.add(button)
+            modeRow.addView(button, LinearLayout.LayoutParams(0, dp(22), 1f).apply {
+                if (index > 0) leftMargin = dp(2)
+            })
+        }
+        paintModeButtons()
+        delayControls.addView(modeRow, LinearLayout.LayoutParams(-1, dp(23)))
 
         val divisions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1115,17 +1154,17 @@ class MainActivity : Activity() {
             })
         }
         paintDivisionButtons()
-        delayControls.addView(divisions, LinearLayout.LayoutParams(-1, dp(27)))
+        delayControls.addView(divisions, LinearLayout.LayoutParams(-1, dp(22)))
 
         val delayRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
         delayRow.addView(delayDial, LinearLayout.LayoutParams(0, dp(82), 1.15f))
-        delayRow.addView(delayControls, LinearLayout.LayoutParams(0, dp(58), 1.85f).apply {
+        delayRow.addView(delayControls, LinearLayout.LayoutParams(0, dp(88), 1.85f).apply {
             leftMargin = dp(4)
         })
-        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(84)))
+        panel.addView(delayRow, LinearLayout.LayoutParams(-1, dp(90)))
         panel.addView(fadeRow("DUB FADE", delayFadeMs) { delayFadeMs = it },
             LinearLayout.LayoutParams(-1, dp(42)))
 
@@ -1336,7 +1375,7 @@ class MainActivity : Activity() {
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision
+                                delayOn, delayFadeMs, delayDivision, delayMode
                             )
                             var written = 0
                             while (written < count && captureRunning) {
