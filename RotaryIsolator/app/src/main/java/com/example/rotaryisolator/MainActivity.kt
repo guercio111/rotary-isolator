@@ -1020,7 +1020,8 @@ class MainActivity : Activity() {
             setOnClickListener {
                 reverbOn = !reverbOn
                 styleToggle(this, reverbOn)
-                save(); scheduleUpdate(); updateEffectsCapture(true)
+                save(); scheduleUpdate()
+                if (reverbOn) updateEffectsCapture(true)
             }
         }
         val closeButton = TextView(this).apply {
@@ -1141,7 +1142,8 @@ class MainActivity : Activity() {
             setOnClickListener {
                 delayOn = !delayOn
                 styleToggle(this, delayOn)
-                save(); scheduleUpdate(); updateEffectsCapture(true)
+                save(); scheduleUpdate()
+                if (delayOn) updateEffectsCapture(true)
             }
         }
         delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
