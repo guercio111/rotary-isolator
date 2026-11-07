@@ -87,7 +87,7 @@ class MainActivity : Activity() {
     private var colorOptions = Color.rgb(255,205,0)
     private var limiterOn = true
     private var mouseWheelAdjustOn = false
-    private var mouseWheelSensitivity = 4f
+    private var mouseWheelSensitivity = 1f
     private var compressorOn = false
     private var compThreshold = -18f
     private var compRatio = 3f
@@ -212,15 +212,15 @@ class MainActivity : Activity() {
                 .putInt("color_titles", colorTitles).putInt("color_options", colorOptions)
                 .putBoolean("color_defaults_v3", true).apply()
         }
-        // v2 restores the fast, uniform wheel response as the default on all dials.
-        // Existing v1 installs may have retained the too-slow filter sensitivity.
-        val mouseDefaultsV2Applied = prefs.getBoolean("mouse_defaults_v2", false)
-        mouseWheelAdjustOn = if (mouseDefaultsV2Applied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
-        mouseWheelSensitivity = if (mouseDefaultsV2Applied) prefs.getFloat("mouse_wheel_sensitivity", 5f).coerceIn(1f,10f) else 5f
-        if (!mouseDefaultsV2Applied) prefs.edit()
-            .putBoolean("mouse_defaults_v2", true)
+        // v3 sets the same one-point-per-detent response for every rotary dial.
+        // Preserve the enable/disable choice, but reset the old 5x default once.
+        val mouseDefaultsV3Applied = prefs.getBoolean("mouse_defaults_v3", false)
+        mouseWheelAdjustOn = if (mouseDefaultsV3Applied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
+        mouseWheelSensitivity = if (mouseDefaultsV3Applied) prefs.getFloat("mouse_wheel_sensitivity", 1f).coerceIn(1f,10f) else 1f
+        if (!mouseDefaultsV3Applied) prefs.edit()
+            .putBoolean("mouse_defaults_v3", true)
             .putBoolean("mouse_wheel_adjust_on", true)
-            .putFloat("mouse_wheel_sensitivity", 5f)
+            .putFloat("mouse_wheel_sensitivity", 1f)
             .putBoolean("mini", false)
             .apply()
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
@@ -1004,8 +1004,8 @@ class MainActivity : Activity() {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(6), dp(4), dp(6), dp(4))
-            setBackgroundColor(Color.rgb(25,28,34))
+            setPadding(0, 0, 0, 0)
+            setBackgroundColor(Color.TRANSPARENT)
         }
         fun styleToggle(view: TextView, enabled: Boolean) {
             view.text = if (enabled) "ON" else "OFF"
@@ -1061,24 +1061,24 @@ class MainActivity : Activity() {
                 if (reverbOn) updateEffectsCapture(true)
             }
         }
-        val reverbTitle = label("REVERB", 10f, colorMaster)
+        val reverbTitle = label("REVERB", 13f, colorMaster)
         reverbTitle.gravity = Gravity.CENTER_VERTICAL
         header.gravity = Gravity.CENTER_VERTICAL
-        header.addView(reverbTitle, LinearLayout.LayoutParams(0, -1, 1f))
+        header.addView(reverbTitle, LinearLayout.LayoutParams(-2, -1).apply { rightMargin = dp(8) })
         header.addView(reverbPower, LinearLayout.LayoutParams(dp(42), dp(20)))
         panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
         val depthDial = RotaryControl(
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
         )
         val timeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
-            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
         )
         val reverbRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1388,8 +1388,8 @@ class MainActivity : Activity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP
-            setPadding(dp(3), dp(3), dp(3), dp(3))
-            setBackgroundColor(Color.rgb(25,28,34))
+            setPadding(0, 0, 0, 0)
+            setBackgroundColor(Color.TRANSPARENT)
             clipChildren = false
             clipToPadding = false
         }
@@ -1933,7 +1933,8 @@ private class RotaryControl(
     private val portraitDialFit:Boolean = false,
     private val bottomTextLift:Float = 0f,
     private val step:Float = 0f,
-    private val spaciousText:Boolean = false
+    private val spaciousText:Boolean = false,
+    private val labelScale:Float = 1f
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -1984,11 +1985,11 @@ private class RotaryControl(
         p.color=Color.WHITE;p.strokeWidth=dp(3f)
         c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
         p.textAlign=Paint.Align.CENTER
-        val titleSize=min(dp(11f),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
+        val titleSize=min(dp(11f*labelScale),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
         p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
         if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)25f else 17f)+bottomTextLift),p)}
         val value=valueText()
-        p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
+        p.color=accent;p.textSize=min(dp(10f*labelScale),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
     }
     private fun quantize(value:Float):Float {
         if (step <= 0f) return value.coerceIn(minV,maxV)
