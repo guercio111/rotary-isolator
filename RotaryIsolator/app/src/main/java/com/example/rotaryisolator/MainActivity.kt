@@ -1076,7 +1076,7 @@ class MainActivity : Activity() {
     private fun analyzeAutoBpm(samples: ShortArray, count: Int, nowMs: Long, sampleRate: Int) {
         if (!autoBpmEnabled || count <= 0) return
 
-        val frameSamples = (sampleRate / 100).coerceAtLeast(1) // 10 ms
+        val frameSamples = (sampleRate / 200).coerceAtLeast(1) // 5 ms: finer BPM resolution
         val alpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 150.0 / sampleRate)).toFloat()
         var offset = 0
         while (offset < count) {
@@ -1094,19 +1094,19 @@ class MainActivity : Activity() {
                 val onset = (bassRms - autoBpmPreviousBass * 0.90f).coerceAtLeast(0f)
                 autoBpmPreviousBass = bassRms
                 autoBpmHistory.addLast(onset)
-                while (autoBpmHistory.size > 1000) autoBpmHistory.removeFirst()
+                while (autoBpmHistory.size > 2000) autoBpmHistory.removeFirst()
             }
             offset = end
         }
 
-        if (autoBpmHistory.size < 400 || nowMs - autoBpmLastAnalysisMs < 500L) return
+        if (autoBpmHistory.size < 800 || nowMs - autoBpmLastAnalysisMs < 500L) return
         autoBpmLastAnalysisMs = nowMs
 
         val values = autoBpmHistory.toList()
         val mean = values.average().toFloat()
         val centered = FloatArray(values.size) { values[it] - mean }
-        val minLag = 33 // 180 BPM at 10 ms/frame
-        val maxLag = minOf(100, centered.size / 3) // 60 BPM; use >= 3 cycles
+        val minLag = 66 // 180 BPM at 5 ms/frame
+        val maxLag = minOf(200, centered.size / 3) // 60 BPM; use >= 3 cycles
         var bestLag = -1
         var bestScore = 0f
         val scores = FloatArray(maxLag + 1)
@@ -1142,7 +1142,16 @@ class MainActivity : Activity() {
         }
 
         if (bestLag > 0 && bestScore >= 0.12f) {
-            val detected = (6000f / bestLag).coerceIn(60f, 180f)
+            // Parabolic interpolation around the autocorrelation peak removes most
+            // of the 5 ms frame quantization error (important near 122 BPM).
+            val leftScore = if (bestLag > minLag) scores[bestLag - 1] else scores[bestLag]
+            val centerScore = scores[bestLag]
+            val rightScore = if (bestLag < maxLag) scores[bestLag + 1] else scores[bestLag]
+            val curvature = leftScore - 2f * centerScore + rightScore
+            val peakOffset = if (abs(curvature) > 1e-6f)
+                (0.5f * (leftScore - rightScore) / curvature).coerceIn(-0.5f, 0.5f) else 0f
+            val refinedLag = (bestLag + peakOffset).coerceAtLeast(1f)
+            val detected = (12000f / refinedLag).coerceIn(60f, 180f)
             autoBpmEstimateHistory.addLast(detected)
             while (autoBpmEstimateHistory.size > 7) autoBpmEstimateHistory.removeFirst()
             val orderedEstimates = autoBpmEstimateHistory.toList().sorted()
@@ -1169,7 +1178,7 @@ class MainActivity : Activity() {
                     strongestIndex = i
                 }
             }
-            val ageMs = ((values.lastIndex - strongestIndex) * 10L)
+            val ageMs = ((values.lastIndex - strongestIndex) * 5L)
             autoBpmNextBeatMs = nowMs - ageMs
 
             handler.post {
@@ -1471,6 +1480,49 @@ class MainActivity : Activity() {
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
         delayTop.addView(autoButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
         delayTop.addView(syncButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
+        val resetBpmButton = TextView(this).apply {
+            text = "RST"
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            contentDescription = "Reset contabattute e SYNC"
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                // Clear the beat/phase history and release the tempo lock.
+                // Keep the last BPM number visible until AUTO detects a fresh estimate.
+                bpmSyncLocked = false
+                delaySyncOffsetMs = 0f
+                autoBpmNextBeatMs = 0L
+                autoBpmHistory.clear()
+                autoBpmEstimateHistory.clear()
+                autoBpmPreviousBass = 0f
+                autoBpmLowpassState = 0f
+                autoBpmLastAnalysisMs = 0L
+                autoBpmHasEstimate = false
+                lastDelayTapMs = 0L
+                delayTapIntervals.clear()
+                scheduleUpdate()
+                save()
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(6).toFloat()
+                    setColor(colorMaster)
+                    setStroke(dp(1), colorMaster)
+                }
+                postDelayed({
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(6).toFloat()
+                        setColor(Color.rgb(55,62,72))
+                        setStroke(dp(1), colorMaster)
+                    }
+                }, 300L)
+            }
+        }
+        delayTop.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3) })
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.6f))
         val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -1896,7 +1948,7 @@ class MainActivity : Activity() {
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
                                 delayOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
-                                delaySyncOffsetMs
+                                delaySyncOffsetMs, bpmSyncLocked
                             )
                             var written = 0
                             while (written < count && captureRunning) {
