@@ -754,8 +754,8 @@ class MainActivity : Activity() {
                     if(actions.isNotEmpty()){
                         val actionBox=LinearLayout(this@MainActivity).apply{
                             orientation=LinearLayout.VERTICAL
-                            gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                            setPadding(0,dp(6),0,0)
+                            gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
+                            setPadding(0,0,0,0)
                             actions.forEachIndexed { index, action ->
                                 addView(action,LinearLayout.LayoutParams(-1,dp(23)).apply{if(index>0)topMargin=dp(3)})
                             }
@@ -764,9 +764,8 @@ class MainActivity : Activity() {
                     }
                 }.also{it.minimumHeight=dp(rowHeight)}
             }
-            // Match the EQ / ISOLATOR header lane so MASTER and its GAIN dial
-            // start on the same vertical baseline as the other three sections.
-            box.addView(View(this),LinearLayout.LayoutParams(-1,dp(38)))
+            // Four equal-height MASTER rows: no extra spacer above GAIN.
+            // All four dials share the same left axis and vertical sizing.
             val gainDial:View = if(modes["GAIN"]==true) SeekBar(this).apply {
                 max=240;progress=((gain+12)*10).roundToInt()
                 setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
@@ -774,7 +773,7 @@ class MainActivity : Activity() {
                     override fun onStartTrackingTouch(b:SeekBar?){}
                     override fun onStopTrackingTouch(b:SeekBar?){save()}
                 })
-            } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             box.addView(landscapeMasterRow(gainDial),LinearLayout.LayoutParams(-1,dp(rowHeight)))
             val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,masterAccent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()}
@@ -2039,19 +2038,10 @@ private class RotaryControl(
             val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
             // Match the main EQ wheel response exactly. The shared sensitivity
             // option scales every dial, including the effect controls.
-            // Wheel movement is always one displayed unit per detent:
-            // integer-valued dials move by 1, normalized 0..1 dials (shown as
-            // percentages, e.g. filters) move by 0.01 = 1 percentage point.
-            // Keep the same global sensitivity multiplier for every dial.
-            val wheelUnit = when {
-                step > 0f -> step
-                // HPF/Resonance are stored 0..1 but displayed 0..100%.
-                // One percentage point must match one normal unit on every other dial.
-                (maxV - minV) <= 1.0001f -> 0.01f
-                else -> 1f
-            }
-            // Default global multiplier is 5x: five displayed units per mouse notch,
-            // uniformly across EQ, filters, master and every Beat FX dial.
+            // Every mouse-wheel detent advances every rotary by the same fraction
+            // of its total travel: 1/28 of the range, matching EQ's 1 dB step
+            // across its 28 dB sweep. This keeps physical dial response identical.
+            val wheelUnit = (maxV - minV) / 28f
             val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(1f, 10f)
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
