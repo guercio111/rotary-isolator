@@ -1755,7 +1755,13 @@ class MainActivity : Activity() {
                                 captureRunning = false
                                 captureRestartPending = false
                                 captureProjection = null
-                                releaseCaptureIoOnly()
+                                // A revoked capture must never leave a wet return playing
+                                // or FX switches latched ON with no controllable audio stream.
+                                reverbOn = false
+                                delayOn = false
+                                releaseCaptureIoOnly() // stop + flush + release AudioTrack immediately
+                                save()                  // preserve all knob values, persist safe OFF state
+                                refreshUi()
                                 captureConsentLocked = true
                                 try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
                                 showCaptureRevokedDialog()
