@@ -742,7 +742,50 @@ class MainActivity : Activity() {
         val compactMaster = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compactMaster)1 else 4),dp(4),dp(if(compactMaster)1 else 4),dp(1))}
         box.addView(sectionLabel("MASTER",if(compactMaster)11f else 13f,titleTint(masterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactMaster)24 else 32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
-        if(tabletPortrait){
+        val tabletLandscape = !phonePortrait && wideLayout
+        if(tabletLandscape){
+            // Tablet landscape: compact vertical MASTER controls beside the FILTER stack.
+            val rowHeight = ((windowHeightDp()*0.53f-90f)/4f).roundToInt().coerceIn(48,90)
+            fun landscapeMasterRow(dial:View, actions:List<View> = emptyList()):View {
+                return LinearLayout(this).apply {
+                    orientation=LinearLayout.HORIZONTAL
+                    gravity=Gravity.CENTER
+                    setPadding(dp(2),dp(1),dp(2),dp(1))
+                    addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-2),1f))
+                    if(actions.isNotEmpty()){
+                        val actionBox=LinearLayout(this@MainActivity).apply{
+                            orientation=LinearLayout.VERTICAL
+                            gravity=Gravity.CENTER
+                            actions.forEachIndexed { index, action ->
+                                addView(action,LinearLayout.LayoutParams(-1,dp(23)).apply{if(index>0)topMargin=dp(3)})
+                            }
+                        }
+                        addView(actionBox,LinearLayout.LayoutParams(dp(66),-1))
+                    }
+                }.also{it.minimumHeight=dp(rowHeight)}
+            }
+            box.addView(View(this),LinearLayout.LayoutParams(-1,dp(24)))
+            val gainDial:View = if(modes["GAIN"]==true) SeekBar(this).apply {
+                max=240;progress=((gain+12)*10).roundToInt()
+                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                    override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;scheduleUpdate()}}
+                    override fun onStartTrackingTouch(b:SeekBar?){}
+                    override fun onStopTrackingTouch(b:SeekBar?){save()}
+                })
+            } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            box.addView(landscapeMasterRow(gainDial),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,masterAccent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()}
+            box.addView(landscapeMasterRow(compDial,listOf(compToggle)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val bassDial=RotaryControl(this,"BASS BOOST",bassBoost,0f,100f,masterAccent,{v->bassBoost=v;scheduleUpdate()},{bassBoost.roundToInt().toString()+"%"},titleInside=true,onStart={previousBassBoost=bassBoost},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val bassToggle=roundAction("",if(bassBoostOn)"ON" else "OFF",bassBoostOn){bassBoostOn=!bassBoostOn;save();refreshUi();scheduleUpdate()}
+            val bassReturn=roundAction("↶","RETURN",true){bassBoost=previousBassBoost;save();refreshUi();scheduleUpdate()}
+            box.addView(landscapeMasterRow(bassDial,listOf(bassToggle,bassReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,masterAccent,{v->loudness=v;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=true,onStart={previousLoudness=loudness},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val loudToggle=roundAction("",if(loudnessOn)"ON" else "OFF",loudnessOn){loudnessOn=!loudnessOn;save();refreshUi();scheduleUpdate()}
+            val loudReturn=roundAction("↶","RETURN",true){loudness=previousLoudness;save();refreshUi();scheduleUpdate()}
+            box.addView(landscapeMasterRow(loudDial,listOf(loudToggle,loudReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+        }else if(tabletPortrait){
             // Portrait tablet: one full-width MASTER strip per control.
             // Keep the existing rotary controls and DSP callbacks; only the layout changes.
             val rowHeight = ((windowHeightDp()/2f-96f)/4f).roundToInt().coerceIn(52,140)
