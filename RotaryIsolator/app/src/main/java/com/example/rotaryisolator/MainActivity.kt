@@ -686,10 +686,10 @@ class MainActivity : Activity() {
         for(i in 0..1){
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==1)resonance else filters[0]
-            val filterReturnSize=if(compactFilter)18 else 42
-            val filterFlatSize=if(compactFilter)22 else 56
-            val filterActionGap=if(compactFilter)1 else 8
-            val filterActionHeight=if(compactFilter)24 else 58
+            val filterReturnSize=if(stackedTabletLandscape)22 else if(compactFilter)18 else 42
+            val filterFlatSize=if(stackedTabletLandscape)26 else if(compactFilter)22 else 56
+            val filterActionGap=if(stackedTabletLandscape)4 else if(compactFilter)1 else 8
+            val filterActionHeight=if(stackedTabletLandscape)30 else if(compactFilter)24 else 58
             val controlEnabled=filtersOn
             // Tablet portrait: EQ dials use the full row width and are centered
             // on the section's vertical axis. Do not add a blank label lane here:
@@ -730,7 +730,7 @@ class MainActivity : Activity() {
                 if(i==1)resonance=0f else filters[0]=0f
                 scheduleUpdate();refreshUi()
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
-            col.addView(filterActions,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,dp(25)) else if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
+            col.addView(filterActions,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,dp(30)) else if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row,if(useVerticalRows) LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=dp(4)} else LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(compactFilter)4 else 7)});parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
@@ -760,7 +760,7 @@ class MainActivity : Activity() {
                                 addView(action,LinearLayout.LayoutParams(-1,dp(23)).apply{if(index>0)topMargin=dp(3)})
                             }
                         }
-                        addView(actionBox,LinearLayout.LayoutParams(dp(66),-1))
+                        addView(actionBox,LinearLayout.LayoutParams(dp(82),-1))
                     }
                 }.also{it.minimumHeight=dp(rowHeight)}
             }
