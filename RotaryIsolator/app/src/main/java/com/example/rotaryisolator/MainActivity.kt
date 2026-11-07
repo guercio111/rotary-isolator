@@ -40,7 +40,6 @@ class MainActivity : Activity() {
     @Volatile private var reverbDecayPercent = 50
     @Volatile private var reverbColorPercent = 50
     @Volatile private var delayOn = false
-    @Volatile private var effectsMasterOn = true
     @Volatile private var captureConsentLocked = false
     @Volatile private var delayFadeMs = 1400
     @Volatile private var delayDivision = 3 // 1/4, 1/2, 3/4, 1, 2, 4, 8 beats
@@ -148,7 +147,6 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
-        effectsMasterOn = prefs.getBoolean("effects_master_on", true)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
@@ -282,31 +280,6 @@ class MainActivity : Activity() {
         prefs.edit().putInt("session_task_id", taskId).putBoolean("session_in_background", false).apply()
         buildUi()
         connectAudio()
-        // Ask Android to exempt FREQUALIZER from Doze/battery optimization.
-        // The user must confirm this in the system dialog.
-        handler.postDelayed({ if (!isFinishing && !isDestroyed) requestBatteryOptimizationExemption() }, 900)
-    }
-
-    private fun requestBatteryOptimizationExemption() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
-        try {
-            val power = getSystemService(POWER_SERVICE) as android.os.PowerManager
-            if (power.isIgnoringBatteryOptimizations(packageName)) {
-                Toast.makeText(this, "FREQUALIZER escluso dal risparmio batteria", Toast.LENGTH_SHORT).show()
-                return
-            }
-            val intent = android.content.Intent(
-                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                android.net.Uri.parse("package:$packageName")
-            )
-            startActivity(intent)
-        } catch (t: Throwable) {
-            try {
-                startActivity(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            } catch (_: Throwable) {
-                Toast.makeText(this, "Apri Impostazioni > App > FREQUALIZER > Batteria e seleziona Senza restrizioni", Toast.LENGTH_LONG).show()
-            }
-        }
     }
 
     override fun onPause() {
@@ -489,7 +462,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putBoolean("effects_master_on",effectsMasterOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -956,7 +929,7 @@ class MainActivity : Activity() {
 
 
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
-    private fun effectsActive() = effectsMasterOn && (reverbOn || (delayOn && delayMix > 0))
+    private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
 
     private fun registerDelayTap(): Float {
         val now = android.os.SystemClock.elapsedRealtime()
@@ -979,11 +952,14 @@ class MainActivity : Activity() {
     }
 
     private fun updateEffectsCapture(allowNewConsent: Boolean = false) {
-        // Only deliberate ON actions may request Android consent. Ordinary knob
-        // changes never open the system permission sheet.
+        // Only an explicit ON action can start a new Android consent flow.
+        // Temporary stream errors reuse the current MediaProjection token.
         if (!effectsActive() || captureRunning || captureRestartPending) return
         if (captureProjection != null) startAudioCaptureTest()
-        else if (allowNewConsent && !captureConsentLocked) startAudioCaptureTest()
+        else if (allowNewConsent) {
+            captureConsentLocked = false
+            startAudioCaptureTest()
+        }
     }
 
     private fun showReverbPopup(){
@@ -1058,33 +1034,7 @@ class MainActivity : Activity() {
             }
             setOnClickListener { reverbPopup?.dismiss() }
         }
-        val masterPower = TextView(this).apply {
-            textSize = 9f
-            setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            fun paintMaster() {
-                text = if (effectsMasterOn) "FX MASTER ON" else "FX MASTER OFF"
-                setTextColor(Color.WHITE)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = dp(5).toFloat()
-                    setColor(if (effectsMasterOn) Color.rgb(28,170,75) else Color.rgb(185,42,48))
-                    setStroke(dp(1), if (effectsMasterOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
-                }
-            }
-            paintMaster()
-            setOnClickListener {
-                effectsMasterOn = !effectsMasterOn
-                if (effectsMasterOn) {
-                    captureConsentLocked = false
-                    updateEffectsCapture(true)
-                }
-                paintMaster()
-                save()
-                scheduleUpdate()
-            }
-        }
         header.gravity = Gravity.CENTER_VERTICAL
-        header.addView(masterPower, LinearLayout.LayoutParams(dp(82), dp(20)))
         header.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         header.addView(closeButton, LinearLayout.LayoutParams(dp(44), dp(18)))
         panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
@@ -1492,7 +1442,7 @@ class MainActivity : Activity() {
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
             captureConsentLocked = true
-            Toast.makeText(this, "Cattura non autorizzata • riattiva FX MASTER per riprovare", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Cattura non autorizzata • premi ON su Reverb o Delay/Echo per riprovare", Toast.LENGTH_LONG).show()
             return
         }
         if (!effectsActive()) return
@@ -1525,7 +1475,7 @@ class MainActivity : Activity() {
                                 if (captureProjection === projection) captureProjection = null
                                 captureConsentLocked = true
                                 try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
-                                Toast.makeText(this@MainActivity, "Sessione di cattura interrotta da Android • riattiva FX MASTER per ripristinarla", Toast.LENGTH_LONG).show()
+                                Toast.makeText(this@MainActivity, "Android ha interrotto la cattura • premi ON sull’effetto per ripristinarla", Toast.LENGTH_LONG).show()
                             }
                         }
                     }, handler)
@@ -1625,8 +1575,8 @@ class MainActivity : Activity() {
                             processor.process(
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
-                                reverbOn && effectsMasterOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn && effectsMasterOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
+                                reverbOn, reverbFadeMs, delayMix, delayBpm,
+                                delayOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent
                             )
                             var written = 0
@@ -1892,12 +1842,6 @@ class MainActivity : Activity() {
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
         }
-        val batteryButton = Button(this).apply {
-            text = "ESCLUDI DA RISPARMIO BATTERIA"
-            textSize = 12f
-            setOnClickListener { requestBatteryOptimizationExemption() }
-        }
-        panel.addView(batteryButton, LinearLayout.LayoutParams(-1, dp(44)))
         val defaultsRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),dp(6),dp(8),dp(4))}
         defaultsRow.addView(label("DEFAULT SETTINGS ALL'AVVIO",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(46),1f))
         val defaultsSwitch=Switch(this).apply{
@@ -2081,9 +2025,9 @@ private class RotaryControl(
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
             val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
-            // One wheel detent = exactly one unit. Apply immediately for
-            // every scroll event: no ramp, debounce, or acceleration.
-            val delta = wheel * if (step > 0f) step else 1f
+            // Match the main EQ wheel response exactly. The shared sensitivity
+            // option scales every dial, including the effect controls.
+            val delta = wheel * (if (step > 0f) step else 1f) * wheelMultiplier().coerceIn(1f, 10f)
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
