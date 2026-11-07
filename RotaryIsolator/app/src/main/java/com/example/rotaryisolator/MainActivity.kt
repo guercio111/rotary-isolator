@@ -502,12 +502,15 @@ class MainActivity : Activity() {
         // dimensions change, never the order or the set of controls.
         val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
         val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-        content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
-        content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
+        content.addView(upper,LinearLayout.LayoutParams(-1,0,0.94f))
+        content.addView(lower,LinearLayout.LayoutParams(-1,0,1.06f))
         addSection("EQ","EQ",eq,-14f..14f,{eqOn},upper)
         addSection("ISOLATOR","ISOLATOR",iso,-24f..24f,{isoOn},upper)
-        addFilterSection(lower)
-        addGainSection(lower)
+        val lowerLeft=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+        lower.addView(lowerLeft,LinearLayout.LayoutParams(0,-1,1f))
+        addFilterSection(lowerLeft)
+        addGainSection(lowerLeft)
+        addEffectsSection(lower)
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
@@ -828,22 +831,6 @@ class MainActivity : Activity() {
                 box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(7)})
             }
         }
-        val reverbButton = Button(this).apply {
-            text = "BEAT FX"
-            textSize = 11f
-            isAllCaps = false
-            setTextColor(Color.BLACK)
-            backgroundTintList = ColorStateList.valueOf(colorButtons)
-            minHeight = dp(32)
-            minimumHeight = dp(32)
-            setPadding(dp(18), 0, dp(18), 0)
-            setOnClickListener { showReverbPopup() }
-        }
-        box.addView(reverbButton, LinearLayout.LayoutParams(-2, dp(32)).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = dp(5)
-            bottomMargin = dp(2)
-        })
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
     }
 
