@@ -37,6 +37,8 @@ class MainActivity : Activity() {
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFadeMs = 1400
     @Volatile private var reverbFeedbackPercent = 50
+    @Volatile private var reverbDecayPercent = 50
+    @Volatile private var reverbColorPercent = 50
     @Volatile private var delayOn = false
     @Volatile private var effectsMasterOn = true
     @Volatile private var captureConsentLocked = false
@@ -150,6 +152,8 @@ class MainActivity : Activity() {
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
+        reverbDecayPercent = prefs.getInt("reverb_decay", 50).coerceIn(0,100)
+        reverbColorPercent = prefs.getInt("reverb_color", 50).coerceIn(0,100)
         delayMix = prefs.getInt("reverb_delay_mix", 0).coerceIn(0,100)
         delayTimePercent = prefs.getInt("beat_fx_delay_time", 100).coerceIn(50,200)
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
@@ -485,7 +489,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putBoolean("effects_master_on",effectsMasterOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putBoolean("effects_master_on",effectsMasterOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1110,6 +1114,16 @@ class MainActivity : Activity() {
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        val reverbDecayDial = RotaryControl(
+            this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true
+        )
+        val reverbColorDial = RotaryControl(
+            this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbColorPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true
+        )
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
@@ -1359,8 +1373,17 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        reverbControlsRow.addView(reverbPower, LinearLayout.LayoutParams(dp(50), dp(42)).apply {
-            rightMargin = dp(5)
+        val reverbSideColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        reverbSideColumn.addView(reverbDecayDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbSideColumn.addView(reverbPower, LinearLayout.LayoutParams(-1, dp(42)).apply {
+            topMargin = dp(2); bottomMargin = dp(2)
+        })
+        reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(64), -1).apply {
+            rightMargin = dp(4)
         })
         reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
         reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -1602,7 +1625,7 @@ class MainActivity : Activity() {
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn && effectsMasterOn, reverbFadeMs, delayMix, delayBpm,
                                 delayOn && effectsMasterOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
-                                reverbFeedbackPercent
+                                reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent
                             )
                             var written = 0
                             while (written < count && captureRunning) {
@@ -2058,9 +2081,9 @@ private class RotaryControl(
             val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
             // Keep integer precision on effect controls while matching the
             // main-screen wheel speed and the user's configured sensitivity.
-            val delta = if(step > 0f) {
-                wheel * step * wheelMultiplier().coerceIn(1f,10f)
-            } else wheel*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f)
+            // Fixed precision: one physical wheel notch changes exactly one unit.
+            // No acceleration and no sensitivity multiplier, consistently on every dial.
+            val delta = wheel * if (step > 0f) step else 1f
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
