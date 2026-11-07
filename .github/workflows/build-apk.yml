@@ -87,6 +87,7 @@ jobs:
           service = '''        <service
               android:name=".AudioCaptureForegroundService"
               android:exported="false"
+              android:stopWithTask="false"
               android:foregroundServiceType="mediaProjection" />
           '''
           if "AudioCaptureForegroundService" not in xml:
