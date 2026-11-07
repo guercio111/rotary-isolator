@@ -57,19 +57,9 @@ class MainActivity : Activity() {
     private val delayTapIntervals = ArrayDeque<Long>()
     private var reverbPopup: android.widget.PopupWindow? = null
     private var captureProjection: android.media.projection.MediaProjection? = null
-    private var pendingCaptureResultCode: Int = 0
-    private var pendingCaptureData: android.content.Intent? = null
-    private var captureServiceBound = false
-    private var captureService: AudioCaptureForegroundService? = null
-    private val captureServiceConnection = object : android.content.ServiceConnection {
-        override fun onServiceConnected(name: android.content.ComponentName?, binder: android.os.IBinder?) {
-            captureService = (binder as? AudioCaptureForegroundService.LocalBinder)?.getService()
-            createProjectionWhenServiceReady()
-        }
-        override fun onServiceDisconnected(name: android.content.ComponentName?) {
-            captureService = null
-        }
-    }
+    // Tracks an intentional stop so MediaProjection.Callback.onStop does not
+    // mistake our own cleanup for an Android permission revocation.
+    private var intentionallyStoppingProjection: android.media.projection.MediaProjection? = null
     private var captureRecord: android.media.AudioRecord? = null
     private var captureTrack: android.media.AudioTrack? = null
     private var parallelReverbProcessor: SchroederReverb? = null
@@ -1469,66 +1459,50 @@ class MainActivity : Activity() {
         }
         if (!effectsActive()) return
         try {
-            // Start and bind to the foreground service. Its binder is delivered only
-            // after onCreate() has called startForeground(), avoiding a timing race.
+            // Use the same proven startup sequence as the S25 build:
+            // start the mediaProjection foreground service first, then obtain
+            // the projection only after Android has had time to promote it.
             val serviceIntent = android.content.Intent(this, AudioCaptureForegroundService::class.java)
-            pendingCaptureResultCode = resultCode
-            pendingCaptureData = data
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
-            if (!captureServiceBound) {
-                captureServiceBound = bindService(serviceIntent, captureServiceConnection, android.content.Context.BIND_AUTO_CREATE)
-            }
-            if (!captureServiceBound) throw IllegalStateException("Impossibile collegarsi al servizio di cattura")
+            handler.postDelayed({
+                try {
+                    val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                    val projection = manager.getMediaProjection(resultCode, data)
+                    if (projection == null) {
+                        showCaptureError("ANDROID NON HA RESTITUITO LA SESSIONE DI CATTURA", null)
+                        stopAudioCaptureTest()
+                        return@postDelayed
+                    }
+                    intentionallyStoppingProjection = null
+                    captureProjection = projection
+                    projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
+                        override fun onStop() {
+                            runOnUiThread {
+                                // Ignore the callback caused by our own stop/cleanup.
+                                if (intentionallyStoppingProjection === projection) {
+                                    intentionallyStoppingProjection = null
+                                    return@runOnUiThread
+                                }
+                                captureRunning = false
+                                captureRestartPending = false
+                                releaseCaptureIoOnly()
+                                if (captureProjection === projection) captureProjection = null
+                                captureConsentLocked = true
+                                try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
+                                Toast.makeText(this@MainActivity, "Android ha revocato la sessione di cattura • serve una nuova autorizzazione", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }, handler)
+                    beginAudioCapture(projection)
+                } catch (t: Throwable) {
+                    showCaptureError("ERRORE CREAZIONE SESSIONE DI CATTURA", t)
+                    stopAudioCaptureTest()
+                }
+            }, 500)
         } catch (t: Throwable) {
-            pendingCaptureData = null
             showCaptureError("IMPOSSIBILE AVVIARE IL SERVIZIO MEDIA PROJECTION", t)
             stopAudioCaptureTest()
         }
-    }
-
-    private fun createProjectionWhenServiceReady() {
-        val service = captureService ?: return
-        if (!service.isForegroundReady()) return
-        val data = pendingCaptureData ?: return
-        val resultCode = pendingCaptureResultCode
-        pendingCaptureData = null
-        try {
-            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
-            val projection = manager.getMediaProjection(resultCode, data)
-            if (projection == null) {
-                showCaptureError("ANDROID NON HA RESTITUITO LA SESSIONE DI CATTURA", null)
-                stopAudioCaptureTest()
-                return
-            }
-            captureProjection = projection
-            projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
-                override fun onStop() {
-                    runOnUiThread {
-                        captureRunning = false
-                        captureRestartPending = false
-                        releaseCaptureIoOnly()
-                        if (captureProjection === projection) captureProjection = null
-                        captureConsentLocked = true
-                        pendingCaptureData = null
-                        unbindCaptureServiceIfNeeded()
-                        try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
-                        Toast.makeText(this@MainActivity, "Android ha revocato la sessione di cattura • serve una nuova autorizzazione", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }, handler)
-            beginAudioCapture(projection)
-        } catch (t: Throwable) {
-            showCaptureError("ERRORE CREAZIONE SESSIONE DI CATTURA", t)
-            stopAudioCaptureTest()
-        }
-    }
-
-    private fun unbindCaptureServiceIfNeeded() {
-        if (captureServiceBound) {
-            try { unbindService(captureServiceConnection) } catch (_: Throwable) {}
-            captureServiceBound = false
-        }
-        captureService = null
     }
 
     private fun beginAudioCapture(projection: android.media.projection.MediaProjection) {
@@ -1776,11 +1750,12 @@ class MainActivity : Activity() {
         captureRestartPending = false
         releaseCaptureIoOnly()
         captureRestartAttempts = 0
-        pendingCaptureData = null
-        unbindCaptureServiceIfNeeded()
         val projection = captureProjection
         captureProjection = null
-        try { projection?.stop() } catch (_: Throwable) {}
+        if (projection != null) {
+            intentionallyStoppingProjection = projection
+            try { projection.stop() } catch (_: Throwable) {}
+        }
         try { stopService(android.content.Intent(this, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
         captureStatusView = null
         captureDialog = null
