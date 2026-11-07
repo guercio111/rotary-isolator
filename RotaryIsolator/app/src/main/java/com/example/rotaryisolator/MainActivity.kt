@@ -751,17 +751,18 @@ class MainActivity : Activity() {
                     gravity=Gravity.CENTER
                     setPadding(dp(2),dp(1),dp(2),dp(1))
                     addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-2),1f))
-                    if(actions.isNotEmpty()){
-                        val actionBox=LinearLayout(this@MainActivity).apply{
-                            orientation=LinearLayout.VERTICAL
-                            gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
-                            setPadding(0,0,0,0)
-                            actions.forEachIndexed { index, action ->
-                                addView(action,LinearLayout.LayoutParams(-1,dp(23)).apply{if(index>0)topMargin=dp(3)})
-                            }
+                    // Reserve the same right-hand action lane in all four rows,
+                    // including GAIN (which has no ON/RETURN buttons). This keeps
+                    // the four dial centers on one exact vertical axis.
+                    val actionBox=LinearLayout(this@MainActivity).apply{
+                        orientation=LinearLayout.VERTICAL
+                        gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
+                        setPadding(0,0,0,0)
+                        actions.forEachIndexed { index, action ->
+                            addView(action,LinearLayout.LayoutParams(-1,dp(23)).apply{if(index>0)topMargin=dp(3)})
                         }
-                        addView(actionBox,LinearLayout.LayoutParams(dp(74),-1))
                     }
+                    addView(actionBox,LinearLayout.LayoutParams(dp(74),-1))
                 }.also{it.minimumHeight=dp(rowHeight)}
             }
             // Four equal-height MASTER rows: no extra spacer above GAIN.
