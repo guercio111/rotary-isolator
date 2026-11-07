@@ -38,6 +38,8 @@ class MainActivity : Activity() {
     @Volatile private var reverbFadeMs = 1400
     @Volatile private var reverbFeedbackPercent = 50
     @Volatile private var delayOn = false
+    @Volatile private var effectsMasterOn = true
+    @Volatile private var captureConsentLocked = false
     @Volatile private var delayFadeMs = 1400
     @Volatile private var delayDivision = 3 // 1/4, 1/2, 3/4, 1, 2, 4, 8 beats
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
@@ -144,6 +146,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
+        effectsMasterOn = prefs.getBoolean("effects_master_on", true)
         reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
@@ -482,7 +485,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putBoolean("effects_master_on",effectsMasterOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -949,7 +952,7 @@ class MainActivity : Activity() {
 
 
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
-    private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
+    private fun effectsActive() = effectsMasterOn && (reverbOn || (delayOn && delayMix > 0))
 
     private fun registerDelayTap(): Float {
         val now = android.os.SystemClock.elapsedRealtime()
@@ -971,12 +974,12 @@ class MainActivity : Activity() {
         return delayBpm
     }
 
-    private fun updateEffectsCapture() {
-        // Keep one shared MediaProjection session alive for the whole open app
-        // session. Switching either effect OFF only fades its wet return in the
-        // processor; it must not stop capture, otherwise Android asks for consent
-        // again when the other effect is enabled or a parameter is changed.
-        if (effectsActive() && !captureRunning && !captureRestartPending) startAudioCaptureTest()
+    private fun updateEffectsCapture(allowNewConsent: Boolean = false) {
+        // Only deliberate ON actions may request Android consent. Ordinary knob
+        // changes never open the system permission sheet.
+        if (!effectsActive() || captureRunning || captureRestartPending) return
+        if (captureProjection != null) startAudioCaptureTest()
+        else if (allowNewConsent && !captureConsentLocked) startAudioCaptureTest()
     }
 
     private fun showReverbPopup(){
@@ -1037,7 +1040,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 reverbOn = !reverbOn
                 styleToggle(this, reverbOn)
-                save(); scheduleUpdate(); updateEffectsCapture()
+                save(); scheduleUpdate(); updateEffectsCapture(true)
             }
         }
         val closeButton = TextView(this).apply {
@@ -1051,8 +1054,36 @@ class MainActivity : Activity() {
             }
             setOnClickListener { reverbPopup?.dismiss() }
         }
-        header.addView(closeButton, LinearLayout.LayoutParams(dp(44), dp(14)))
-        panel.addView(header, LinearLayout.LayoutParams(-1, dp(18)))
+        val masterPower = TextView(this).apply {
+            textSize = 9f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            fun paintMaster() {
+                text = if (effectsMasterOn) "FX MASTER ON" else "FX MASTER OFF"
+                setTextColor(Color.WHITE)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(5).toFloat()
+                    setColor(if (effectsMasterOn) Color.rgb(28,170,75) else Color.rgb(185,42,48))
+                    setStroke(dp(1), if (effectsMasterOn) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+                }
+            }
+            paintMaster()
+            setOnClickListener {
+                effectsMasterOn = !effectsMasterOn
+                if (effectsMasterOn) {
+                    captureConsentLocked = false
+                    updateEffectsCapture(true)
+                }
+                paintMaster()
+                save()
+                scheduleUpdate()
+            }
+        }
+        header.gravity = Gravity.CENTER_VERTICAL
+        header.addView(masterPower, LinearLayout.LayoutParams(dp(82), dp(20)))
+        header.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        header.addView(closeButton, LinearLayout.LayoutParams(dp(44), dp(18)))
+        panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
         val depthDial = RotaryControl(
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
@@ -1084,7 +1115,7 @@ class MainActivity : Activity() {
         val delayDial = RotaryControl(
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$delayMix%" }, onEnd = { save(); updateEffectsCapture() }, titleInside = false, spaciousText = true,
+            { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val delayControls = LinearLayout(this).apply {
@@ -1144,7 +1175,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 delayOn = !delayOn
                 styleToggle(this, delayOn)
-                save(); scheduleUpdate(); updateEffectsCapture()
+                save(); scheduleUpdate(); updateEffectsCapture(true)
             }
         }
         delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
@@ -1435,10 +1466,8 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
-            reverbOn = false
-            delayOn = false
-            save()
-            Toast.makeText(this, "Cattura audio non autorizzata", Toast.LENGTH_SHORT).show()
+            captureConsentLocked = true
+            Toast.makeText(this, "Cattura non autorizzata • riattiva FX MASTER per riprovare", Toast.LENGTH_LONG).show()
             return
         }
         if (!effectsActive()) return
@@ -1469,7 +1498,9 @@ class MainActivity : Activity() {
                                 captureRestartPending = false
                                 releaseCaptureIoOnly()
                                 if (captureProjection === projection) captureProjection = null
+                                captureConsentLocked = true
                                 try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
+                                Toast.makeText(this@MainActivity, "Sessione di cattura interrotta da Android • riattiva FX MASTER per ripristinarla", Toast.LENGTH_LONG).show()
                             }
                         }
                     }, handler)
@@ -1569,8 +1600,8 @@ class MainActivity : Activity() {
                             processor.process(
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
-                                reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
+                                reverbOn && effectsMasterOn, reverbFadeMs, delayMix, delayBpm,
+                                delayOn && effectsMasterOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
                                 reverbFeedbackPercent
                             )
                             var written = 0
@@ -1635,7 +1666,7 @@ class MainActivity : Activity() {
                 captureRestartPending = false
                 return@post
             }
-            if (captureRestartAttempts >= 8) {
+            if (captureRestartAttempts >= 20) {
                 // Keep the user's MediaProjection consent and foreground service alive.
                 // A temporary AudioRecord/AudioTrack failure must not destroy the
                 // projection token: the next effect ON or route retry can rebuild I/O
@@ -1645,7 +1676,7 @@ class MainActivity : Activity() {
                 return@post
             }
             captureRestartAttempts++
-            val waitMs = 400L + captureRestartAttempts * 300L
+            val waitMs = (250L + captureRestartAttempts * 250L).coerceAtMost(5000L)
             captureRestartPending = true
             handler.postDelayed({
                 captureRestartPending = false
