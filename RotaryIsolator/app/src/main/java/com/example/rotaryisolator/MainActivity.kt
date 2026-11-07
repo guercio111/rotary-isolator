@@ -57,8 +57,9 @@ class MainActivity : Activity() {
     @Volatile private var delaySyncOffsetMs = 0f
     @Volatile private var autoBpmNextBeatMs = 0L
     private var autoBpmHasEstimate = false
-    private var autoBpmHistory = ArrayDeque<Float>()
-    private var autoBpmPreviousRms = 0f
+    private var autoBpmHistory = ArrayDeque<Float>() // 10 ms bass-onset frames
+    private var autoBpmPreviousBass = 0f
+    private var autoBpmLowpassState = 0f
     private var autoBpmLastAnalysisMs = 0L
     private var bpmUiLabel: TextView? = null
     private var autoBpmButton: TextView? = null
@@ -1066,24 +1067,46 @@ class MainActivity : Activity() {
         }
     }
 
-    // Estimates tempo from the captured music envelope. This runs alongside
-    // the existing RMS measurement and never changes the audio samples.
-    private fun analyzeAutoBpm(rms: Float, nowMs: Long, sampleRate: Int, blockSamples: Int) {
-        if (!autoBpmEnabled || rms < 0.0015f) return
-        val onset = (rms - autoBpmPreviousRms * 0.88f).coerceAtLeast(0f)
-        autoBpmPreviousRms = rms
-        autoBpmHistory.addLast(onset)
-        while (autoBpmHistory.size > 240) autoBpmHistory.removeFirst()
-        if (autoBpmHistory.size < 120 || nowMs - autoBpmLastAnalysisMs < 1200L) return
+    // Autonomous beat detector: derive a 10 ms low-frequency onset envelope
+    // directly from captured PCM, then search its periodicity over a rolling window.
+    // It does not depend on TAP and never modifies the audio being played.
+    private fun analyzeAutoBpm(samples: ShortArray, count: Int, nowMs: Long, sampleRate: Int) {
+        if (!autoBpmEnabled || count <= 0) return
+
+        val frameSamples = (sampleRate / 100).coerceAtLeast(1) // 10 ms
+        val alpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 150.0 / sampleRate)).toFloat()
+        var offset = 0
+        while (offset < count) {
+            val end = minOf(offset + frameSamples, count)
+            var bassEnergy = 0.0
+            var n = 0
+            for (i in offset until end) {
+                val input = samples[i].toFloat() / 32768f
+                autoBpmLowpassState += alpha * (input - autoBpmLowpassState)
+                bassEnergy += autoBpmLowpassState.toDouble() * autoBpmLowpassState.toDouble()
+                n++
+            }
+            if (n > 0) {
+                val bassRms = kotlin.math.sqrt(bassEnergy / n).toFloat()
+                val onset = (bassRms - autoBpmPreviousBass * 0.90f).coerceAtLeast(0f)
+                autoBpmPreviousBass = bassRms
+                autoBpmHistory.addLast(onset)
+                while (autoBpmHistory.size > 1000) autoBpmHistory.removeFirst()
+            }
+            offset = end
+        }
+
+        if (autoBpmHistory.size < 400 || nowMs - autoBpmLastAnalysisMs < 500L) return
         autoBpmLastAnalysisMs = nowMs
+
         val values = autoBpmHistory.toList()
         val mean = values.average().toFloat()
         val centered = FloatArray(values.size) { values[it] - mean }
-        val frameSeconds = blockSamples.toFloat() / sampleRate.coerceAtLeast(1)
-        val minLag = (60f / 180f / frameSeconds).roundToInt().coerceAtLeast(1)
-        val maxLag = (60f / 60f / frameSeconds).roundToInt().coerceAtMost(values.size / 2)
+        val minLag = 33 // 180 BPM at 10 ms/frame
+        val maxLag = minOf(100, centered.size / 3) // 60 BPM; use >= 3 cycles
         var bestLag = -1
         var bestScore = 0f
+        val scores = FloatArray(maxLag + 1)
         for (lag in minLag..maxLag) {
             var cross = 0.0
             var left = 0.0
@@ -1095,37 +1118,44 @@ class MainActivity : Activity() {
                 left += a * a
                 right += b * b
             }
-            val score = if (left > 1e-12 && right > 1e-12) (cross / kotlin.math.sqrt(left * right)).toFloat() else 0f
-            if (score > bestScore) { bestScore = score; bestLag = lag }
+            val score = if (left > 1e-12 && right > 1e-12)
+                (cross / kotlin.math.sqrt(left * right)).toFloat() else 0f
+            scores[lag] = score
+            if (score > bestScore) {
+                bestScore = score
+                bestLag = lag
+            }
         }
-        if (bestLag > 0 && bestScore >= 0.18f) {
-            val detected = (60f / (bestLag * frameSeconds)).coerceIn(60f,180f)
-            delayTapBpm = if (autoBpmHasEstimate) delayTapBpm * 0.72f + detected * 0.28f else detected
-            autoBpmHasEstimate = true
-            delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
 
-            // Estimate the beat-grid phase by finding the strongest repeating
-            // onset phase within the same autocorrelation window.
-            var bestPhase = 0
-            var bestPhaseEnergy = Float.NEGATIVE_INFINITY
-            for (phase in 0 until bestLag) {
-                var energy = 0f
-                var count = 0
-                var index = phase
-                while (index < centered.size) {
-                    energy += centered[index]
-                    count++
-                    index += bestLag
-                }
-                val normalized = if (count > 0) energy / count else Float.NEGATIVE_INFINITY
-                if (normalized > bestPhaseEnergy) {
-                    bestPhaseEnergy = normalized
-                    bestPhase = phase
+        // Prefer the faster fundamental when a slower half-tempo candidate is
+        // almost as correlated (a common ambiguity with kick/snare patterns).
+        if (bestLag > 0) {
+            for (lag in minLag until bestLag) {
+                if (bestLag % lag == 0 && scores[lag] >= bestScore * 0.92f) {
+                    bestLag = lag
+                    break
                 }
             }
-            var lastBeatIndex = values.lastIndex
-            while (lastBeatIndex >= 0 && lastBeatIndex % bestLag != bestPhase) lastBeatIndex--
-            val ageMs = ((values.lastIndex - lastBeatIndex).coerceAtLeast(0) * frameSeconds * 1000f).toLong()
+        }
+
+        if (bestLag > 0 && bestScore >= 0.12f) {
+            val detected = (6000f / bestLag).coerceIn(60f, 180f)
+            delayTapBpm = if (autoBpmHasEstimate)
+                delayTapBpm * 0.78f + detected * 0.22f else detected
+            autoBpmHasEstimate = true
+            delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
+
+            // Anchor the phase to the strongest onset in the most recent beat window.
+            var strongestIndex = values.lastIndex
+            var strongest = Float.NEGATIVE_INFINITY
+            val searchStart = (values.size - bestLag * 2).coerceAtLeast(0)
+            for (i in searchStart..values.lastIndex) {
+                if (values[i] > strongest) {
+                    strongest = values[i]
+                    strongestIndex = i
+                }
+            }
+            val ageMs = ((values.lastIndex - strongestIndex) * 10L)
             autoBpmNextBeatMs = nowMs - ageMs
 
             handler.post {
@@ -1335,7 +1365,7 @@ class MainActivity : Activity() {
                 autoBpmEnabled = !autoBpmEnabled
                 if (autoBpmEnabled) {
                     autoBpmHistory.clear()
-                    autoBpmPreviousRms = 0f
+                    autoBpmPreviousBass = 0f\n                    autoBpmLowpassState = 0f
                     autoBpmLastAnalysisMs = 0L
                     autoBpmNextBeatMs = 0L
                     autoBpmHasEstimate = false
@@ -1843,7 +1873,7 @@ class MainActivity : Activity() {
                                 written += n
                             }
                             val rms = kotlin.math.sqrt(sum / count)
-                            analyzeAutoBpm((rms / 32768.0).toFloat(), readCompleted, sampleRate, count)
+                            analyzeAutoBpm(buffer, count, readCompleted, sampleRate)
                             val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
                             val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
                             val now = android.os.SystemClock.elapsedRealtime()
