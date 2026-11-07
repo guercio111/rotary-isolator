@@ -31,7 +31,7 @@ class MainActivity : Activity() {
     private var dpEffect: DynamicsProcessing? = null
     // TEST252 diffuse parallel reverb engine.
     @Volatile private var reverbOn = false
-    @Volatile private var reverbMix = 65
+    @Volatile private var reverbMix = 0
     @Volatile private var reverbSize = 950
     @Volatile private var reverbHpHz = 420
     @Volatile private var reverbLpHz = 14000
@@ -53,6 +53,12 @@ class MainActivity : Activity() {
     @Volatile private var delayBpm = 120f
     @Volatile private var delayTapBpm = 120f
     @Volatile private var delayBpmCorrection = 0f
+    @Volatile private var autoBpmEnabled = false
+    private var autoBpmHistory = ArrayDeque<Float>()
+    private var autoBpmPreviousRms = 0f
+    private var autoBpmLastAnalysisMs = 0L
+    private var bpmUiLabel: TextView? = null
+    private var autoBpmButton: TextView? = null
     private var lastDelayTapMs = 0L
     private val delayTapIntervals = ArrayDeque<Long>()
     private var captureProjection: android.media.projection.MediaProjection? = null
@@ -162,7 +168,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
-        reverbMix = prefs.getInt("reverb_mix", 65).coerceIn(0,100)
+        reverbMix = prefs.getInt("reverb_mix", 0).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
         reverbDecayPercent = prefs.getInt("reverb_decay", 50).coerceIn(0,100)
@@ -177,6 +183,7 @@ class MainActivity : Activity() {
         delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,6)
         delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
         delayBpmCorrection = prefs.getFloat("reverb_delay_bpm_correction", 0f).coerceIn(-10f,10f)
+        autoBpmEnabled = prefs.getBoolean("auto_bpm_enabled", false)
         delayBpm = (prefs.all["reverb_delay_bpm"] as? Number)?.toFloat()?.coerceIn(60f,180f) ?: 120f
         delayTapBpm = prefs.getFloat("reverb_delay_tap_bpm", (delayBpm - delayBpmCorrection).coerceIn(60f,180f)).coerceIn(60f,180f)
         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
@@ -336,6 +343,7 @@ class MainActivity : Activity() {
         for(i in 0..3){eq[i]=0f;previousEq[i]=0f;sectionPreviousEq[i]=0f}
         for(i in 0..2){iso[i]=0f;previousIso[i]=0f;sectionPreviousIso[i]=0f}
         filters[0]=0f;filters[1]=0f;resonance=0f
+        reverbMix=0
         for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
         gain=0f;compMakeup=0f;compressorOn=false
         bassBoost=0f;loudness=0f;bassBoostOn=false;loudnessOn=false
@@ -488,7 +496,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1042,6 +1050,60 @@ class MainActivity : Activity() {
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
     private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
 
+    private fun paintAutoBpmButton() {
+        autoBpmButton?.let { button ->
+            button.text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
+            button.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(if (autoBpmEnabled) colorMaster else Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+        }
+    }
+
+    // Estimates tempo from the captured music envelope. This runs alongside
+    // the existing RMS measurement and never changes the audio samples.
+    private fun analyzeAutoBpm(rms: Float, nowMs: Long, sampleRate: Int, blockSamples: Int) {
+        if (!autoBpmEnabled || rms < 0.0015f) return
+        val onset = (rms - autoBpmPreviousRms * 0.88f).coerceAtLeast(0f)
+        autoBpmPreviousRms = rms
+        autoBpmHistory.addLast(onset)
+        while (autoBpmHistory.size > 240) autoBpmHistory.removeFirst()
+        if (autoBpmHistory.size < 120 || nowMs - autoBpmLastAnalysisMs < 1200L) return
+        autoBpmLastAnalysisMs = nowMs
+        val values = autoBpmHistory.toList()
+        val mean = values.average().toFloat()
+        val centered = FloatArray(values.size) { values[it] - mean }
+        val frameSeconds = blockSamples.toFloat() / sampleRate.coerceAtLeast(1)
+        val minLag = (60f / 180f / frameSeconds).roundToInt().coerceAtLeast(1)
+        val maxLag = (60f / 60f / frameSeconds).roundToInt().coerceAtMost(values.size / 2)
+        var bestLag = -1
+        var bestScore = 0f
+        for (lag in minLag..maxLag) {
+            var cross = 0.0
+            var left = 0.0
+            var right = 0.0
+            for (i in lag until centered.size) {
+                val a = centered[i].toDouble()
+                val b = centered[i - lag].toDouble()
+                cross += a * b
+                left += a * a
+                right += b * b
+            }
+            val score = if (left > 1e-12 && right > 1e-12) (cross / kotlin.math.sqrt(left * right)).toFloat() else 0f
+            if (score > bestScore) { bestScore = score; bestLag = lag }
+        }
+        if (bestLag > 0 && bestScore >= 0.18f) {
+            val detected = (60f / (bestLag * frameSeconds)).coerceIn(60f,180f)
+            delayTapBpm = if (delayTapBpm in 60f..180f && autoBpmLastAnalysisMs > 1200L)
+                delayTapBpm * 0.72f + detected * 0.28f else detected
+            delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+            handler.post {
+                bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+            }
+        }
+    }
+
     private fun registerDelayTap(): Float {
         val now = android.os.SystemClock.elapsedRealtime()
         if (lastDelayTapMs != 0L) {
@@ -1208,6 +1270,7 @@ class MainActivity : Activity() {
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
         }
+        bpmUiLabel = bpmLabel
         val tapButton = TextView(this).apply {
             text = "TAP"
             textSize = 9f
@@ -1220,11 +1283,36 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             }
             setOnClickListener {
+                autoBpmEnabled = false
+                paintAutoBpmButton()
                 delayBpm = registerDelayTap()
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
             }
         }
+        val autoButton = TextView(this).apply {
+            text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(if (autoBpmEnabled) colorMaster else Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                autoBpmEnabled = !autoBpmEnabled
+                if (autoBpmEnabled) {
+                    autoBpmHistory.clear()
+                    autoBpmPreviousRms = 0f
+                    autoBpmLastAnalysisMs = 0L
+                }
+                paintAutoBpmButton()
+                save()
+            }
+        }
+        autoBpmButton = autoButton
         var bpmFineSeek: SeekBar? = null
         fun bpmNudgeButton(symbol: String, amount: Float): TextView = TextView(this).apply {
             text = symbol
@@ -1259,6 +1347,7 @@ class MainActivity : Activity() {
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
         delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
+        delayTop.addView(autoButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.6f))
         val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -1682,6 +1771,7 @@ class MainActivity : Activity() {
                                 written += n
                             }
                             val rms = kotlin.math.sqrt(sum / count)
+                            analyzeAutoBpm((rms / 32768.0).toFloat(), readCompleted, sampleRate, count)
                             val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
                             val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
                             val now = android.os.SystemClock.elapsedRealtime()
