@@ -1360,9 +1360,6 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         reverbSideColumn.addView(reverbDecayDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        reverbSideColumn.addView(reverbPower, LinearLayout.LayoutParams(-1, dp(42)).apply {
-            topMargin = dp(2); bottomMargin = dp(2)
-        })
         reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(50), -1).apply {
             rightMargin = dp(5)
