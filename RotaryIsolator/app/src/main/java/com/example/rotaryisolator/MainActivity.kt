@@ -1117,12 +1117,14 @@ class MainActivity : Activity() {
         val reverbDecayDial = RotaryControl(
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true
+            { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val reverbColorDial = RotaryControl(
             this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbColorPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true
+            { "$reverbColorPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
@@ -2079,11 +2081,13 @@ private class RotaryControl(
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
             val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
-            // Keep integer precision on effect controls while matching the
-            // main-screen wheel speed and the user's configured sensitivity.
-            // Fixed precision: one physical wheel notch changes exactly one unit.
-            // No acceleration and no sensitivity multiplier, consistently on every dial.
-            val delta = wheel * if (step > 0f) step else 1f
+            // Identical wheel response to the main screen: same range-based
+            // increment and the same user-configurable sensitivity multiplier.
+            val delta = if (step > 0f) {
+                wheel * step * wheelMultiplier().coerceIn(1f,10f)
+            } else {
+                wheel * (maxV - minV) * 0.012f * wheelMultiplier().coerceIn(1f,10f)
+            }
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
