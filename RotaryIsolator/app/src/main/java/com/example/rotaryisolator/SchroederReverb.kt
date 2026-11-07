@@ -168,7 +168,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
         fxFrequency: Int = 1,
-        reverbFeedbackPercent: Int = 50
+        reverbFeedbackPercent: Int = 50,
+        reverbDecayPercent: Int = 50,
+        reverbColorPercent: Int = 50
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
@@ -191,7 +193,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val delayMixSmoothing = (1.0 - exp(-3.0 / (sampleRate * delayFadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
         val size = roomSize.coerceIn(0, 1000) / 1000f * 1.30f
         val hp = hpHz.coerceIn(20, 1200).toFloat()
-        val lp = lpHz.coerceIn(1000, 20000).toFloat()
+        val color = reverbColorPercent.coerceIn(0,100) / 100f
+        val lp = (lpHz.coerceIn(1000, 20000) * (0.55f + color * 0.90f)).coerceIn(1000f, 20000f)
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
         val fxLowAlpha = (1f - exp((-2.0 * PI * 250f / sampleRate).toFloat())).coerceIn(0.001f,1f)
@@ -200,9 +203,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // A long but controlled room tail; freeze is bounded to avoid runaway.
         // Dedicated Reverb FEEDBACK control: 50% preserves approximately the
         // previous tail length; lower values shorten it, higher values extend it.
+        val decay = reverbDecayPercent.coerceIn(0,100) / 100f
         val feedback = if (freeze) 0.965f else
-            (0.78f + size * 0.10f + reverbFeedbackPercent.coerceIn(0,100) / 100f * 0.146f).coerceIn(0.78f, 0.955f)
-        val damping = if (freeze) 0.035f else (0.09f + (1f - size.coerceIn(0f, 1f)) * 0.16f)
+            (0.78f + size * 0.10f + reverbFeedbackPercent.coerceIn(0,100) / 100f * 0.146f + (decay - 0.5f) * 0.09f).coerceIn(0.78f, 0.955f)
+        // COLOR moves the late tail from dark/warm to open/bright.
+        val damping = if (freeze) 0.035f else
+            (0.09f + (1f - size.coerceIn(0f, 1f)) * 0.16f + (0.5f - color) * 0.12f).coerceIn(0.015f, 0.32f)
 
         for (i in 0 until count) {
             val x = input[i] / 32768f
