@@ -297,9 +297,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // exposed in this simplified interface. Darker repeats in DUB mode
             // progressively lose top end, while SHORT stays crisp.
             delayToneState += delayToneAlpha * (delayed - delayToneState)
-            delayBuffer[delayWriteIndex] = (x * 0.68f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
-            delayWriteIndex++
-            if (delayWriteIndex == delayBuffer.size) delayWriteIndex = 0
+            // Keep the circular-buffer cursor in range even if a previous
+            // interrupted processing cycle left it at an unexpected position.
+            val safeWriteIndex = Math.floorMod(delayWriteIndex, delayBuffer.size)
+            delayBuffer[safeWriteIndex] = (x * 0.68f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
+            delayWriteIndex = if (safeWriteIndex + 1 >= delayBuffer.size) 0 else safeWriteIndex + 1
             // TEST: OFF is a hard output gate. The fade controls continue to shape
             // the return while enabled, but a disabled switch must produce no wet
             // signal at all. This isolates lingering DSP tails from stale AudioTrack output.
