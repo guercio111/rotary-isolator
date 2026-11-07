@@ -1761,33 +1761,35 @@ class MainActivity : Activity() {
                     captureProjection = projection
                     projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
                         override fun onStop() {
-                            runOnUiThread {
-                                // Ignore the callback caused by our own stop/cleanup.
-                                if (intentionallyStoppingProjection === projection) {
-                                    intentionallyStoppingProjection = null
-                                    return@runOnUiThread
-                                }
-                                // A delayed callback from an older projection must never tear down
-                                // a newer capture session that is already active.
-                                if (captureProjection !== projection) {
-                                    captureDiag("MEDIA_PROJECTION onStop ignorato: callback di sessione non corrente; activeProjectionPresent=${captureProjection != null} captureRunning=$captureRunning")
-                                    return@runOnUiThread
-                                }
-                                captureDiag("MEDIA_PROJECTION onStop della sessione corrente; captureRunning=$captureRunning restartPending=$captureRestartPending projectionId=${System.identityHashCode(projection)}")
-                                captureRunning = false
-                                captureRestartPending = false
-                                captureProjection = null
-                                // A revoked capture must never leave a wet return playing
-                                // or FX switches latched ON with no controllable audio stream.
-                                reverbOn = false
-                                delayOn = false
-                                releaseCaptureIoOnly() // stop + flush + release AudioTrack immediately
-                                save()                  // preserve all knob values, persist safe OFF state
-                                refreshUi()
-                                captureConsentLocked = true
-                                try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
-                                showCaptureRevokedDialog()
+                            // This callback is already delivered on the main handler supplied
+                            // to registerCallback(). Handle revocation synchronously here:
+                            // posting a second runOnUiThread block leaves a race in which the
+                            // AudioRecord error handler can schedule a restart with a dead token.
+                            // Ignore the callback caused by our own stop/cleanup.
+                            if (intentionallyStoppingProjection === projection) {
+                                intentionallyStoppingProjection = null
+                                return
                             }
+                            // A delayed callback from an older projection must never tear down
+                            // a newer capture session that is already active.
+                            if (captureProjection !== projection) {
+                                captureDiag("MEDIA_PROJECTION onStop ignorato: callback di sessione non corrente; activeProjectionPresent=${captureProjection != null} captureRunning=$captureRunning")
+                                return
+                            }
+                            captureDiag("MEDIA_PROJECTION onStop della sessione corrente; captureRunning=$captureRunning restartPending=$captureRestartPending projectionId=${System.identityHashCode(projection)} autoBpm=$autoBpmEnabled restartAttempts=$captureRestartAttempts")
+                            // Invalidate the token before releasing I/O so no queued retry can
+                            // rebuild AudioRecord/AudioTrack from this revoked projection.
+                            captureRunning = false
+                            captureRestartPending = false
+                            captureProjection = null
+                            reverbOn = false
+                            delayOn = false
+                            releaseCaptureIoOnly()
+                            save()
+                            refreshUi()
+                            captureConsentLocked = true
+                            try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
+                            showCaptureRevokedDialog()
                         }
                     }, handler)
                     beginAudioCapture(projection)
@@ -1962,7 +1964,7 @@ class MainActivity : Activity() {
         captureRunning = false
         handler.post {
             releaseCaptureIoOnly()
-            if (captureProjection !== projection || !captureNeeded()) {
+            if (captureProjection !== projection || !captureNeeded() || captureConsentLocked) {
                 captureRestartPending = false
                 return@post
             }
@@ -1980,7 +1982,7 @@ class MainActivity : Activity() {
             captureRestartPending = true
             handler.postDelayed({
                 captureRestartPending = false
-                if (captureProjection === projection && captureNeeded() && !captureRunning) {
+                if (captureProjection === projection && captureNeeded() && !captureRunning && !captureConsentLocked) {
                     beginAudioCapture(projection)
                 }
             }, waitMs)
