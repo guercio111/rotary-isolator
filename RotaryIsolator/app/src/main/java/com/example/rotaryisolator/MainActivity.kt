@@ -754,16 +754,19 @@ class MainActivity : Activity() {
                     if(actions.isNotEmpty()){
                         val actionBox=LinearLayout(this@MainActivity).apply{
                             orientation=LinearLayout.VERTICAL
-                            gravity=Gravity.CENTER
+                            gravity=Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                            setPadding(0,dp(6),0,0)
                             actions.forEachIndexed { index, action ->
                                 addView(action,LinearLayout.LayoutParams(-1,dp(23)).apply{if(index>0)topMargin=dp(3)})
                             }
                         }
-                        addView(actionBox,LinearLayout.LayoutParams(dp(82),-1))
+                        addView(actionBox,LinearLayout.LayoutParams(dp(74),-1))
                     }
                 }.also{it.minimumHeight=dp(rowHeight)}
             }
-            box.addView(View(this),LinearLayout.LayoutParams(-1,dp(24)))
+            // Match the EQ / ISOLATOR header lane so MASTER and its GAIN dial
+            // start on the same vertical baseline as the other three sections.
+            box.addView(View(this),LinearLayout.LayoutParams(-1,dp(38)))
             val gainDial:View = if(modes["GAIN"]==true) SeekBar(this).apply {
                 max=240;progress=((gain+12)*10).roundToInt()
                 setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
@@ -1097,13 +1100,13 @@ class MainActivity : Activity() {
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f
         )
         val reverbColorDial = RotaryControl(
             this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbColorPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f
         )
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
@@ -1361,8 +1364,10 @@ class MainActivity : Activity() {
         }
         reverbSideColumn.addView(reverbDecayDial, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(50), -1).apply {
-            rightMargin = dp(5)
+        // Give DECAY and COLOR enough width for noticeably larger rotary faces
+        // while keeping their captions and values below each dial.
+        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(74), -1).apply {
+            rightMargin = dp(3)
         })
         reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
         reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
