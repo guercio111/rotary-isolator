@@ -55,7 +55,7 @@ class MainActivity : Activity() {
     @Volatile private var delayBpmCorrection = 0f
     private var lastDelayTapMs = 0L
     private val delayTapIntervals = ArrayDeque<Long>()
-    private var reverbPopup: android.widget.PopupWindow? = null
+    private var fxExpanded = false
     private var captureProjection: android.media.projection.MediaProjection? = null
     // Tracks an intentional stop so MediaProjection.Callback.onStop does not
     // mistake our own cleanup for an Android permission revocation.
@@ -303,8 +303,6 @@ class MainActivity : Activity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        val reopenReverb = reverbPopup?.isShowing == true
-        reverbPopup?.dismiss()
         val w = newConfig.screenWidthDp
         val h = newConfig.screenHeightDp
         if (w > 0 && h > 0) {
@@ -313,7 +311,6 @@ class MainActivity : Activity() {
         }
         lastWindowWidthPx = 0
         buildUi()
-        if (reopenReverb) handler.post { if (!isFinishing) showReverbPopup() }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -959,8 +956,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showReverbPopup(){
-        reverbPopup?.let { if (it.isShowing) return }
+    private fun buildEffectsPanel(): LinearLayout {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -1030,7 +1026,7 @@ class MainActivity : Activity() {
                 cornerRadius = dp(4).toFloat()
                 setColor(Color.rgb(55,62,72))
             }
-            setOnClickListener { reverbPopup?.dismiss() }
+            setOnClickListener { fxExpanded = false; buildUi() }
         }
         header.gravity = Gravity.CENTER_VERTICAL
         header.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
@@ -1353,47 +1349,38 @@ class MainActivity : Activity() {
         effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, 0.57f))
         panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        // The popup initially occupies exactly the MASTER section. It never
-        // grows automatically: if the user wants more room, the bottom-right
-        // grip can be dragged to resize it manually.
-        val masterSection = sections["GAIN"] ?: container
-        val popupLocation = IntArray(2)
-        masterSection.getLocationInWindow(popupLocation)
-        val popupWidth = masterSection.width
-        val popupHeight = masterSection.height
-        if (popupWidth <= dp(40) || popupHeight <= dp(40) || !container.isAttachedToWindow) {
-            container.post {
-                if (!isFinishing && !isDestroyed && container.isAttachedToWindow) showReverbPopup()
-            }
-            return
-        }
-        val popupTop = popupLocation[1]
-        val popupContent = FrameLayout(this).apply {
-            clipChildren = true
-            clipToPadding = true
+        return panel
+    }
+
+    private fun addEffectsSection(parent: LinearLayout) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP
+            setPadding(dp(3), dp(3), dp(3), dp(3))
             setBackgroundColor(Color.rgb(25,28,34))
-            addView(panel, FrameLayout.LayoutParams(-1, -1))
+            clipChildren = false
+            clipToPadding = false
         }
-        val popupWindow = android.widget.PopupWindow(popupContent, popupWidth, popupHeight, false).apply {
-            isOutsideTouchable = false
-            isTouchable = true
-            setTouchModal(false)
-            setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
-                setColor(Color.rgb(25,28,34)); cornerRadius = dp(10).toFloat()
-                setStroke(dp(1), colorMaster)
-            })
-            elevation = dp(10).toFloat()
-            setOnDismissListener { save(); reverbPopup = null }
+        val toggle = Button(this).apply {
+            text = if (fxExpanded) "BEAT FX  ▲" else "BEAT FX  ▼"
+            textSize = 11f
+            isAllCaps = false
+            setTextColor(Color.BLACK)
+            backgroundTintList = ColorStateList.valueOf(colorButtons)
+            minHeight = dp(30)
+            minimumHeight = dp(30)
+            setPadding(dp(8), 0, dp(8), 0)
+            setOnClickListener { fxExpanded = !fxExpanded; buildUi() }
         }
-        reverbPopup = popupWindow
-        try {
-            popupWindow.showAtLocation(container, Gravity.TOP or Gravity.START, popupLocation[0], popupTop)
-        } catch (t: Throwable) {
-            reverbPopup = null
-            try { popupWindow.dismiss() } catch (_: Throwable) {}
-            android.util.Log.e("FREQUALIZER", "Impossibile mostrare il pannello BEAT FX", t)
-            Toast.makeText(this, "Pannello BEAT FX non disponibile: riprova", Toast.LENGTH_SHORT).show()
+        box.addView(toggle, LinearLayout.LayoutParams(-1, dp(32)))
+        if (fxExpanded) {
+            box.addView(buildEffectsPanel(), LinearLayout.LayoutParams(-1, 0, 1f))
+        } else {
+            box.addView(label("REVERB  •  DELAY  •  DUB ECHO", 10f, Color.LTGRAY),
+                LinearLayout.LayoutParams(-1, 0, 1f))
         }
+        parent.addView(box, LinearLayout.LayoutParams(0, -1, 1f))
+        sections["FX"] = box
     }
     private fun startAudioCaptureTest() {
         // Reuse the existing MediaProjection session after a track/route switch.
