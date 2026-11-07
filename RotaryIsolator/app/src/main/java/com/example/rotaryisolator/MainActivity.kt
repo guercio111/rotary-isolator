@@ -507,19 +507,53 @@ class MainActivity : Activity() {
         // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
         root.addView(content,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
-        // Fixed four-quadrant mixer in every orientation: only the available
-        // dimensions change, never the order or the set of controls.
-        val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-        val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-        content.addView(upper,LinearLayout.LayoutParams(-1,0,0.94f))
-        content.addView(lower,LinearLayout.LayoutParams(-1,0,1.06f))
-        addSection("EQ","EQ",eq,-14f..14f,{eqOn},upper)
-        addSection("ISOLATOR","ISOLATOR",iso,-24f..24f,{isoOn},upper)
-        val lowerLeft=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-        lower.addView(lowerLeft,LinearLayout.LayoutParams(0,-1,1f))
-        addFilterSection(lowerLeft)
-        addGainSection(lowerLeft)
-        addEffectsSection(lower)
+        // Tablet portrait gets a dedicated vertical composition. Landscape and phone
+        // layouts retain the established four-quadrant structure unchanged.
+        if (!phonePortrait && !wideLayout) {
+            val upper = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            val middle = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            val fxHost = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            // EQ + Isolator share the upper band; FILTER + MASTER form a compact
+            // middle strip; REVERB + DELAY get the full width in the lower band.
+            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.34f))
+            content.addView(middle, LinearLayout.LayoutParams(-1, 0, 0.24f))
+            content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, 0.42f))
+            addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, upper)
+            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
+            addFilterSection(middle)
+            addGainSection(middle)
+            addEffectsSection(fxHost)
+        } else {
+            // Fixed four-quadrant mixer in every orientation: only the available
+            // dimensions change, never the order or the set of controls.
+            val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+            val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+            content.addView(upper,LinearLayout.LayoutParams(-1,0,0.94f))
+            content.addView(lower,LinearLayout.LayoutParams(-1,0,1.06f))
+            addSection("EQ","EQ",eq,-14f..14f,{eqOn},upper)
+            addSection("ISOLATOR","ISOLATOR",iso,-24f..24f,{isoOn},upper)
+            val lowerLeft=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+            lower.addView(lowerLeft,LinearLayout.LayoutParams(0,-1,1f))
+            addFilterSection(lowerLeft)
+            addGainSection(lowerLeft)
+            addEffectsSection(lower)
+    
+        }
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
