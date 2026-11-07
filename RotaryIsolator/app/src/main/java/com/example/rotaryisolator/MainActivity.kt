@@ -2029,7 +2029,16 @@ private class RotaryControl(
             val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
             // Match the main EQ wheel response exactly. The shared sensitivity
             // option scales every dial, including the effect controls.
-            val delta = wheel * (if (step > 0f) step else 1f) * wheelMultiplier().coerceIn(1f, 10f)
+            // Wheel movement is always one displayed unit per detent:
+            // integer-valued dials move by 1, normalized 0..1 dials (shown as
+            // percentages, e.g. filters) move by 0.01 = 1 percentage point.
+            // Keep the same global sensitivity multiplier for every dial.
+            val wheelUnit = when {
+                step > 0f -> step
+                (maxV - minV) <= 1.0001f -> 0.01f
+                else -> 1f
+            }
+            val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(1f, 10f)
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
