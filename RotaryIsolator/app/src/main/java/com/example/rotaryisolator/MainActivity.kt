@@ -68,6 +68,19 @@ class MainActivity : Activity() {
     @Volatile private var captureRestartPending = false
     private var captureDialog: AlertDialog? = null
     private var captureStatusView: TextView? = null
+    private val captureDiagLock = Any()
+    private val captureDiagnostics = ArrayDeque<String>()
+    private fun captureDiag(message: String) {
+        val line = "t+${android.os.SystemClock.elapsedRealtime()}ms $message"
+        synchronized(captureDiagLock) {
+            captureDiagnostics.addLast(line)
+            while (captureDiagnostics.size > 100) captureDiagnostics.removeFirst()
+        }
+        android.util.Log.i("FREQUALIZER_CAPTURE", line)
+    }
+    private fun captureDiagSnapshot(): String = synchronized(captureDiagLock) {
+        captureDiagnostics.joinToString("\\n")
+    }
     private val captureRequestCode = 7420
     private val capturePermissionRequestCode = 7421
     private var audioReady = false
@@ -1113,7 +1126,7 @@ class MainActivity : Activity() {
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val delayControls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1326,19 +1339,19 @@ class MainActivity : Activity() {
             this, "TIME", delayTimePercent.toFloat(), 50f, 200f, colorMaster,
             { value -> delayTimePercent = value.roundToInt().coerceIn(50,200); scheduleUpdate() },
             { "${delayTimePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val delayFeedbackDial = RotaryControl(
             this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
             { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
             { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val delayToneDial = RotaryControl(
             this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorMaster,
             { value -> delayTonePercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val delayRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1476,13 +1489,14 @@ class MainActivity : Activity() {
                                     intentionallyStoppingProjection = null
                                     return@runOnUiThread
                                 }
+                                captureDiag("MEDIA_PROJECTION onStop ricevuto; captureRunning=$captureRunning restartPending=$captureRestartPending")
                                 captureRunning = false
                                 captureRestartPending = false
                                 releaseCaptureIoOnly()
                                 if (captureProjection === projection) captureProjection = null
                                 captureConsentLocked = true
                                 try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
-                                Toast.makeText(this@MainActivity, "Android ha revocato la sessione di cattura • serve una nuova autorizzazione", Toast.LENGTH_LONG).show()
+                                showCaptureError("ANDROID HA REVOCATO LA SESSIONE DI CATTURA", null)
                             }
                         }
                     }, handler)
@@ -1559,16 +1573,23 @@ class MainActivity : Activity() {
             captureRecord = record
             track.play()
             record.startRecording()
+            captureDiag("I/O avviato: rate=$sampleRate minInBuffer=$minBuffer inBuffer=${maxOf(minBuffer * 2, 8192)} minOutBuffer=$minOut outBuffer=${maxOf(minOut * 2, 8192)} recordState=${record.state} recordingState=${record.recordingState} trackState=${track.state} playState=${track.playState}")
             captureRunning = true
             captureThread = Thread({
                 val buffer = ShortArray(2048)
                 val wetBuffer = ShortArray(buffer.size)
                 val processor = parallelReverbProcessor ?: return@Thread
                 var lastUi = 0L
-                var previousReverbState = false
+                var lastReadCompleted = 0L
                 try {
                     while (captureRunning) {
+                        val readStarted = android.os.SystemClock.elapsedRealtime()
                         val count = record.read(buffer, 0, buffer.size)
+                        val readCompleted = android.os.SystemClock.elapsedRealtime()
+                        if (lastReadCompleted > 0L && readCompleted - lastReadCompleted > 100L) {
+                            captureDiag("GAP tra letture AudioRecord: ${readCompleted - lastReadCompleted}ms; readDuration=${readCompleted - readStarted}ms count=$count recordState=${record.state} recordingState=${record.recordingState} trackPlayState=${track.playState}")
+                        }
+                        lastReadCompleted = readCompleted
                         if (count > 0) {
                             captureRestartAttempts = 0
                             var peak = 0
@@ -1588,7 +1609,10 @@ class MainActivity : Activity() {
                             )
                             var written = 0
                             while (written < count && captureRunning) {
+                                val writeStarted = android.os.SystemClock.elapsedRealtime()
                                 val n = track.write(wetBuffer, written, count - written, android.media.AudioTrack.WRITE_BLOCKING)
+                                val writeDuration = android.os.SystemClock.elapsedRealtime() - writeStarted
+                                if (writeDuration > 80L || n <= 0) captureDiag("AudioTrack.write: n=$n duration=${writeDuration}ms written=$written/$count trackState=${track.state} playState=${track.playState}")
                                 if (n <= 0) throw IllegalStateException("AudioTrack write non riuscita: $n")
                                 written += n
                             }
@@ -1608,6 +1632,7 @@ class MainActivity : Activity() {
                                 }
                             }
                         } else if (count < 0 && captureRunning) {
+                            captureDiag("AudioRecord.read errore: $count recordState=${record.state} recordingState=${record.recordingState}")
                             throw IllegalStateException("AudioRecord read: $count")
                         }
                     }
@@ -1641,6 +1666,7 @@ class MainActivity : Activity() {
     }
 
     private fun scheduleCaptureRestart(projection: android.media.projection.MediaProjection, error: Throwable) {
+        captureDiag("RESTART richiesto: ${error.javaClass.simpleName}: ${error.message}; projectionSame=${captureProjection === projection} effectsActive=${effectsActive()}")
         captureRunning = false
         handler.post {
             releaseCaptureIoOnly()
@@ -1712,6 +1738,8 @@ class MainActivity : Activity() {
                 append("\n\nDETTAGLI TECNICI:\n")
                 append(android.util.Log.getStackTraceString(error))
             }
+            append("\\n\\nDIAGNOSTICA CATTURA (ultimi eventi):\\n")
+            append(captureDiagSnapshot())
         }
         val detailsView = ScrollView(this).apply {
             addView(TextView(this@MainActivity).apply {
