@@ -36,7 +36,9 @@ class AudioCaptureForegroundService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    // A restarted sticky service would not receive the one-shot MediaProjection
+    // consent token again. Never resurrect capture without a fresh user grant.
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
