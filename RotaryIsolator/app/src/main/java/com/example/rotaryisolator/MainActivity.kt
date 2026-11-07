@@ -181,7 +181,7 @@ class MainActivity : Activity() {
         reverbDecayPercent = prefs.getInt("reverb_decay", 50).coerceIn(0,100)
         reverbColorPercent = prefs.getInt("reverb_color", 50).coerceIn(0,100)
         delayMix = 0 // Il livello Delay parte sempre chiuso all’avvio dell’app.
-        delayTimePercent = prefs.getInt("beat_fx_delay_time", 100).coerceIn(50,200)
+        delayTimePercent = 100
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
         delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
         fxFrequency = prefs.getInt("beat_fx_frequency", 1).coerceIn(0,2)
@@ -318,13 +318,29 @@ class MainActivity : Activity() {
         connectAudio()
     }
 
+    override fun onStart() {
+        super.onStart()
+        captureDiag("ACTIVITY onStart taskId=$taskId captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        captureDiag("ACTIVITY onResume taskId=$taskId captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
+    }
+
     override fun onPause() {
+        captureDiag("ACTIVITY onPause isFinishing=$isFinishing isChangingConfigurations=$isChangingConfigurations captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
         // Persist the live mixer and mark the session as backgrounded. If Android
         // later reclaims the process for battery/memory management, the next
         // Activity instance knows to restore the saved controls, not startup defaults.
         save()
         prefs.edit().putBoolean("session_in_background", true).apply()
         super.onPause()
+    }
+
+    override fun onStop() {
+        captureDiag("ACTIVITY onStop isFinishing=$isFinishing isChangingConfigurations=$isChangingConfigurations captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
+        super.onStop()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -503,7 +519,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",delayTimePercent).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",100).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1493,9 +1509,10 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             }
             setOnClickListener {
-                // Clear the beat/phase history and release the tempo lock.
-                // Keep the last BPM number visible until AUTO detects a fresh estimate.
+                // Full beat-clock reset. AUTO remains enabled if it was enabled,
+                // but must acquire a fresh estimate instead of retaining stale phase/BPM.
                 bpmSyncLocked = false
+                bpmSyncLockedValue = 120f
                 delaySyncOffsetMs = 0f
                 autoBpmNextBeatMs = 0L
                 autoBpmHistory.clear()
@@ -1504,10 +1521,16 @@ class MainActivity : Activity() {
                 autoBpmLowpassState = 0f
                 autoBpmLastAnalysisMs = 0L
                 autoBpmHasEstimate = false
+                delayTapBpm = 120f
+                delayBpmCorrection = 0f
+                delayBpm = 120f
                 lastDelayTapMs = 0L
                 delayTapIntervals.clear()
+                bpmFineSeek?.progress = 100
+                bpmUiLabel?.text = "120.0"
                 scheduleUpdate()
                 save()
+                captureDiag("RST premuto: BPM riportato a 120, fase e storico azzerati; AUTO=$autoBpmEnabled")
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(6).toFloat()
                     setColor(colorMaster)
@@ -1665,12 +1688,6 @@ class MainActivity : Activity() {
 
 
 
-        val delayTimeDial = RotaryControl(
-            this, "TIME", delayTimePercent.toFloat(), 50f, 200f, colorMaster,
-            { value -> delayTimePercent = value.roundToInt().coerceIn(50,200); scheduleUpdate() },
-            { "${delayTimePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
-        )
         val delayFeedbackDial = RotaryControl(
             this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
             { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
@@ -1688,7 +1705,6 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         delayRow.addView(delayDial, LinearLayout.LayoutParams(0, -1, 1f))
-        delayRow.addView(delayTimeDial, LinearLayout.LayoutParams(0, -1, 1f))
         delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
         delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, -1, 1f))
         val reverbColumn = LinearLayout(this).apply {
@@ -1946,7 +1962,7 @@ class MainActivity : Activity() {
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision, delayMode, delayTimePercent, delayFeedbackPercent, delayTonePercent, fxFrequency,
+                                delayOn, delayFadeMs, delayDivision, delayMode, 100, delayFeedbackPercent, delayTonePercent, fxFrequency,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
                                 delaySyncOffsetMs, bpmSyncLocked
                             )
@@ -2321,6 +2337,7 @@ class MainActivity : Activity() {
     }
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
+        captureDiag("ACTIVITY onDestroy isFinishing=$isFinishing isChangingConfigurations=$isChangingConfigurations captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
         // An intentional close starts a fresh session next time; background
         // process reclamation and configuration changes keep the saved state.
         if (isFinishing) {
