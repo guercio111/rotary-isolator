@@ -55,6 +55,7 @@ class MainActivity : Activity() {
     @Volatile private var delayBpmCorrection = 0f
     @Volatile private var autoBpmEnabled = false
     @Volatile private var delaySyncOffsetMs = 0f
+    @Volatile private var bpmSyncAnchorMs = 0L
     @Volatile private var autoBpmNextBeatMs = 0L
     private var autoBpmHasEstimate = false
     private var autoBpmHistory = ArrayDeque<Float>() // 10 ms bass-onset frames
@@ -1203,6 +1204,30 @@ class MainActivity : Activity() {
         }
     }
 
+    // Recalculate the delay read-head offset against the same SYNC phase anchor
+    // whenever the user changes beat division. The selected interval then lands
+    // on the next subdivision instead of adding a stale positive phase offset.
+    private fun updateDelaySyncOffsetForDivision() {
+        if (!bpmSyncLocked || bpmSyncAnchorMs <= 0L) {
+            delaySyncOffsetMs = 0f
+            return
+        }
+        val beatMs = 60000f / bpmSyncLockedValue.coerceIn(60f, 180f)
+        val fraction = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 2f, 4f, 8f)[delayDivision.coerceIn(0, 6)]
+        val intervalMs = beatMs * fraction
+        val elapsedMs = (android.os.SystemClock.elapsedRealtime() - bpmSyncAnchorMs)
+            .coerceAtLeast(0L).toFloat()
+        val remainingMs = if (fraction < 1f) {
+            val withinSubdivision = elapsedMs % intervalMs
+            intervalMs - withinSubdivision
+        } else {
+            val withinBeat = elapsedMs % beatMs
+            val untilNextBeat = if (withinBeat < 1f) beatMs else beatMs - withinBeat
+            untilNextBeat + (fraction - 1f) * beatMs
+        }
+        delaySyncOffsetMs = (remainingMs - intervalMs).coerceIn(-1000f, 1000f)
+    }
+
     private fun registerDelayTap(): Float {
         val now = android.os.SystemClock.elapsedRealtime()
         if (lastDelayTapMs != 0L) {
@@ -1385,6 +1410,8 @@ class MainActivity : Activity() {
                 autoBpmEnabled = false
                 paintAutoBpmButton()
                 bpmSyncLocked = false
+                bpmSyncAnchorMs = 0L
+                delaySyncOffsetMs = 0f
                 delayBpm = registerDelayTap()
                 delayTapBpm = delayBpm
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
@@ -1408,6 +1435,8 @@ class MainActivity : Activity() {
                     autoBpmHistory.clear()
                     autoBpmEstimateHistory.clear()
                     bpmSyncLocked = false
+                    bpmSyncAnchorMs = 0L
+                    delaySyncOffsetMs = 0f
                     autoBpmPreviousBass = 0f
                     autoBpmLowpassState = 0f
                     autoBpmLastAnalysisMs = 0L
@@ -1433,17 +1462,13 @@ class MainActivity : Activity() {
             }
             setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
-                val beatMs = 60000f / delayBpm.coerceIn(60f,180f)
                 val lastBeat = autoBpmNextBeatMs
-                delaySyncOffsetMs = if (autoBpmEnabled && lastBeat > 0L) {
-                    val elapsed = ((now - lastBeat).toFloat() % beatMs + beatMs) % beatMs
-                    (beatMs - elapsed) % beatMs
-                } else {
-                    // In manual mode, press SYNC exactly on the beat to establish phase.
-                    0f
-                }
+                // AUTO anchors to the latest detected bass beat. In manual mode,
+                // the SYNC press itself is the phase reference.
+                bpmSyncAnchorMs = if (autoBpmEnabled && lastBeat > 0L) lastBeat else now
                 bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
                 bpmSyncLocked = true
+                updateDelaySyncOffsetForDivision()
                 scheduleUpdate()
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(6).toFloat()
@@ -1514,6 +1539,7 @@ class MainActivity : Activity() {
                 // detector can reacquire timing without jumping back to 120 BPM.
                 bpmSyncLocked = false
                 delaySyncOffsetMs = 0f
+                bpmSyncAnchorMs = 0L
                 autoBpmNextBeatMs = 0L
                 autoBpmHistory.clear()
                 autoBpmEstimateHistory.clear()
@@ -1630,6 +1656,7 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setOnClickListener {
                     delayDivision = index
+                    if (bpmSyncLocked) updateDelaySyncOffsetForDivision()
                     paintDivisionButtons()
                     save(); scheduleUpdate()
                 }
