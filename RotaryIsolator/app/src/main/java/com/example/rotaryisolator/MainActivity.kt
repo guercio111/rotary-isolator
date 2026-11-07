@@ -1161,7 +1161,7 @@ class MainActivity : Activity() {
         // than the four Delay dials. Scale only their drawing, not their
         // touch/layout bounds, to match the Delay rotary size.
         if (!phonePortrait && !wideLayout) {
-            listOf(depthDial, timeDial).forEach { it.scaleX = 0.62f; it.scaleY = 0.62f }
+            listOf(depthDial, timeDial).forEach { it.scaleX = 0.72f; it.scaleY = 0.72f }
         }
         reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -1171,7 +1171,7 @@ class MainActivity : Activity() {
             { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        if (!phonePortrait && !wideLayout) { reverbFeedbackDial.scaleX = 0.62f; reverbFeedbackDial.scaleY = 0.62f }
+        if (!phonePortrait && !wideLayout) { reverbFeedbackDial.scaleX = 0.72f; reverbFeedbackDial.scaleY = 0.72f }
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
         val reverbDecayDial = RotaryControl(
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
