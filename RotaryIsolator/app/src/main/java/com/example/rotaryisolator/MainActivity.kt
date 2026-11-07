@@ -1748,10 +1748,10 @@ class MainActivity : Activity() {
                                 // A delayed callback from an older projection must never tear down
                                 // a newer capture session that is already active.
                                 if (captureProjection !== projection) {
-                                    captureDiag("MEDIA_PROJECTION onStop ignorato: callback di sessione non corrente; activeProjectionPresent=\${captureProjection != null} captureRunning=$captureRunning")
+                                    captureDiag("MEDIA_PROJECTION onStop ignorato: callback di sessione non corrente; activeProjectionPresent=${captureProjection != null} captureRunning=$captureRunning")
                                     return@runOnUiThread
                                 }
-                                captureDiag("MEDIA_PROJECTION onStop della sessione corrente; captureRunning=$captureRunning restartPending=$captureRestartPending projectionId=\${System.identityHashCode(projection)}")
+                                captureDiag("MEDIA_PROJECTION onStop della sessione corrente; captureRunning=$captureRunning restartPending=$captureRestartPending projectionId=${System.identityHashCode(projection)}")
                                 captureRunning = false
                                 captureRestartPending = false
                                 captureProjection = null
