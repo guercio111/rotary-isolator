@@ -63,6 +63,7 @@ class MainActivity : Activity() {
     private var autoBpmEstimateHistory = ArrayDeque<Float>() // median filter for noisy frame estimates
     @Volatile private var bpmSyncLocked = false
     @Volatile private var bpmSyncLockedValue = 120f
+    @Volatile private var bpmSyncManualTempoPending = false
     private var autoBpmPreviousBass = 0f
     private var autoBpmLowpassState = 0f
     private var autoBpmLastAnalysisMs = 0L
@@ -1493,6 +1494,30 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
                 val lastBeat = autoBpmNextBeatMs
+                if (bpmSyncLocked && bpmSyncManualTempoPending) {
+                    // A manual BPM adjustment explicitly asks for a fresh phase lock.
+                    // Re-anchor at this SYNC press using the manually selected tempo.
+                    bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
+                    bpmSyncAnchorMs = now
+                    bpmSyncLastCorrectionBeatMs = 0L
+                    bpmSyncManualTempoPending = false
+                    updateDelaySyncOffsetForDivision()
+                    scheduleUpdate()
+                    captureDiag("SYNC riagganciato al BPM manuale: " + bpmSyncLockedValue)
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(6).toFloat()
+                        setColor(colorMaster)
+                        setStroke(dp(1), colorMaster)
+                    }
+                    postDelayed({
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            cornerRadius = dp(6).toFloat()
+                            setColor(Color.rgb(55,62,72))
+                            setStroke(dp(1), colorMaster)
+                        }
+                    }, 350L)
+                    return@setOnClickListener
+                }
                 if (bpmSyncLocked) {
                     // A repeated SYNC is a gentle phase trim, never a new clock/tempo lock.
                     // Use each newly detected onset only once; limit each correction so
@@ -1518,6 +1543,7 @@ class MainActivity : Activity() {
                 bpmSyncAnchorMs = if (autoBpmEnabled && lastBeat > 0L) lastBeat else now
                 bpmSyncLastCorrectionBeatMs = lastBeat
                 bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
+                bpmSyncManualTempoPending = false
                 bpmSyncLocked = true
                 updateDelaySyncOffsetForDivision()
                 scheduleUpdate()
@@ -1551,6 +1577,7 @@ class MainActivity : Activity() {
                 delayBpmCorrection = (delayBpmCorrection + amount).coerceIn(-10f,10f)
                 delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
                 if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
+                bpmSyncManualTempoPending = true
                 bpmFineSeek?.progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
@@ -1633,6 +1660,7 @@ class MainActivity : Activity() {
                         delayBpmCorrection = (progress - 100) * 0.1f
                         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
                         if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
+                        bpmSyncManualTempoPending = true
                         bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                         scheduleUpdate()
                     }
