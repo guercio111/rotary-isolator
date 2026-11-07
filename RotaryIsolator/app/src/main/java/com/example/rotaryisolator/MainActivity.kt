@@ -1509,10 +1509,10 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             }
             setOnClickListener {
-                // Full beat-clock reset. AUTO remains enabled if it was enabled,
-                // but must acquire a fresh estimate instead of retaining stale phase/BPM.
+                // Original RST behavior: release SYNC and reset only the beat-phase
+                // reference/history. Keep the current BPM and fine correction so the
+                // detector can reacquire timing without jumping back to 120 BPM.
                 bpmSyncLocked = false
-                bpmSyncLockedValue = 120f
                 delaySyncOffsetMs = 0f
                 autoBpmNextBeatMs = 0L
                 autoBpmHistory.clear()
@@ -1521,16 +1521,9 @@ class MainActivity : Activity() {
                 autoBpmLowpassState = 0f
                 autoBpmLastAnalysisMs = 0L
                 autoBpmHasEstimate = false
-                delayTapBpm = 120f
-                delayBpmCorrection = 0f
-                delayBpm = 120f
-                lastDelayTapMs = 0L
-                delayTapIntervals.clear()
-                bpmFineSeek?.progress = 100
-                bpmUiLabel?.text = "120.0"
                 scheduleUpdate()
                 save()
-                captureDiag("RST premuto: BPM riportato a 120, fase e storico azzerati; AUTO=$autoBpmEnabled")
+                captureDiag("RST premuto: SYNC sbloccato, fase e storico azzerati; BPM mantenuto; AUTO=$autoBpmEnabled")
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(6).toFloat()
                     setColor(colorMaster)
