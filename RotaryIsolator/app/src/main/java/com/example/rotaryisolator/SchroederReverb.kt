@@ -271,7 +271,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val effectiveTimeBeats = if (delaySyncLocked)
             (rawTimeBeats * 16f).roundToInt().coerceAtLeast(1) / 16f
         else rawTimeBeats
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * effectiveTimeBeats * modeTime + sampleRate * (delaySyncOffsetMs.coerceIn(0f,1000f) / 1000f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * effectiveTimeBeats * modeTime + sampleRate * (delaySyncOffsetMs.coerceIn(-1000f,1000f) / 1000f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val requestedDivision = delayDivision.coerceIn(0, 6)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
