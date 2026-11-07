@@ -58,6 +58,9 @@ class MainActivity : Activity() {
     @Volatile private var autoBpmNextBeatMs = 0L
     private var autoBpmHasEstimate = false
     private var autoBpmHistory = ArrayDeque<Float>() // 10 ms bass-onset frames
+    private var autoBpmEstimateHistory = ArrayDeque<Float>() // median filter for noisy frame estimates
+    @Volatile private var bpmSyncLocked = false
+    @Volatile private var bpmSyncLockedValue = 120f
     private var autoBpmPreviousBass = 0f
     private var autoBpmLowpassState = 0f
     private var autoBpmLastAnalysisMs = 0L
@@ -1140,10 +1143,21 @@ class MainActivity : Activity() {
 
         if (bestLag > 0 && bestScore >= 0.12f) {
             val detected = (6000f / bestLag).coerceIn(60f, 180f)
+            autoBpmEstimateHistory.addLast(detected)
+            while (autoBpmEstimateHistory.size > 7) autoBpmEstimateHistory.removeFirst()
+            val orderedEstimates = autoBpmEstimateHistory.toList().sorted()
+            val stableDetected = orderedEstimates[orderedEstimates.size / 2]
             delayTapBpm = if (autoBpmHasEstimate)
-                delayTapBpm * 0.78f + detected * 0.22f else detected
+                delayTapBpm * 0.88f + stableDetected * 0.12f else stableDetected
             autoBpmHasEstimate = true
-            delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
+            val liveEstimate = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
+            if (bpmSyncLocked) {
+                // Once SYNC is pressed, keep the musical clock fixed.
+                // The detector may keep analysing, but cannot pull the effects off beat.
+                delayBpm = bpmSyncLockedValue
+            } else {
+                delayBpm = liveEstimate
+            }
 
             // Anchor the phase to the strongest onset in the most recent beat window.
             var strongestIndex = values.lastIndex
@@ -1345,7 +1359,9 @@ class MainActivity : Activity() {
             setOnClickListener {
                 autoBpmEnabled = false
                 paintAutoBpmButton()
+                bpmSyncLocked = false
                 delayBpm = registerDelayTap()
+                delayTapBpm = delayBpm
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
             }
@@ -1365,6 +1381,8 @@ class MainActivity : Activity() {
                 autoBpmEnabled = !autoBpmEnabled
                 if (autoBpmEnabled) {
                     autoBpmHistory.clear()
+                    autoBpmEstimateHistory.clear()
+                    bpmSyncLocked = false
                     autoBpmPreviousBass = 0f
                     autoBpmLowpassState = 0f
                     autoBpmLastAnalysisMs = 0L
@@ -1399,6 +1417,8 @@ class MainActivity : Activity() {
                     // In manual mode, press SYNC exactly on the beat to establish phase.
                     0f
                 }
+                bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
+                bpmSyncLocked = true
                 scheduleUpdate()
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(6).toFloat()
@@ -1429,6 +1449,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 delayBpmCorrection = (delayBpmCorrection + amount).coerceIn(-10f,10f)
                 delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
                 bpmFineSeek?.progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
@@ -1465,6 +1486,7 @@ class MainActivity : Activity() {
                     if (fromUser) {
                         delayBpmCorrection = (progress - 100) * 0.1f
                         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                        if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
                         bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                         scheduleUpdate()
                     }
