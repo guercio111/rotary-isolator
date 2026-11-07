@@ -1172,35 +1172,63 @@ class MainActivity : Activity() {
             val detected = (12000f / refinedLag).coerceIn(60f, 180f)
             autoBpmEstimateHistory.addLast(detected)
             while (autoBpmEstimateHistory.size > 7) autoBpmEstimateHistory.removeFirst()
-            val orderedEstimates = autoBpmEstimateHistory.toList().sorted()
+            val estimates = autoBpmEstimateHistory.toList()
+            val orderedEstimates = estimates.sorted()
             val stableDetected = orderedEstimates[orderedEstimates.size / 2]
-            delayTapBpm = if (autoBpmHasEstimate)
-                delayTapBpm * 0.88f + stableDetected * 0.12f else stableDetected
-            autoBpmHasEstimate = true
-            val liveEstimate = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
-            if (bpmSyncLocked) {
-                // Once SYNC is pressed, keep the musical clock fixed.
-                // The detector may keep analysing, but cannot pull the effects off beat.
-                delayBpm = bpmSyncLockedValue
-            } else {
-                delayBpm = liveEstimate
-            }
-
-            // Anchor the phase to the strongest onset in the most recent beat window.
-            var strongestIndex = values.lastIndex
-            var strongest = Float.NEGATIVE_INFINITY
-            val searchStart = (values.size - bestLag * 2).coerceAtLeast(0)
-            for (i in searchStart..values.lastIndex) {
-                if (values[i] > strongest) {
-                    strongest = values[i]
-                    strongestIndex = i
+            // Require agreement across several analysis windows before changing
+            // the displayed tempo or publishing a new phase reference.
+            val agreementTolerance = maxOf(2.0f, stableDetected * 0.035f)
+            val agreeingEstimates = estimates.count { abs(it - stableDetected) <= agreementTolerance }
+            if (agreeingEstimates >= 4) {
+                var candidateBpm = stableDetected
+                if (autoBpmHasEstimate) {
+                    // Protect the established tempo from octave errors: kick patterns
+                    // can make autocorrelation alternate between real and half/double time.
+                    val ratio = candidateBpm / delayTapBpm.coerceIn(60f, 180f)
+                    if (ratio in 0.45f..0.55f) candidateBpm *= 2f
+                    else if (ratio in 1.80f..2.20f) candidateBpm *= 0.5f
                 }
-            }
-            val ageMs = ((values.lastIndex - strongestIndex) * 5L)
-            autoBpmNextBeatMs = nowMs - ageMs
 
-            handler.post {
-                bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+                val relativeChange = abs(candidateBpm - delayTapBpm) / delayTapBpm.coerceAtLeast(1f)
+                if (!autoBpmHasEstimate) {
+                    // Initial acquisition uses the median of several agreeing windows.
+                    delayTapBpm = candidateBpm.coerceIn(60f, 180f)
+                    autoBpmHasEstimate = true
+                } else if (relativeChange <= 0.08f) {
+                    // Follow small tempo movements smoothly.
+                    delayTapBpm = delayTapBpm * 0.90f + candidateBpm * 0.10f
+                } else if (agreeingEstimates >= 6) {
+                    // A larger genuine tempo change needs near-unanimous confirmation.
+                    delayTapBpm = delayTapBpm * 0.92f + candidateBpm * 0.08f
+                }
+
+                val liveEstimate = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
+                if (bpmSyncLocked) {
+                    // Once SYNC is pressed, the musical clock remains fixed.
+                    delayBpm = bpmSyncLockedValue
+                } else {
+                    delayBpm = liveEstimate
+                }
+
+                // Select phase from the accepted tempo's beat window, not a raw
+                // autocorrelation lag that may represent half/double time.
+                val expectedLag = (12000f / delayTapBpm.coerceIn(60f, 180f)).roundToInt()
+                    .coerceIn(minLag, maxLag)
+                var strongestIndex = values.lastIndex
+                var strongest = Float.NEGATIVE_INFINITY
+                val searchStart = (values.size - expectedLag * 2).coerceAtLeast(0)
+                for (i in searchStart..values.lastIndex) {
+                    if (values[i] > strongest) {
+                        strongest = values[i]
+                        strongestIndex = i
+                    }
+                }
+                val ageMs = ((values.lastIndex - strongestIndex) * 5L)
+                autoBpmNextBeatMs = nowMs - ageMs
+
+                handler.post {
+                    bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+                }
             }
         }
     }
