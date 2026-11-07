@@ -34,6 +34,11 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
+      - name: Apply branch Kotlin sources
+        run: |
+          mkdir -p extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/*.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/
+
       - name: Rename app to FREQUALIZER
         run: |
           python3 - <<'PY'
