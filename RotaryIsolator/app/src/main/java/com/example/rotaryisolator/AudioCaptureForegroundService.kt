@@ -12,6 +12,7 @@ import android.os.IBinder
 class AudioCaptureForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
+        android.util.Log.i("FREQUALIZER_CAPTURE", "SERVICE onCreate")
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(
@@ -38,7 +39,21 @@ class AudioCaptureForegroundService : Service() {
 
     // A restarted sticky service would not receive the one-shot MediaProjection
     // consent token again. Never resurrect capture without a fresh user grant.
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        android.util.Log.i("FREQUALIZER_CAPTURE", "SERVICE onStartCommand startId=$startId flags=$flags intentPresent=${intent != null}")
+        return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        android.util.Log.w("FREQUALIZER_CAPTURE", "SERVICE onTaskRemoved")
+        super.onTaskRemoved(rootIntent)
+    }
+
+    override fun onDestroy() {
+        android.util.Log.w("FREQUALIZER_CAPTURE", "SERVICE onDestroy")
+        super.onDestroy()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
