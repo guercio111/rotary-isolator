@@ -14,6 +14,54 @@ import kotlin.math.roundToInt
  * Input and output all-pass diffusion soften the onset and merge the late tail.
  */
 internal class SchroederReverb(private val sampleRate: Int) {
+    // Fourth-order Linkwitz-Riley crossover sections for clean, phase-aligned
+    // FX band isolation. Two cascaded Butterworth biquads create each LR4 slope.
+    private class Biquad(sampleRate: Int, frequency: Float, highPass: Boolean) {
+        private val b0: Float
+        private val b1: Float
+        private val b2: Float
+        private val a1: Float
+        private val a2: Float
+        private var z1 = 0f
+        private var z2 = 0f
+
+        init {
+            val omega = (2.0 * PI * frequency.coerceIn(20f, sampleRate * 0.45f) / sampleRate).toFloat()
+            val c = kotlin.math.cos(omega.toDouble()).toFloat()
+            val sn = kotlin.math.sin(omega.toDouble()).toFloat()
+            val alpha = sn * 0.70710678f
+            val a0 = 1f + alpha
+            if (highPass) {
+                b0 = ((1f + c) * 0.5f) / a0
+                b1 = -(1f + c) / a0
+                b2 = ((1f + c) * 0.5f) / a0
+            } else {
+                b0 = ((1f - c) * 0.5f) / a0
+                b1 = (1f - c) / a0
+                b2 = ((1f - c) * 0.5f) / a0
+            }
+            a1 = (-2f * c) / a0
+            a2 = (1f - alpha) / a0
+        }
+
+        fun tick(input: Float): Float {
+            val output = b0 * input + z1
+            z1 = b1 * input - a1 * output + z2
+            z2 = b2 * input - a2 * output
+            return output
+        }
+
+        fun clear() { z1 = 0f; z2 = 0f }
+    }
+
+    private val fxLow1 = Biquad(sampleRate, 250f, false)
+    private val fxLow2 = Biquad(sampleRate, 250f, false)
+    private val fxMidHighPass1 = Biquad(sampleRate, 250f, true)
+    private val fxMidHighPass2 = Biquad(sampleRate, 250f, true)
+    private val fxMidLowPass1 = Biquad(sampleRate, 2500f, false)
+    private val fxMidLowPass2 = Biquad(sampleRate, 2500f, false)
+    private val fxHigh1 = Biquad(sampleRate, 2500f, true)
+    private val fxHigh2 = Biquad(sampleRate, 2500f, true)
     private class AllPass(delay: Int, private val coefficient: Float) {
         private val data = FloatArray(delay.coerceAtLeast(1))
         private var index = 0
@@ -128,8 +176,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
-    private var fxLowState = 0f
-    private var fxMidState = 0f
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -151,8 +197,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTransitionPosition = 0
         activeDelayDivision = -1
         delayToneState = 0f
-        fxLowState = 0f
-        fxMidState = 0f
+        fxLow1.clear(); fxLow2.clear()
+        fxMidHighPass1.clear(); fxMidHighPass2.clear()
+        fxMidLowPass1.clear(); fxMidLowPass2.clear()
+        fxHigh1.clear(); fxHigh2.clear()
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -251,8 +299,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val lp = (lpHz.coerceIn(1000, 20000) * (0.55f + color * 0.90f)).coerceIn(1000f, 20000f)
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val fxLowAlpha = (1f - exp((-2.0 * PI * 250f / sampleRate).toFloat())).coerceIn(0.001f,1f)
-        val fxMidAlpha = (1f - exp((-2.0 * PI * 2500f / sampleRate).toFloat())).coerceIn(0.001f,1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
         // Dedicated Reverb FEEDBACK control: 50% preserves approximately the
@@ -323,12 +369,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
-            fxLowState += fxLowAlpha * (raw - fxLowState)
-            fxMidState += fxMidAlpha * (raw - fxMidState)
+            // Split the FX return into three genuinely isolated bands:
+            // LOW <250 Hz, MID 250-2500 Hz, HIGH >2500 Hz.
+            // LR4 crossover pairs provide steep 24 dB/oct slopes without the
+            // broad overlap and phasey subtraction of the previous one-pole filters.
+            val lowBand = fxLow2.tick(fxLow1.tick(raw))
+            val midHighPassed = fxMidHighPass2.tick(fxMidHighPass1.tick(raw))
+            val midBand = fxMidLowPass2.tick(fxMidLowPass1.tick(midHighPassed))
+            val highBand = fxHigh2.tick(fxHigh1.tick(raw))
             val bandLimited = when (fxFrequency.coerceIn(0,2)) {
-                0 -> fxLowState
-                1 -> fxMidState - fxLowState
-                else -> raw - fxMidState
+                0 -> lowBand
+                1 -> midBand
+                else -> highBand
             }
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
