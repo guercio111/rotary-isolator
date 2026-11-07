@@ -1113,7 +1113,7 @@ class MainActivity : Activity() {
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
         )
         val delayControls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1326,19 +1326,19 @@ class MainActivity : Activity() {
             this, "TIME", delayTimePercent.toFloat(), 50f, 200f, colorMaster,
             { value -> delayTimePercent = value.roundToInt().coerceIn(50,200); scheduleUpdate() },
             { "${delayTimePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
         )
         val delayFeedbackDial = RotaryControl(
             this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
             { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
             { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
         )
         val delayToneDial = RotaryControl(
             this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorMaster,
             { value -> delayTonePercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, wheelStep = 1f
         )
         val delayRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1946,7 +1946,8 @@ private class RotaryControl(
     private val bottomTextLift:Float = 0f,
     private val step:Float = 0f,
     private val spaciousText:Boolean = false,
-    private val labelScale:Float = 1f
+    private val labelScale:Float = 1f,
+    private val wheelStep:Float = 0f
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -2049,7 +2050,7 @@ private class RotaryControl(
             // Every mouse-wheel detent advances every rotary by the same fraction
             // of its total travel: 1/28 of the range, matching EQ's 1 dB step
             // across its 28 dB sweep. This keeps physical dial response identical.
-            val wheelUnit = (maxV - minV) / 28f
+            val wheelUnit = if (wheelStep > 0f) wheelStep else (maxV - minV) / 28f
             val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(0.7f, 1.3f)
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
