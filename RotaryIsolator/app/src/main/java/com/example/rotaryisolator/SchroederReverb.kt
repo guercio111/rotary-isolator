@@ -4,6 +4,7 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.PI
 import kotlin.math.sqrt
+import kotlin.math.roundToInt
 
 /**
  * Dense, diffuse algorithmic reverb return.
