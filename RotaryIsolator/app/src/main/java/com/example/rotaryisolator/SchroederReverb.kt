@@ -299,8 +299,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
             delayBuffer[delayWriteIndex] = (x * 0.68f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
             delayWriteIndex++
             if (delayWriteIndex == delayBuffer.size) delayWriteIndex = 0
-            val reverbReturn = wet * smoothedMix * 1.28f
-            val delayReturn = delayToneState * smoothedDelayMix * 1.28f
+            // TEST: OFF is a hard output gate. The fade controls continue to shape
+            // the return while enabled, but a disabled switch must produce no wet
+            // signal at all. This isolates lingering DSP tails from stale AudioTrack output.
+            val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
+            val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
             fxLowState += fxLowAlpha * (raw - fxLowState)
             fxMidState += fxMidAlpha * (raw - fxMidState)
