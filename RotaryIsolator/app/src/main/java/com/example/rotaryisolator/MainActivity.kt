@@ -1099,7 +1099,7 @@ class MainActivity : Activity() {
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f, bottomTextLift = 4f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
         )
         val reverbColorDial = RotaryControl(
             this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
