@@ -1382,8 +1382,8 @@ class MainActivity : Activity() {
             topMargin = dp(2); bottomMargin = dp(2)
         })
         reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(64), -1).apply {
-            rightMargin = dp(4)
+        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(50), -1).apply {
+            rightMargin = dp(5)
         })
         reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
         reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
