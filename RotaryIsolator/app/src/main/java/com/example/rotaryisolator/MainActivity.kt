@@ -1489,14 +1489,25 @@ class MainActivity : Activity() {
                                     intentionallyStoppingProjection = null
                                     return@runOnUiThread
                                 }
-                                captureDiag("MEDIA_PROJECTION onStop ricevuto; captureRunning=$captureRunning restartPending=$captureRestartPending")
+                                captureDiag("MEDIA_PROJECTION onStop ricevuto; captureRunning=$captureRunning restartPending=$captureRestartPending reverbOn=$reverbOn delayOn=$delayOn delayMix=$delayMix")
+                                // Android has revoked the capture token. Fail safe:
+                                // disable both wet effects immediately, preserve all dial
+                                // values, and mute/flush the wet return so no stale tail
+                                // can remain audible or appear stuck after capture stops.
                                 captureRunning = false
                                 captureRestartPending = false
+                                captureRestartAttempts = 0
+                                reverbOn = false
+                                delayOn = false
+                                try { captureTrack?.setVolume(0f) } catch (_: Throwable) {}
                                 releaseCaptureIoOnly()
                                 if (captureProjection === projection) captureProjection = null
                                 captureConsentLocked = true
+                                save()
+                                refreshUi()
+                                captureDiag("FAILSAFE applicato: REVERB=OFF, DELAY/ECHO=OFF; valori delle manopole conservati")
                                 try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
-                                showCaptureError("ANDROID HA REVOCATO LA SESSIONE DI CATTURA", null)
+                                showCaptureError("ANDROID HA REVOCATO LA SESSIONE DI CATTURA • EFFETTI DISATTIVATI", null)
                             }
                         }
                     }, handler)
