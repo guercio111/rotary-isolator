@@ -381,12 +381,19 @@ class MainActivity : Activity() {
     private fun fitUiToWindow() {
         if (!::root.isInitialized || !::container.isInitialized || container.width <= 0 || container.height <= 0) return
         var scale = 1f
-        for (section in sections.values) {
-            if (section.height <= 0) continue
-            val required = requiredContentHeight(section)
-            if (required > 0) scale = min(scale, section.height.toFloat() / required.toFloat())
+        // Tablet portrait uses weighted section rows sized to the available
+        // window. The recursive intrinsic-height estimate double-counts those
+        // weighted children and used to shrink the entire interface, leaving
+        // unused space at the bottom. Keep native scale in this orientation.
+        val tabletPortraitLayout = !phonePortrait && !wideLayout
+        if (!tabletPortraitLayout) {
+            for (section in sections.values) {
+                if (section.height <= 0) continue
+                val required = requiredContentHeight(section)
+                if (required > 0) scale = min(scale, section.height.toFloat() / required.toFloat())
+            }
+            scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         }
-        scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         root.pivotX = 0f
         root.pivotY = 0f
         root.scaleX = scale
@@ -762,6 +769,9 @@ class MainActivity : Activity() {
                 },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,bottomTextLift=if(useVerticalRows)8f else 0f)
                 knob.isEnabled=controlEnabled
                 if(stackedTabletLandscape && i==1){knob.scaleX=0.78f;knob.scaleY=0.78f}
+                // Make the HPF dial more prominent on tablet portrait;
+                // resonance keeps its original size.
+                if (useVerticalRows && i == 0) { knob.scaleX = 1.18f; knob.scaleY = 1.18f }
                 controlRow.addView(knob,if(stackedTabletLandscape) LinearLayout.LayoutParams(-1,-1) else if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout) filterLandscapeDialHeight else verticalDialHeight,1f))
             }
             col.addView(controlRow,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,0,1f) else if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
@@ -1133,6 +1143,12 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
+        // In tablet portrait the Reverb main dials were visually larger
+        // than the four Delay dials. Scale only their drawing, not their
+        // touch/layout bounds, to match the Delay rotary size.
+        if (!phonePortrait && !wideLayout) {
+            listOf(depthDial, timeDial).forEach { it.scaleX = 0.78f; it.scaleY = 0.78f }
+        }
         reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1f))
         val reverbFeedbackDial = RotaryControl(
@@ -1141,6 +1157,7 @@ class MainActivity : Activity() {
             { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
+        if (!phonePortrait && !wideLayout) { reverbFeedbackDial.scaleX = 0.78f; reverbFeedbackDial.scaleY = 0.78f }
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
         val reverbDecayDial = RotaryControl(
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
