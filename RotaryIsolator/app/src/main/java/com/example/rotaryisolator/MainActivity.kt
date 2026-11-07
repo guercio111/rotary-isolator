@@ -223,10 +223,17 @@ class MainActivity : Activity() {
                 .putInt("color_titles", colorTitles).putInt("color_options", colorOptions)
                 .putBoolean("color_defaults_v3", true).apply()
         }
-        val mouseDefaultsApplied = prefs.getBoolean("mouse_defaults_v1", false)
-        mouseWheelAdjustOn = if (mouseDefaultsApplied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
-        mouseWheelSensitivity = if (mouseDefaultsApplied) prefs.getFloat("mouse_wheel_sensitivity", 5f).coerceIn(1f,10f) else 5f
-        if (!mouseDefaultsApplied) prefs.edit().putBoolean("mouse_defaults_v1", true).putBoolean("mouse_wheel_adjust_on", true).putFloat("mouse_wheel_sensitivity", 5f).putBoolean("mini", false).apply()
+        // v2 restores the fast, uniform wheel response as the default on all dials.
+        // Existing v1 installs may have retained the too-slow filter sensitivity.
+        val mouseDefaultsV2Applied = prefs.getBoolean("mouse_defaults_v2", false)
+        mouseWheelAdjustOn = if (mouseDefaultsV2Applied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
+        mouseWheelSensitivity = if (mouseDefaultsV2Applied) prefs.getFloat("mouse_wheel_sensitivity", 5f).coerceIn(1f,10f) else 5f
+        if (!mouseDefaultsV2Applied) prefs.edit()
+            .putBoolean("mouse_defaults_v2", true)
+            .putBoolean("mouse_wheel_adjust_on", true)
+            .putFloat("mouse_wheel_sensitivity", 5f)
+            .putBoolean("mini", false)
+            .apply()
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
         compressorOn = prefs.getBoolean("compressor_on", false)
@@ -2068,9 +2075,13 @@ private class RotaryControl(
             // Keep the same global sensitivity multiplier for every dial.
             val wheelUnit = when {
                 step > 0f -> step
+                // HPF/Resonance are stored 0..1 but displayed 0..100%.
+                // One percentage point must match one normal unit on every other dial.
                 (maxV - minV) <= 1.0001f -> 0.01f
                 else -> 1f
             }
+            // Default global multiplier is 5x: five displayed units per mouse notch,
+            // uniformly across EQ, filters, master and every Beat FX dial.
             val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(1f, 10f)
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
