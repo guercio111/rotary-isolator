@@ -507,6 +507,44 @@ class MainActivity : Activity() {
         // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
         root.addView(content,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
+        if (!phonePortrait && !wideLayout) {
+            // Tablet portrait gets its own full-width vertical composition.
+            // The landscape branch below is deliberately left unchanged.
+            val top = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            val filterRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            val masterRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            val fxRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            content.addView(top, LinearLayout.LayoutParams(-1, 0, 0.95f))
+            content.addView(filterRow, LinearLayout.LayoutParams(-1, 0, 0.72f))
+            content.addView(masterRow, LinearLayout.LayoutParams(-1, 0, 0.88f))
+            content.addView(fxRow, LinearLayout.LayoutParams(-1, 0, 1.25f))
+
+            addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, top)
+            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, top)
+            addFilterSection(filterRow)
+            addGainSection(masterRow)
+            addEffectsSection(fxRow)
+        } else {
         // Fixed four-quadrant mixer in every orientation: only the available
         // dimensions change, never the order or the set of controls.
         val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
@@ -520,6 +558,7 @@ class MainActivity : Activity() {
         addFilterSection(lowerLeft)
         addGainSection(lowerLeft)
         addEffectsSection(lower)
+        }
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
