@@ -1461,10 +1461,17 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             }
             setOnClickListener {
+                // SYNC is an acquire/lock command, not a repeated phase reset.
+                // Once locked, extra taps must not replace the original beat anchor
+                // with a stale detector timestamp (which can jump the delay phase).
+                if (bpmSyncLocked) {
+                    captureDiag("SYNC ignorato: clock gia' bloccato; ancora di fase preservata")
+                    return@setOnClickListener
+                }
                 val now = android.os.SystemClock.elapsedRealtime()
                 val lastBeat = autoBpmNextBeatMs
-                // AUTO anchors to the latest detected bass beat. In manual mode,
-                // the SYNC press itself is the phase reference.
+                // On first lock, AUTO uses the latest detected bass beat.
+                // Manual mode uses the exact SYNC press as its phase reference.
                 bpmSyncAnchorMs = if (autoBpmEnabled && lastBeat > 0L) lastBeat else now
                 bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
                 bpmSyncLocked = true
