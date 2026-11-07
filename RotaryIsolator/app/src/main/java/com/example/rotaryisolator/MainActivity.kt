@@ -1365,7 +1365,8 @@ class MainActivity : Activity() {
                 autoBpmEnabled = !autoBpmEnabled
                 if (autoBpmEnabled) {
                     autoBpmHistory.clear()
-                    autoBpmPreviousBass = 0f\n                    autoBpmLowpassState = 0f
+                    autoBpmPreviousBass = 0f
+                    autoBpmLowpassState = 0f
                     autoBpmLastAnalysisMs = 0L
                     autoBpmNextBeatMs = 0L
                     autoBpmHasEstimate = false
