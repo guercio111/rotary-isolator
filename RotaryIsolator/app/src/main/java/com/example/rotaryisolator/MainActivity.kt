@@ -566,8 +566,7 @@ class MainActivity : Activity() {
         box.addView(header)
         // In tablet portrait, stack LOW / MID / HIGH as full-width mixer strips.
         // Phone layouts keep their compact three-column arrangement.
-        val stackedTabletLandscape = !phonePortrait && wideLayout
-        val useVerticalRows = !wideLayout || stackedTabletLandscape
+        val useVerticalRows=!wideLayout
         // Size portrait strips from their actual count: EQ has four rows in
         // double-mid mode, while the Isolator has three. This prevents the last
         // strip from being clipped by the quadrant boundary.
@@ -580,7 +579,7 @@ class MainActivity : Activity() {
         val names = if(key=="EQ" && eqDoubleMid) listOf("HIGH","MID HIGH","MID LOW","LOW") else listOf("HIGH","MID","LOW")
         for(pos in indices.indices){
             val i=indices[pos]
-            val col=LinearLayout(this).apply{orientation=if(stackedTabletLandscape)LinearLayout.VERTICAL else if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             if(useVerticalRows) vLabel.gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
@@ -658,7 +657,8 @@ class MainActivity : Activity() {
         val compactFilter = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compactFilter)1 else 4),dp(4),dp(if(compactFilter)1 else 4),dp(1))}
         val filterAccent = accentFor("FILTERS")
-        val useVerticalRows=!wideLayout
+        val stackedTabletLandscape = !phonePortrait && wideLayout
+        val useVerticalRows = !wideLayout || stackedTabletLandscape
         val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         }
@@ -684,7 +684,7 @@ class MainActivity : Activity() {
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
         val names=listOf("HPF","RESONANCE")
         for(i in 0..1){
-            val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val col=LinearLayout(this).apply{orientation=if(stackedTabletLandscape)LinearLayout.VERTICAL else if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==1)resonance else filters[0]
             val filterReturnSize=if(stackedTabletLandscape)22 else if(compactFilter)18 else 42
             val filterFlatSize=if(stackedTabletLandscape)26 else if(compactFilter)22 else 56
