@@ -2081,13 +2081,9 @@ private class RotaryControl(
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
             val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
-            // Identical wheel response to the main screen: same range-based
-            // increment and the same user-configurable sensitivity multiplier.
-            val delta = if (step > 0f) {
-                wheel * step * wheelMultiplier().coerceIn(1f,10f)
-            } else {
-                wheel * (maxV - minV) * 0.012f * wheelMultiplier().coerceIn(1f,10f)
-            }
+            // One wheel detent = exactly one unit. Apply immediately for
+            // every scroll event: no ramp, debounce, or acceleration.
+            val delta = wheel * if (step > 0f) step else 1f
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
