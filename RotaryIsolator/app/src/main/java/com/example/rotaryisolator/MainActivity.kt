@@ -762,7 +762,7 @@ class MainActivity : Activity() {
                             addView(action,LinearLayout.LayoutParams(0,dp(26),1f).apply{if(index>0)leftMargin=dp(4)})
                         }
                     }
-                    addView(actionBox,LinearLayout.LayoutParams(dp(74),-1))
+                    addView(actionBox,LinearLayout.LayoutParams(dp(144),-1))
                 }.also{it.minimumHeight=dp(rowHeight)}
             }
             // Four equal-height MASTER rows: no extra spacer above GAIN.
@@ -809,7 +809,7 @@ class MainActivity : Activity() {
                                 })
                             }
                         }
-                        addView(actions,LinearLayout.LayoutParams(dp(112),-1))
+                        addView(actions,LinearLayout.LayoutParams(dp(144),-1))
                     }
                 }.also { it.minimumHeight=dp(rowHeight) }
             }
@@ -1099,7 +1099,7 @@ class MainActivity : Activity() {
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
         )
         val reverbColorDial = RotaryControl(
             this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
