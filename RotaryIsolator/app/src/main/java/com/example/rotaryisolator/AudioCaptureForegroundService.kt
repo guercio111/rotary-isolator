@@ -8,8 +8,18 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.Binder
 
 class AudioCaptureForegroundService : Service() {
+    inner class LocalBinder : Binder() {
+        fun getService(): AudioCaptureForegroundService = this@AudioCaptureForegroundService
+    }
+
+    private val localBinder = LocalBinder()
+    @Volatile private var foregroundReady = false
+
+    fun isForegroundReady(): Boolean = foregroundReady
+
     override fun onCreate() {
         super.onCreate()
         val manager = getSystemService(NotificationManager::class.java)
@@ -34,10 +44,17 @@ class AudioCaptureForegroundService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        // The Activity waits for this service connection before requesting MediaProjection.
+        foregroundReady = true
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder = localBinder
+
+    override fun onDestroy() {
+        foregroundReady = false
+        super.onDestroy()
+    }
 
     companion object {
         private const val CHANNEL_ID = "frequalizer_capture"
