@@ -167,7 +167,7 @@ class MainActivity : Activity() {
         reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
         reverbDecayPercent = prefs.getInt("reverb_decay", 50).coerceIn(0,100)
         reverbColorPercent = prefs.getInt("reverb_color", 50).coerceIn(0,100)
-        delayMix = prefs.getInt("reverb_delay_mix", 0).coerceIn(0,100)
+        delayMix = 0 // Il livello Delay parte sempre chiuso all’avvio dell’app.
         delayTimePercent = prefs.getInt("beat_fx_delay_time", 100).coerceIn(50,200)
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
         delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
