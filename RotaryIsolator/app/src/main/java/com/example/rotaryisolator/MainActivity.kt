@@ -1052,6 +1052,8 @@ class MainActivity : Activity() {
 
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
     private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
+    // AUTO BPM also needs the system-audio capture, even when no FX is audible.
+    private fun captureNeeded() = effectsActive() || autoBpmEnabled
 
     private fun paintAutoBpmButton() {
         autoBpmButton?.let { button ->
@@ -1155,7 +1157,7 @@ class MainActivity : Activity() {
     private fun updateEffectsCapture(allowNewConsent: Boolean = false) {
         // Only an explicit ON action can start a new Android consent flow.
         // Temporary stream errors reuse the current MediaProjection token.
-        if (!effectsActive() || captureRunning || captureRestartPending) return
+        if (!captureNeeded() || captureRunning || captureRestartPending) return
         if (captureProjection != null) startAudioCaptureTest()
         else if (allowNewConsent) {
             captureConsentLocked = false
@@ -1340,6 +1342,7 @@ class MainActivity : Activity() {
                 }
                 paintAutoBpmButton()
                 save()
+                if (autoBpmEnabled) updateEffectsCapture(true)
             }
         }
         autoBpmButton = autoButton
@@ -1682,10 +1685,10 @@ class MainActivity : Activity() {
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
             captureConsentLocked = true
-            Toast.makeText(this, "Cattura non autorizzata • premi ON su Reverb o Delay/Echo per riprovare", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Cattura non autorizzata • attiva AUTO BPM oppure ON su Reverb/Delay per riprovare", Toast.LENGTH_LONG).show()
             return
         }
-        if (!effectsActive()) return
+        if (!captureNeeded()) return
         try {
             // Use the same proven startup sequence as the S25 build:
             // start the mediaProjection foreground service first, then obtain
@@ -1894,7 +1897,7 @@ class MainActivity : Activity() {
         captureRunning = false
         handler.post {
             releaseCaptureIoOnly()
-            if (captureProjection !== projection || !effectsActive()) {
+            if (captureProjection !== projection || !captureNeeded()) {
                 captureRestartPending = false
                 return@post
             }
@@ -1912,7 +1915,7 @@ class MainActivity : Activity() {
             captureRestartPending = true
             handler.postDelayed({
                 captureRestartPending = false
-                if (captureProjection === projection && effectsActive() && !captureRunning) {
+                if (captureProjection === projection && captureNeeded() && !captureRunning) {
                     beginAudioCapture(projection)
                 }
             }, waitMs)
