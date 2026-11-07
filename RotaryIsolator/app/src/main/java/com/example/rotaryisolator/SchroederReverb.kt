@@ -112,12 +112,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayToneState = 0f
 
     private fun readDelayTap(delaySamples: Float): Float {
-        var position = delayWriteIndex.toFloat() - delaySamples
-        position %= delayBuffer.size.toFloat()
-        if (position < 0f) position += delayBuffer.size.toFloat()
-        val indexA = position.toInt()
-        val fraction = position - indexA
-        val indexB = if (indexA + 1 == delayBuffer.size) 0 else indexA + 1
+        // Use Double for circular-position arithmetic. At this buffer size,
+        // Float can round a value just below size up to size itself, producing
+        // the invalid index 432000 on a 48 kHz / 9 s buffer.
+        val size = delayBuffer.size
+        val writeIndex = Math.floorMod(delayWriteIndex, size)
+        var position = (writeIndex.toDouble() - delaySamples.toDouble()) % size.toDouble()
+        if (position < 0.0) position += size.toDouble()
+        // Guard the upper boundary against any modulo/rounding edge case.
+        if (position >= size.toDouble()) position = 0.0
+        val indexA = position.toInt().coerceIn(0, size - 1)
+        val fraction = (position - indexA.toDouble()).toFloat().coerceIn(0f, 1f)
+        val indexB = if (indexA + 1 >= size) 0 else indexA + 1
         val a = delayBuffer[indexA]
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
