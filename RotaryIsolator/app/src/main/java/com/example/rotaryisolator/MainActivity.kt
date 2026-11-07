@@ -1671,6 +1671,9 @@ class MainActivity : Activity() {
                 setOnClickListener {
                     selectedBeatFx = index
                     delayMode = index
+                    // Keep the active musical clock and re-align the delay tap
+                    // when changing voicing, without resetting the SYNC anchor.
+                    if (bpmSyncLocked) updateDelaySyncOffsetForDivision()
                     paintModeButtons()
                     save(); scheduleUpdate()
                 }
