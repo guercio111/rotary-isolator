@@ -191,7 +191,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         fxFrequency: Int = 1,
         reverbFeedbackPercent: Int = 50,
         reverbDecayPercent: Int = 50,
-        reverbColorPercent: Int = 50
+        reverbColorPercent: Int = 50,
+        delaySyncOffsetMs: Float = 0f
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
@@ -207,7 +208,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val toneControlHz = 700f + delayTonePercent.coerceIn(0,100) * 130f
         val delayToneHz = when (mode) { 0 -> toneControlHz.coerceAtLeast(5000f); 1 -> toneControlHz; else -> toneControlHz.coerceAtMost(9000f) }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction * modeTime * (delayTimePercent.coerceIn(50,200) / 100f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction * modeTime * (delayTimePercent.coerceIn(50,200) / 100f) + sampleRate * (delaySyncOffsetMs.coerceIn(0f,1000f) / 1000f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val requestedDivision = delayDivision.coerceIn(0, 6)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
