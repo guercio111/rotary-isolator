@@ -216,7 +216,7 @@ class MainActivity : Activity() {
         // Preserve the enable/disable choice, but reset the old 5x default once.
         val mouseDefaultsV3Applied = prefs.getBoolean("mouse_defaults_v3", false)
         mouseWheelAdjustOn = if (mouseDefaultsV3Applied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
-        mouseWheelSensitivity = if (mouseDefaultsV3Applied) prefs.getFloat("mouse_wheel_sensitivity", 1f).coerceIn(1f,10f) else 1f
+        mouseWheelSensitivity = if (mouseDefaultsV3Applied) prefs.getFloat("mouse_wheel_sensitivity", 1f).coerceIn(0.7f,1.3f) else 1f
         if (!mouseDefaultsV3Applied) prefs.edit()
             .putBoolean("mouse_defaults_v3", true)
             .putBoolean("mouse_wheel_adjust_on", true)
@@ -755,11 +755,11 @@ class MainActivity : Activity() {
                     // including GAIN (which has no ON/RETURN buttons). This keeps
                     // the four dial centers on one exact vertical axis.
                     val actionBox=LinearLayout(this@MainActivity).apply{
-                        orientation=LinearLayout.VERTICAL
-                        gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
+                        orientation=LinearLayout.HORIZONTAL
+                        gravity=Gravity.CENTER
                         setPadding(0,0,0,0)
                         actions.forEachIndexed { index, action ->
-                            addView(action,LinearLayout.LayoutParams(-1,dp(23)).apply{if(index>0)topMargin=dp(3)})
+                            addView(action,LinearLayout.LayoutParams(0,dp(26),1f).apply{if(index>0)leftMargin=dp(4)})
                         }
                     }
                     addView(actionBox,LinearLayout.LayoutParams(dp(74),-1))
@@ -801,12 +801,11 @@ class MainActivity : Activity() {
                     addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-2),1f))
                     if(actionViews.isNotEmpty()){
                         val actions=LinearLayout(this@MainActivity).apply {
-                            orientation=LinearLayout.VERTICAL
+                            orientation=LinearLayout.HORIZONTAL
                             gravity=Gravity.CENTER
                             actionViews.forEachIndexed { index, action ->
-                                addView(action,LinearLayout.LayoutParams(-1,dp(28)).apply {
-                                    topMargin=if(index==0)0 else dp(4)
-                                    bottomMargin=dp(2)
+                                addView(action,LinearLayout.LayoutParams(0,dp(30),1f).apply {
+                                    leftMargin=if(index==0)0 else dp(4)
                                 })
                             }
                         }
@@ -1883,13 +1882,21 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener{_,checked->mouseWheelAdjustOn=checked;save()}
         }
         wheelRow.addView(wheelSwitch);panel.addView(wheelRow)
-        val wheelValue=label("Velocità: ${mouseWheelSensitivity.roundToInt()}x",12f,gold)
+        val wheelValue=label("Velocità: ${"%.1f".format(java.util.Locale.US,mouseWheelSensitivity)}X",12f,gold)
         panel.addView(wheelValue,LinearLayout.LayoutParams(-1,dp(28)))
+        val wheelScaleLabels=LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL
+            gravity=Gravity.CENTER
+            addView(label("−3",10f,Color.LTGRAY),LinearLayout.LayoutParams(0,dp(18),1f))
+            addView(label("1X • STANDARD",10f,gold),LinearLayout.LayoutParams(0,dp(18),1f))
+            addView(label("+3",10f,Color.LTGRAY),LinearLayout.LayoutParams(0,dp(18),1f))
+        }
+        panel.addView(wheelScaleLabels,LinearLayout.LayoutParams(-1,dp(20)))
         val wheelSeek=SeekBar(this).apply{
-            max=9;progress=(mouseWheelSensitivity.roundToInt()-1).coerceIn(0,9);isEnabled=mouseWheelAdjustOn
+            max=6;progress=((mouseWheelSensitivity-0.7f)*10f).roundToInt().coerceIn(0,6);isEnabled=mouseWheelAdjustOn
             setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
                 override fun onProgressChanged(seek:SeekBar?,progress:Int,fromUser:Boolean){
-                    if(fromUser){mouseWheelSensitivity=(progress+1).toFloat();wheelValue.text="Velocità: ${mouseWheelSensitivity.roundToInt()}x";save()}
+                    if(fromUser){mouseWheelSensitivity=(0.7f+progress*0.1f).coerceIn(0.7f,1.3f);wheelValue.text="Velocità: ${"%.1f".format(java.util.Locale.US,mouseWheelSensitivity)}X";save()}
                 }
                 override fun onStartTrackingTouch(seek:SeekBar?){}
                 override fun onStopTrackingTouch(seek:SeekBar?){}
@@ -2043,7 +2050,7 @@ private class RotaryControl(
             // of its total travel: 1/28 of the range, matching EQ's 1 dB step
             // across its 28 dB sweep. This keeps physical dial response identical.
             val wheelUnit = (maxV - minV) / 28f
-            val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(1f, 10f)
+            val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(0.7f, 1.3f)
             v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
