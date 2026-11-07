@@ -1745,11 +1745,17 @@ class MainActivity : Activity() {
                                     intentionallyStoppingProjection = null
                                     return@runOnUiThread
                                 }
-                                captureDiag("MEDIA_PROJECTION onStop ricevuto; captureRunning=$captureRunning restartPending=$captureRestartPending")
+                                // A delayed callback from an older projection must never tear down
+                                // a newer capture session that is already active.
+                                if (captureProjection !== projection) {
+                                    captureDiag("MEDIA_PROJECTION onStop ignorato: callback di sessione non corrente; activeProjectionPresent=\${captureProjection != null} captureRunning=$captureRunning")
+                                    return@runOnUiThread
+                                }
+                                captureDiag("MEDIA_PROJECTION onStop della sessione corrente; captureRunning=$captureRunning restartPending=$captureRestartPending projectionId=\${System.identityHashCode(projection)}")
                                 captureRunning = false
                                 captureRestartPending = false
+                                captureProjection = null
                                 releaseCaptureIoOnly()
-                                if (captureProjection === projection) captureProjection = null
                                 captureConsentLocked = true
                                 try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
                                 showCaptureError("ANDROID HA REVOCATO LA SESSIONE DI CATTURA", null)
