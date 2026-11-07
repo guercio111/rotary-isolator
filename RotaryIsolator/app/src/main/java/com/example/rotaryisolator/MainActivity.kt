@@ -537,9 +537,9 @@ class MainActivity : Activity() {
             }
             // EQ + Isolator share the upper band; FILTER + MASTER form a compact
             // middle strip; REVERB + DELAY get the full width in the lower band.
-            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.35f))
-            content.addView(middle, LinearLayout.LayoutParams(-1, 0, 0.31f))
-            content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, 0.34f))
+            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.34f))
+            content.addView(middle, LinearLayout.LayoutParams(-1, 0, 0.36f))
+            content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, 0.30f))
             addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, upper)
             addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
             addFilterSection(middle)
@@ -730,7 +730,7 @@ class MainActivity : Activity() {
             box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
         }
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
-        val verticalRowHeight = ((windowHeightDp()*0.31f-76f)/2f).roundToInt().coerceIn(54,150)
+        val verticalRowHeight = ((windowHeightDp()*0.36f-76f)/2f).roundToInt().coerceIn(50,140)
         val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else dialHeight()
         // Enlarge only the two FILTER dials on tablet landscape; leave every other control unchanged.
         val filterLandscapeDialHeight = if(wideLayout) dp(210) else dialHeight()
@@ -771,7 +771,8 @@ class MainActivity : Activity() {
                 if(stackedTabletLandscape && i==1){knob.scaleX=0.78f;knob.scaleY=0.78f}
                 // Make the HPF dial more prominent on tablet portrait;
                 // resonance keeps its original size.
-                if (useVerticalRows && i == 0) { knob.scaleX = 1.28f; knob.scaleY = 1.28f }
+                if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
+                if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
                 controlRow.addView(knob,if(stackedTabletLandscape) LinearLayout.LayoutParams(-1,-1) else if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout) filterLandscapeDialHeight else verticalDialHeight,1f))
             }
             col.addView(controlRow,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,0,1f) else if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
@@ -853,6 +854,10 @@ class MainActivity : Activity() {
                 setPadding(dp(2), dp(2), dp(2), dp(2))
             }
             fun masterCell(dial:View, actions:List<View> = emptyList()):View {
+                // Reduce all four MASTER rotary faces together so the 2x2
+                // grid fits comfortably inside the middle strip.
+                dial.scaleX = 0.76f
+                dial.scaleY = 0.76f
                 return LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER
