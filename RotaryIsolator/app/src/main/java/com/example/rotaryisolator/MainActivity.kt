@@ -55,7 +55,6 @@ class MainActivity : Activity() {
     @Volatile private var delayBpmCorrection = 0f
     private var lastDelayTapMs = 0L
     private val delayTapIntervals = ArrayDeque<Long>()
-    private var fxExpanded = false
     private var captureProjection: android.media.projection.MediaProjection? = null
     // Tracks an intentional stop so MediaProjection.Callback.onStop does not
     // mistake our own cleanup for an Android permission revocation.
@@ -1062,20 +1061,11 @@ class MainActivity : Activity() {
                 if (reverbOn) updateEffectsCapture(true)
             }
         }
-        val closeButton = TextView(this).apply {
-            text = "CHIUDI"
-            textSize = 7f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(4).toFloat()
-                setColor(Color.rgb(55,62,72))
-            }
-            setOnClickListener { fxExpanded = false; buildUi() }
-        }
+        val reverbTitle = label("REVERB", 10f, colorMaster)
+        reverbTitle.gravity = Gravity.CENTER_VERTICAL
         header.gravity = Gravity.CENTER_VERTICAL
-        header.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        header.addView(closeButton, LinearLayout.LayoutParams(dp(44), dp(18)))
+        header.addView(reverbTitle, LinearLayout.LayoutParams(0, -1, 1f))
+        header.addView(reverbPower, LinearLayout.LayoutParams(dp(42), dp(20)))
         panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
         val depthDial = RotaryControl(
@@ -1406,24 +1396,7 @@ class MainActivity : Activity() {
             clipChildren = false
             clipToPadding = false
         }
-        val toggle = Button(this).apply {
-            text = if (fxExpanded) "BEAT FX  ▲" else "BEAT FX  ▼"
-            textSize = 11f
-            isAllCaps = false
-            setTextColor(Color.BLACK)
-            backgroundTintList = ColorStateList.valueOf(colorButtons)
-            minHeight = dp(30)
-            minimumHeight = dp(30)
-            setPadding(dp(8), 0, dp(8), 0)
-            setOnClickListener { fxExpanded = !fxExpanded; buildUi() }
-        }
-        box.addView(toggle, LinearLayout.LayoutParams(-1, dp(32)))
-        if (fxExpanded) {
-            box.addView(buildEffectsPanel(), LinearLayout.LayoutParams(-1, 0, 1f))
-        } else {
-            box.addView(label("REVERB  •  DELAY  •  DUB ECHO", 10f, Color.LTGRAY),
-                LinearLayout.LayoutParams(-1, 0, 1f))
-        }
+        box.addView(buildEffectsPanel(), LinearLayout.LayoutParams(-1, -1))
         parent.addView(box, LinearLayout.LayoutParams(0, -1, 1f))
         sections["FX"] = box
     }
