@@ -1758,7 +1758,7 @@ class MainActivity : Activity() {
                                 releaseCaptureIoOnly()
                                 captureConsentLocked = true
                                 try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
-                                showCaptureError("ANDROID HA REVOCATO LA SESSIONE DI CATTURA", null)
+                                showCaptureRevokedDialog()
                             }
                         }
                     }, handler)
@@ -1988,6 +1988,37 @@ class MainActivity : Activity() {
             if (captureStatusView === view) captureStatusView = null
         }
         captureDialog = dialog
+        dialog.show()
+    }
+
+    // A revoked MediaProjection token cannot be reused on Android 14+.
+    // Keep the user's FX/AUTO selections intact and offer a fresh, explicit
+    // consent flow instead of leaving the user with only a generic error dialog.
+    private fun showCaptureRevokedDialog() {
+        val detail = "Android ha terminato la sessione di cattura.\\n" +
+            "Le impostazioni degli effetti sono conservate, ma il flusso audio resta fermo finché non autorizzi una nuova sessione.\\n\\n" +
+            "DIAGNOSTICA CATTURA (ultimi eventi):\\n" + captureDiagSnapshot()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("SESSIONE DI CATTURA INTERROTTA")
+            .setMessage(detail)
+            .setPositiveButton("RIATTIVA CATTURA") { _, _ ->
+                captureConsentLocked = false
+                if (captureNeeded()) {
+                    startAudioCaptureTest()
+                } else {
+                    Toast.makeText(this, "Attiva prima Reverb, Delay o AUTO BPM.", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("CHIUDI", null)
+            .setNeutralButton("COPIA DETTAGLI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Capture Error", detail))
+                Toast.makeText(this, "Dettagli copiati", Toast.LENGTH_SHORT).show()
+            }
+        }
         dialog.show()
     }
 
