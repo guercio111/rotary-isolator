@@ -56,6 +56,7 @@ class MainActivity : Activity() {
     @Volatile private var autoBpmEnabled = false
     @Volatile private var delaySyncOffsetMs = 0f
     @Volatile private var bpmSyncAnchorMs = 0L
+    @Volatile private var bpmSyncLastCorrectionBeatMs = 0L
     @Volatile private var autoBpmNextBeatMs = 0L
     private var autoBpmHasEstimate = false
     private var autoBpmHistory = ArrayDeque<Float>() // 10 ms bass-onset frames
@@ -1436,6 +1437,7 @@ class MainActivity : Activity() {
                     autoBpmEstimateHistory.clear()
                     bpmSyncLocked = false
                     bpmSyncAnchorMs = 0L
+                    bpmSyncLastCorrectionBeatMs = 0L
                     delaySyncOffsetMs = 0f
                     autoBpmPreviousBass = 0f
                     autoBpmLowpassState = 0f
@@ -1461,18 +1463,32 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             }
             setOnClickListener {
-                // SYNC is an acquire/lock command, not a repeated phase reset.
-                // Once locked, extra taps must not replace the original beat anchor
-                // with a stale detector timestamp (which can jump the delay phase).
-                if (bpmSyncLocked) {
-                    captureDiag("SYNC ignorato: clock gia' bloccato; ancora di fase preservata")
-                    return@setOnClickListener
-                }
                 val now = android.os.SystemClock.elapsedRealtime()
                 val lastBeat = autoBpmNextBeatMs
-                // On first lock, AUTO uses the latest detected bass beat.
-                // Manual mode uses the exact SYNC press as its phase reference.
+                if (bpmSyncLocked) {
+                    // A repeated SYNC is a gentle phase trim, never a new clock/tempo lock.
+                    // Use each newly detected onset only once; limit each correction so
+                    // an imperfect BPM/onset estimate cannot throw the delay off beat.
+                    if (autoBpmEnabled && lastBeat > 0L && lastBeat != bpmSyncLastCorrectionBeatMs) {
+                        val beatMs = 60000f / bpmSyncLockedValue.coerceIn(60f, 180f)
+                        var phaseError = ((lastBeat - bpmSyncAnchorMs).toFloat() % beatMs)
+                        if (phaseError > beatMs / 2f) phaseError -= beatMs
+                        if (phaseError < -beatMs / 2f) phaseError += beatMs
+                        val correctionMs = (phaseError * 0.20f).coerceIn(-25f, 25f)
+                        bpmSyncAnchorMs += correctionMs.toLong()
+                        bpmSyncLastCorrectionBeatMs = lastBeat
+                        updateDelaySyncOffsetForDivision()
+                        scheduleUpdate()
+                        captureDiag("SYNC correzione fase: errore=" + phaseError.toInt() + "ms correzione=" + correctionMs.toInt() + "ms")
+                    } else {
+                        captureDiag("SYNC mantenuto: nessun nuovo riferimento AUTO affidabile")
+                    }
+                    return@setOnClickListener
+                }
+                // First lock: AUTO uses the latest detected bass onset; manual mode
+                // uses the exact SYNC press. BPM stays fixed after this point.
                 bpmSyncAnchorMs = if (autoBpmEnabled && lastBeat > 0L) lastBeat else now
+                bpmSyncLastCorrectionBeatMs = lastBeat
                 bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
                 bpmSyncLocked = true
                 updateDelaySyncOffsetForDivision()
@@ -1547,6 +1563,7 @@ class MainActivity : Activity() {
                 bpmSyncLocked = false
                 delaySyncOffsetMs = 0f
                 bpmSyncAnchorMs = 0L
+                bpmSyncLastCorrectionBeatMs = 0L
                 autoBpmNextBeatMs = 0L
                 autoBpmHistory.clear()
                 autoBpmEstimateHistory.clear()
