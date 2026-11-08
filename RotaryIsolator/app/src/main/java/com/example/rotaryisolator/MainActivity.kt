@@ -577,10 +577,11 @@ class MainActivity : Activity() {
             // EQ + Isolator share the upper band; FILTER + MASTER form a compact
             // middle strip; REVERB + DELAY get the full width in the lower band.
             // S25 portrait: reclaim vertical room for FX; tablet proportions remain unchanged.
-            val upperWeight = if (phonePortrait) 0.40f else 0.34f
-            // S25 portrait: give FILTER/MASTER and their controls more breathing room.
-            val middleWeight = if (phonePortrait) 0.26f else 0.36f
-            val effectsWeight = if (phonePortrait) 0.34f else 0.30f
+            val upperWeight = if (phonePortrait) 0.36f else 0.34f
+            // S25 portrait: keep HPF inside its own bounds and give the FX deck
+            // enough real height for readable controls and larger delay dials.
+            val middleWeight = if (phonePortrait) 0.24f else 0.36f
+            val effectsWeight = if (phonePortrait) 0.40f else 0.30f
             content.addView(upper, LinearLayout.LayoutParams(-1, 0, upperWeight))
             content.addView(middle, LinearLayout.LayoutParams(-1, 0, middleWeight))
             content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, effectsWeight))
@@ -825,9 +826,10 @@ class MainActivity : Activity() {
                 // Make the HPF dial more prominent on tablet portrait;
                 // resonance keeps its original size.
                 if (useVerticalRows && phonePortrait && !wideLayout) {
-                    // Give HPF a little more visual diameter in the S25 middle band.
-                    knob.scaleX = if (i == 0) 1.12f else 1.00f
-                    knob.scaleY = if (i == 0) 1.12f else 1.00f
+                    // Keep both S25 filter dials within their measured view bounds:
+                    // scaling the HPF view beyond its cell clips the outer dial ring.
+                    knob.scaleX = 1.00f
+                    knob.scaleY = 1.00f
                 } else {
                     if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
                     if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
@@ -1793,8 +1795,8 @@ class MainActivity : Activity() {
         }
         // On S25 portrait, reserve most of DELAY's vertical height for the
         // BPM/CUE/LOCK and beat-selection controls so none of those rows are clipped.
-        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.35f else 0.36f))
-        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.65f else 0.64f))
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.40f else 0.36f))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.60f else 0.64f))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
