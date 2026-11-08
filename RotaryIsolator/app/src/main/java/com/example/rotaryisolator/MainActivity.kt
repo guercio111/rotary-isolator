@@ -174,9 +174,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Explicitly follow the physical sensor in both portrait and landscape.
-        // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        // S25 build: keep the established portrait-only smartphone presentation.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
@@ -686,6 +685,7 @@ class MainActivity : Activity() {
         dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(bg))
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
         dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        dialog.window?.decorView?.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         beatEffectsDialog = dialog
         overlay.post { applyUniformDialSize(overlay,58) }
     }
