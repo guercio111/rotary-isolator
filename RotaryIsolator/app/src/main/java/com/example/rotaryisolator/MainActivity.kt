@@ -969,7 +969,7 @@ class MainActivity : Activity() {
             bottomRow.addView(masterCell(bassDial,listOf(bassToggle,bassReturn)), LinearLayout.LayoutParams(0, -1, 1f))
             bottomRow.addView(masterCell(loudDial,listOf(loudToggle,loudReturn)), LinearLayout.LayoutParams(0, -1, 1f))
             // S25 only: move the lower pair upward without resizing MASTER dials.
-            if (phonePortrait && !wideLayout) bottomRow.translationY = -dp(5)
+            if (phonePortrait && !wideLayout) bottomRow.translationY = -dp(5).toFloat()
             grid.addView(topRow, LinearLayout.LayoutParams(-1, 0, 1f))
             grid.addView(bottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
             box.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
