@@ -1170,13 +1170,36 @@ class MainActivity : Activity() {
                 (0.5f * (leftScore - rightScore) / curvature).coerceIn(-0.5f, 0.5f) else 0f
             val refinedLag = (bestLag + peakOffset).coerceAtLeast(1f)
             val detected = (12000f / refinedLag).coerceIn(60f, 180f)
-            autoBpmEstimateHistory.addLast(detected)
-            while (autoBpmEstimateHistory.size > 7) autoBpmEstimateHistory.removeFirst()
-            val orderedEstimates = autoBpmEstimateHistory.toList().sorted()
-            val stableDetected = orderedEstimates[orderedEstimates.size / 2]
-            delayTapBpm = if (autoBpmHasEstimate)
-                delayTapBpm * 0.88f + stableDetected * 0.12f else stableDetected
-            autoBpmHasEstimate = true
+            // Accept only a coherent cluster of consecutive tempo readings.
+            // Autocorrelation can jump between beat, half-time and rhythmic
+            // subdivisions; a single outlier must never move the FX clock.
+            val previousCandidate = if (autoBpmEstimateHistory.isNotEmpty()) {
+                autoBpmEstimateHistory.toList().sorted().let { it[it.size / 2] }
+            } else detected
+            val candidateTolerance = max(3.0f, previousCandidate * 0.025f)
+            if (autoBpmEstimateHistory.isEmpty() ||
+                abs(detected - previousCandidate) <= candidateTolerance) {
+                autoBpmEstimateHistory.addLast(detected)
+            } else {
+                autoBpmEstimateHistory.clear()
+                autoBpmEstimateHistory.addLast(detected)
+            }
+            while (autoBpmEstimateHistory.size > 5) autoBpmEstimateHistory.removeFirst()
+
+            // Three matching readings are required before accepting a tempo.
+            // The first confirmed tempo is adopted directly; later genuine
+            // changes are approached slowly (max 1.5 BPM per analysis cycle).
+            if (autoBpmEstimateHistory.size >= 3) {
+                val orderedCandidates = autoBpmEstimateHistory.toList().sorted()
+                val stableDetected = orderedCandidates[orderedCandidates.size / 2]
+                if (!autoBpmHasEstimate) {
+                    delayTapBpm = stableDetected
+                    autoBpmHasEstimate = true
+                } else {
+                    val tempoDelta = stableDetected - delayTapBpm
+                    delayTapBpm += tempoDelta.coerceIn(-1.5f, 1.5f)
+                }
+            }
             val liveEstimate = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
             if (bpmSyncLocked) {
                 // Once SYNC is pressed, keep the musical clock fixed.
