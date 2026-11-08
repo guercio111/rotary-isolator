@@ -952,6 +952,32 @@ class MainActivity : Activity() {
         return col
     }
 
+    // Uniforma il diametro visivo di tutte le rotelle dei quattro quadranti.
+    // La misura viene calcolata dopo il layout, usando la rotella più piccola
+    // come riferimento: le altre vengono ridotte, mai ingrandite oltre lo spazio.
+    private fun normalizeBeatFxRotaries(rootView: View) {
+        val rotaries = ArrayList<RotaryControl>()
+        fun collect(view: View) {
+            if (view is RotaryControl) rotaries.add(view)
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) collect(view.getChildAt(i))
+            }
+        }
+        collect(rootView)
+        val diameters = rotaries.map { dial ->
+            minOf(dial.width.toFloat(), (dial.height - dp(32)).coerceAtLeast(dp(1)).toFloat()) * 0.94f
+        }.filter { it > 0f }
+        val target = diameters.minOrNull() ?: return
+        rotaries.forEach { dial ->
+            val current = minOf(dial.width.toFloat(), (dial.height - dp(32)).coerceAtLeast(dp(1)).toFloat()) * 0.94f
+            if (current > 0f) {
+                val scale = (target / current).coerceIn(0.45f, 1f)
+                dial.scaleX = scale
+                dial.scaleY = scale
+            }
+        }
+    }
+
     private fun showBeatEffectsDialog() {
         val savedSections = sections.toMap()
         val dialog = android.app.Dialog(this)
@@ -1023,6 +1049,7 @@ class MainActivity : Activity() {
             w.setLayout(android.view.WindowManager.LayoutParams.MATCH_PARENT, android.view.WindowManager.LayoutParams.MATCH_PARENT)
             w.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         }
+        page.post { normalizeBeatFxRotaries(page) }
     }
 
     private fun refreshUi(){ buildUi() }
