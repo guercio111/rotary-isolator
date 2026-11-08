@@ -565,12 +565,15 @@ class MainActivity : Activity() {
         // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
         root.addView(content,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
-        // La schermata principale mantiene soltanto EQ a tre bande e MASTER.
+        // Fixed four-quadrant mixer in every orientation: only the available
+        // dimensions change, never the order or the set of controls.
         val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
         val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
         content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
         content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
         addSection("EQ","EQ",eq,-14f..14f,{eqOn},upper)
+        addSection("ISOLATOR","ISOLATOR",iso,-24f..24f,{isoOn},upper)
+        addFilterSection(lower)
         addGainSection(lower)
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
@@ -1344,6 +1347,14 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         val delayTop = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        val delayMainRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val delaySyncRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
@@ -1494,14 +1505,14 @@ class MainActivity : Activity() {
                 if (delayOn) updateEffectsCapture(true)
             }
         }
-        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
-        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(34), dp(42)))
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
-        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
-        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayTop.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
-        delayTop.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
-        delayTop.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3) })
+        delayMainRow.addView(delayPower, LinearLayout.LayoutParams(dp(38), dp(34)))
+        delayMainRow.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(28), dp(34)))
+        delayMainRow.addView(tapButton, LinearLayout.LayoutParams(dp(40), dp(40)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        delayMainRow.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(28), dp(34)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        delayMainRow.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(34), 1f).apply { leftMargin = dp(2) })
+        delaySyncRow.addView(cueButtonView, LinearLayout.LayoutParams(dp(40), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        delaySyncRow.addView(lockButton, LinearLayout.LayoutParams(dp(42), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        delaySyncRow.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(50), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
         val resetBpmButton = TextView(this).apply {
             text = "RST"
             textSize = 8f
@@ -1548,8 +1559,10 @@ class MainActivity : Activity() {
                 }, 300L)
             }
         }
-        delayTop.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3) })
-        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.6f))
+        delaySyncRow.addView(resetBpmButton, LinearLayout.LayoutParams(dp(34), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        delayTop.addView(delayMainRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        delayTop.addView(delaySyncRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 4.0f))
         val bpmFineCaption = label("PITCH TEMPO   −10       0       +10 BPM", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
