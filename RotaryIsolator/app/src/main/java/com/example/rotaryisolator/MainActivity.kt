@@ -1743,8 +1743,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-        reverbSideColumn.addView(reverbDecayDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        // DECAY and COLOR are attached only once, directly to reverbRow.
         reverbRow.addView(reverbDecayDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbRow.addView(reverbColorDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, 0, 1f))
