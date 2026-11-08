@@ -836,8 +836,8 @@ class MainActivity : Activity() {
 
     private fun addGainSection(parent:LinearLayout=content){
         val masterAccent = accentFor("MASTER")
-        val tabletPortrait = !phonePortrait && !wideLayout
-        val compactMaster = phonePortrait && !wideLayout
+        val tabletPortrait = !wideLayout
+        val compactMaster = false
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compactMaster)1 else 4),dp(4),dp(if(compactMaster)1 else 4),dp(1))}
         box.addView(sectionLabel("MASTER",if(compactMaster)11f else 13f,titleTint(masterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactMaster)24 else 32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
         val tabletLandscape = !phonePortrait && wideLayout
@@ -1018,8 +1018,9 @@ class MainActivity : Activity() {
     private fun masterDialHeight():Int {
         if(phonePortrait && wideLayout) return dialHeight()
         if(phonePortrait && !wideLayout){
-            // S25 lower control strip: keep MASTER dials deliberately compact.
-            return dp(46)
+            val section=(windowHeightDp()-64f)/2f
+            val row=(section-18f)/2f
+            return dp((row-64f).roundToInt().coerceIn(24,88))
         }
         // Give MASTER dials a little more vertical room so their faces sit
         // centrally in each control column without changing the four-column layout.
@@ -1301,9 +1302,7 @@ class MainActivity : Activity() {
         // In tablet portrait the Reverb main dials were visually larger
         // than the four Delay dials. Scale only their drawing, not their
         // touch/layout bounds, to match the Delay rotary size.
-        if (!wideLayout) {
-            listOf(depthDial, timeDial).forEach { it.scaleX = 0.72f; it.scaleY = 0.72f }
-        }
+        // Keep the three main Reverb dials at full size; DECAY and COLOR stay in the narrow side lane.
         reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1f))
         val reverbFeedbackDial = RotaryControl(
@@ -1312,7 +1311,7 @@ class MainActivity : Activity() {
             { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        if (!wideLayout) { reverbFeedbackDial.scaleX = 0.72f; reverbFeedbackDial.scaleY = 0.72f }
+        // FEEDBACK remains full size with DEPTH and TIME.
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
         val reverbDecayDial = RotaryControl(
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
@@ -1490,7 +1489,7 @@ class MainActivity : Activity() {
                 if (delayOn) updateEffectsCapture(true)
             }
         }
-        val compactFxPhone = phonePortrait && !wideLayout
+        val compactFxPhone = phonePortrait && wideLayout
         val cueRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -1746,7 +1745,7 @@ class MainActivity : Activity() {
         // Main REVERB controls first; the smaller DECAY/COLOR pair sits to their right.
         reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
         reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(if (!wideLayout) 58 else 74), -1).apply {
-            leftMargin = dp(3)
+            rightMargin = dp(3)
         })
         reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
         val delayColumn = LinearLayout(this).apply {
