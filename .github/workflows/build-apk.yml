@@ -1,5 +1,5 @@
-# Tablet stable APK rebuild trigger
-name: Build Rotary Isolator APK
+# S25 portrait-only build with tablet CUE / LOCK timing controls
+name: Build FREQUALIZER S25 Portrait APK
 # Rebuild requested for experimental master reverb controls
 
 on:
@@ -138,5 +138,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rotary-isolator-debug-apk
+          name: frequalizer-s25-portrait-apk
           path: extracted/RotaryIsolator/app/build/outputs/apk/debug/app-debug.apk
