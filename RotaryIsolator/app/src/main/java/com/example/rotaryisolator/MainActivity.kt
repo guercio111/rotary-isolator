@@ -579,8 +579,8 @@ class MainActivity : Activity() {
             // S25 portrait: reclaim vertical room for FX; tablet proportions remain unchanged.
             val upperWeight = if (phonePortrait) 0.40f else 0.34f
             // S25 portrait: allocate more room to EQ and the lower Beat FX panel.
-            val middleWeight = if (phonePortrait) 0.23f else 0.36f
-            val effectsWeight = if (phonePortrait) 0.37f else 0.30f
+            val middleWeight = if (phonePortrait) 0.27f else 0.36f
+            val effectsWeight = if (phonePortrait) 0.33f else 0.30f
             content.addView(upper, LinearLayout.LayoutParams(-1, 0, upperWeight))
             content.addView(middle, LinearLayout.LayoutParams(-1, 0, middleWeight))
             content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, effectsWeight))
@@ -826,8 +826,8 @@ class MainActivity : Activity() {
                 // resonance keeps its original size.
                 if (useVerticalRows && phonePortrait && !wideLayout) {
                     // Give HPF a little more visual diameter in the S25 middle band.
-                    knob.scaleX = if (i == 0) 1.12f else 1f
-                    knob.scaleY = if (i == 0) 1.12f else 1f
+                    knob.scaleX = if (i == 0) 1.24f else 1.12f
+                    knob.scaleY = if (i == 0) 1.24f else 1.12f
                 } else {
                     if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
                     if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
@@ -1334,8 +1334,9 @@ class MainActivity : Activity() {
         // All three main Reverb dials share the same layout size.
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
         if (phonePortrait && !wideLayout) {
-            depthDial.scaleX = 1.06f
-            depthDial.scaleY = 1.06f
+            depthDial.scaleX = 0.90f; depthDial.scaleY = 0.90f
+            timeDial.scaleX = 0.90f; timeDial.scaleY = 0.90f
+            reverbFeedbackDial.scaleX = 0.90f; reverbFeedbackDial.scaleY = 0.90f
         }
         val reverbDecayDial = RotaryControl(
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
@@ -1775,8 +1776,8 @@ class MainActivity : Activity() {
         reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
         // Match the narrow side dials to the main Reverb dial diameter.
         if (phonePortrait && !wideLayout) {
-            reverbDecayDial.scaleX = 0.84f; reverbDecayDial.scaleY = 0.84f
-            reverbColorDial.scaleX = 0.84f; reverbColorDial.scaleY = 0.84f
+            reverbDecayDial.scaleX = 0.76f; reverbDecayDial.scaleY = 0.76f
+            reverbColorDial.scaleX = 0.76f; reverbColorDial.scaleY = 0.76f
         }
         // DECAY/COLOR stay small on the LEFT; the three main REVERB dials sit on the RIGHT.
         val reverbSideWidth = dp(if (phonePortrait && !wideLayout) 74 else if (!wideLayout) 58 else 74)
@@ -1798,7 +1799,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.38f else if (!wideLayout) 0.37f else 0.43f))
+        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.34f else if (!wideLayout) 0.37f else 0.43f))
         effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.62f else if (!wideLayout) 0.63f else 0.57f))
         panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
 
