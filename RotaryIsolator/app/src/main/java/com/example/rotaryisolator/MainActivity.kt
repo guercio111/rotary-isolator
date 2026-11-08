@@ -53,12 +53,12 @@ class MainActivity : Activity() {
     @Volatile private var delayBpm = 120f
     @Volatile private var delayTapBpm = 120f
     @Volatile private var delayBpmCorrection = 0f
-    @Volatile private var autoBpmEnabled = false
+    @Volatile private var cueListening = false
+    @Volatile private var cueStartedAtMs = 0L
+    private var cueFrameCount = 0
     @Volatile private var delaySyncOffsetMs = 0f
     @Volatile private var bpmSyncAnchorMs = 0L
-    @Volatile private var bpmSyncLastCorrectionBeatMs = 0L
-    @Volatile private var autoBpmNextBeatMs = 0L
-    private var autoBpmHasEstimate = false
+    @Volatile private var cueAnchorMs = 0L
     private var autoBpmHistory = ArrayDeque<Float>() // 10 ms bass-onset frames
     private var autoBpmEstimateHistory = ArrayDeque<Float>() // median filter for noisy frame estimates
     @Volatile private var bpmSyncLocked = false
@@ -69,7 +69,7 @@ class MainActivity : Activity() {
     private var autoBpmMidLowpassState = 0f
     private var autoBpmLastAnalysisMs = 0L
     private var bpmUiLabel: TextView? = null
-    private var autoBpmButton: TextView? = null
+    private var cueButton: TextView? = null
     private var lastDelayTapMs = 0L
     private val delayTapIntervals = ArrayDeque<Long>()
     private var captureProjection: android.media.projection.MediaProjection? = null
@@ -194,7 +194,9 @@ class MainActivity : Activity() {
         delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,6)
         delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
         delayBpmCorrection = prefs.getFloat("reverb_delay_bpm_correction", 0f).coerceIn(-10f,10f)
-        autoBpmEnabled = prefs.getBoolean("auto_bpm_enabled", false)
+        cueListening = false
+        cueAnchorMs = 0L
+        delayBpmCorrection = 0f
         delayBpm = (prefs.all["reverb_delay_bpm"] as? Number)?.toFloat()?.coerceIn(60f,180f) ?: 120f
         delayTapBpm = prefs.getFloat("reverb_delay_tap_bpm", (delayBpm - delayBpmCorrection).coerceIn(60f,180f)).coerceIn(60f,180f)
         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
@@ -523,7 +525,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",100).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",100).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1076,31 +1078,30 @@ class MainActivity : Activity() {
 
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
     private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
-    // AUTO BPM also needs the system-audio capture, even when no FX is audible.
-    private fun captureNeeded() = effectsActive() || autoBpmEnabled
+    // CUE capture is temporary; otherwise capture is needed only for audible FX.
+    private fun captureNeeded() = effectsActive() || cueListening
 
-    private fun paintAutoBpmButton() {
-        autoBpmButton?.let { button ->
-            button.text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
+    private fun paintCueButton() {
+        cueButton?.let { button ->
+            button.text = if (cueListening) "LISTEN…" else "CUE"
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
-                setColor(if (autoBpmEnabled) colorMaster else Color.rgb(55,62,72))
+                setColor(if (cueListening) colorMaster else Color.rgb(55,62,72))
                 setStroke(dp(1), colorMaster)
             }
         }
     }
 
-    // Autonomous beat detector: combine low-bass and mid-band transients
-    // from the ORIGINAL captured PCM. This analysis runs before FX processing
-    // and is deliberately independent of the FX HIGH switch and wet return.
-    private fun analyzeAutoBpm(samples: ShortArray, count: Int, nowMs: Long, sampleRate: Int) {
-        if (!autoBpmEnabled || count <= 0) return
 
-        val frameSamples = (sampleRate / 200).coerceAtLeast(1) // 5 ms analysis frames
+    // CUE listens for four seconds and selects the strongest isolated transient.
+    // It does not estimate BPM: tempo remains entirely under manual fader control.
+    private fun analyzeAutoBpm(samples: ShortArray, count: Int, nowMs: Long, sampleRate: Int) {
+        if (!cueListening || count <= 0) return
+        val frameSamples = (sampleRate / 200).coerceAtLeast(1)
         val bassAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 150.0 / sampleRate)).toFloat()
         val midAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 3200.0 / sampleRate)).toFloat()
         var offset = 0
-        while (offset < count) {
+        while (offset < count && cueListening) {
             val end = minOf(offset + frameSamples, count)
             var bassEnergy = 0.0
             var midEnergy = 0.0
@@ -1118,128 +1119,38 @@ class MainActivity : Activity() {
             if (n > 0) {
                 val bassRms = kotlin.math.sqrt(bassEnergy / n).toFloat()
                 val midRms = kotlin.math.sqrt(midEnergy / n).toFloat()
-                // Keep both kinds of attack useful without letting a louder
-                // frequency band dominate simply because of its mix level.
-                val bassRise = (bassRms - autoBpmPreviousBass * 0.90f).coerceAtLeast(0f)
-                val midRise = (midRms - autoBpmPreviousMid * 0.90f).coerceAtLeast(0f)
-                val onset = max(bassRise, midRise * 0.65f)
+                val bassRise = (bassRms - autoBpmPreviousBass * 0.88f).coerceAtLeast(0f)
+                val midRise = (midRms - autoBpmPreviousMid * 0.88f).coerceAtLeast(0f)
+                autoBpmHistory.addLast(max(bassRise, midRise * 0.65f))
                 autoBpmPreviousBass = bassRms
                 autoBpmPreviousMid = midRms
-                autoBpmHistory.addLast(onset)
-                while (autoBpmHistory.size > 2000) autoBpmHistory.removeFirst()
+                cueFrameCount++
             }
             offset = end
         }
-
-        if (autoBpmHistory.size < 800 || nowMs - autoBpmLastAnalysisMs < 500L) return
-        autoBpmLastAnalysisMs = nowMs
-
+        if (cueFrameCount < 800) return
         val values = autoBpmHistory.toList()
-        val mean = values.average().toFloat()
-        val centered = FloatArray(values.size) { values[it] - mean }
-        val minLag = 66 // 180 BPM at 5 ms/frame
-        val maxLag = minOf(200, centered.size / 3) // 60 BPM; use >= 3 cycles
-        var bestLag = -1
+        val searchStart = minOf(50, values.size - 1)
+        var bestIndex = searchStart
         var bestScore = 0f
-        val scores = FloatArray(maxLag + 1)
-        for (lag in minLag..maxLag) {
-            var cross = 0.0
-            var left = 0.0
-            var right = 0.0
-            for (i in lag until centered.size) {
-                val a = centered[i].toDouble()
-                val b = centered[i - lag].toDouble()
-                cross += a * b
-                left += a * a
-                right += b * b
-            }
-            val score = if (left > 1e-12 && right > 1e-12)
-                (cross / kotlin.math.sqrt(left * right)).toFloat() else 0f
-            scores[lag] = score
-            if (score > bestScore) {
+        for (i in (searchStart + 1) until values.lastIndex) {
+            val score = values[i]
+            if (score >= values[i - 1] && score >= values[i + 1] && score > bestScore) {
                 bestScore = score
-                bestLag = lag
+                bestIndex = i
             }
         }
-
-        // Prefer the faster fundamental when a slower half-tempo candidate is
-        // almost as correlated (a common ambiguity with kick/snare patterns).
-        if (bestLag > 0) {
-            for (lag in minLag until bestLag) {
-                if (bestLag % lag == 0 && scores[lag] >= bestScore * 0.92f) {
-                    bestLag = lag
-                    break
-                }
-            }
+        if (bestScore <= 0f) bestIndex = (searchStart until values.size).maxByOrNull { values[it] } ?: searchStart
+        cueAnchorMs = cueStartedAtMs + bestIndex * 5L
+        bpmSyncAnchorMs = cueAnchorMs
+        bpmSyncLocked = false
+        delaySyncOffsetMs = 0f
+        cueListening = false
+        handler.post {
+            paintCueButton()
+            Toast.makeText(this, "CUE agganciato. Regola TEMPO e premi LOCK.", Toast.LENGTH_LONG).show()
         }
-
-        if (bestLag > 0 && bestScore >= 0.12f) {
-            // Parabolic interpolation around the autocorrelation peak removes most
-            // of the 5 ms frame quantization error (important near 122 BPM).
-            val leftScore = if (bestLag > minLag) scores[bestLag - 1] else scores[bestLag]
-            val centerScore = scores[bestLag]
-            val rightScore = if (bestLag < maxLag) scores[bestLag + 1] else scores[bestLag]
-            val curvature = leftScore - 2f * centerScore + rightScore
-            val peakOffset = if (abs(curvature) > 1e-6f)
-                (0.5f * (leftScore - rightScore) / curvature).coerceIn(-0.5f, 0.5f) else 0f
-            val refinedLag = (bestLag + peakOffset).coerceAtLeast(1f)
-            val detected = (12000f / refinedLag).coerceIn(60f, 180f)
-            // Accept only a coherent cluster of consecutive tempo readings.
-            // Autocorrelation can jump between beat, half-time and rhythmic
-            // subdivisions; a single outlier must never move the FX clock.
-            val previousCandidate = if (autoBpmEstimateHistory.isNotEmpty()) {
-                autoBpmEstimateHistory.toList().sorted().let { it[it.size / 2] }
-            } else detected
-            val candidateTolerance = max(3.0f, previousCandidate * 0.025f)
-            if (autoBpmEstimateHistory.isEmpty() ||
-                abs(detected - previousCandidate) <= candidateTolerance) {
-                autoBpmEstimateHistory.addLast(detected)
-            } else {
-                autoBpmEstimateHistory.clear()
-                autoBpmEstimateHistory.addLast(detected)
-            }
-            while (autoBpmEstimateHistory.size > 5) autoBpmEstimateHistory.removeFirst()
-
-            // Three matching readings are required before accepting a tempo.
-            // The first confirmed tempo is adopted directly; later genuine
-            // changes are approached slowly (max 1.5 BPM per analysis cycle).
-            if (autoBpmEstimateHistory.size >= 3) {
-                val orderedCandidates = autoBpmEstimateHistory.toList().sorted()
-                val stableDetected = orderedCandidates[orderedCandidates.size / 2]
-                if (!autoBpmHasEstimate) {
-                    delayTapBpm = stableDetected
-                    autoBpmHasEstimate = true
-                } else {
-                    val tempoDelta = stableDetected - delayTapBpm
-                    delayTapBpm += tempoDelta.coerceIn(-1.5f, 1.5f)
-                }
-            }
-            val liveEstimate = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
-            if (bpmSyncLocked) {
-                // Once SYNC is pressed, keep the musical clock fixed.
-                // The detector may keep analysing, but cannot pull the effects off beat.
-                delayBpm = bpmSyncLockedValue
-            } else {
-                delayBpm = liveEstimate
-            }
-
-            // Anchor the phase to the strongest onset in the most recent beat window.
-            var strongestIndex = values.lastIndex
-            var strongest = Float.NEGATIVE_INFINITY
-            val searchStart = (values.size - bestLag * 2).coerceAtLeast(0)
-            for (i in searchStart..values.lastIndex) {
-                if (values[i] > strongest) {
-                    strongest = values[i]
-                    strongestIndex = i
-                }
-            }
-            val ageMs = ((values.lastIndex - strongestIndex) * 5L)
-            autoBpmNextBeatMs = nowMs - ageMs
-
-            handler.post {
-                bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
-            }
-        }
+        captureDiag("CUE completato: frame=$bestIndex onset=$bestScore anchor=$cueAnchorMs")
     }
 
     // Recalculate the delay read-head offset against the same SYNC phase anchor
@@ -1445,53 +1356,21 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             }
             setOnClickListener {
-                autoBpmEnabled = false
-                paintAutoBpmButton()
+                cueListening = false
+                paintCueButton()
                 bpmSyncLocked = false
                 bpmSyncAnchorMs = 0L
                 delaySyncOffsetMs = 0f
                 delayBpm = registerDelayTap()
                 delayTapBpm = delayBpm
+                delayBpmCorrection = 0f
+                bpmFineSeek?.progress = 100
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
             }
         }
-        val autoButton = TextView(this).apply {
-            text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
-            textSize = 8f
-            setTextColor(Color.WHITE)
-            setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(6).toFloat()
-                setColor(if (autoBpmEnabled) colorMaster else Color.rgb(55,62,72))
-                setStroke(dp(1), colorMaster)
-            }
-            setOnClickListener {
-                autoBpmEnabled = !autoBpmEnabled
-                if (autoBpmEnabled) {
-                    autoBpmHistory.clear()
-                    autoBpmEstimateHistory.clear()
-                    bpmSyncLocked = false
-                    bpmSyncAnchorMs = 0L
-                    bpmSyncLastCorrectionBeatMs = 0L
-                    delaySyncOffsetMs = 0f
-                    autoBpmPreviousBass = 0f
-                    autoBpmPreviousMid = 0f
-                    autoBpmLowpassState = 0f
-                    autoBpmMidLowpassState = 0f
-                    autoBpmLastAnalysisMs = 0L
-                    autoBpmNextBeatMs = 0L
-                    autoBpmHasEstimate = false
-                }
-                paintAutoBpmButton()
-                save()
-                if (autoBpmEnabled) updateEffectsCapture(true)
-            }
-        }
-        autoBpmButton = autoButton
-        val syncButton = TextView(this).apply {
-            text = "SYNC"
+        val cueButtonView = TextView(this).apply {
+            text = "CUE"
             textSize = 8f
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
@@ -1502,50 +1381,85 @@ class MainActivity : Activity() {
                 setStroke(dp(1), colorMaster)
             }
             setOnClickListener {
-                val now = android.os.SystemClock.elapsedRealtime()
-                val lastBeat = autoBpmNextBeatMs
-                if (bpmSyncLocked) {
-                    // Keep the original lock. A later press can make only a tiny
-                    // correction, and only when AUTO has published a new beat.
-                    if (autoBpmEnabled && lastBeat > 0L &&
-                        lastBeat != bpmSyncLastCorrectionBeatMs) {
-                        val beatMs = 60000f / bpmSyncLockedValue.coerceIn(60f, 180f)
-                        var phaseError = ((lastBeat - bpmSyncAnchorMs).toFloat() % beatMs)
-                        if (phaseError > beatMs / 2f) phaseError -= beatMs
-                        if (phaseError < -beatMs / 2f) phaseError += beatMs
-                        val correctionMs = (phaseError * 0.12f).coerceIn(-8f, 8f)
-                        bpmSyncAnchorMs += correctionMs.toLong()
-                        bpmSyncLastCorrectionBeatMs = lastBeat
-                        updateDelaySyncOffsetForDivision()
-                        scheduleUpdate()
-                        captureDiag("SYNC correzione fase: errore=" + phaseError.toInt() + "ms correzione=" + correctionMs.toInt() + "ms")
-                    } else {
-                        captureDiag("SYNC mantenuto: nessun nuovo riferimento AUTO")
-                    }
-                    return@setOnClickListener
-                }
-                // First SYNC: use the beat found by AUTO, exactly as in the
-                // Build 493 behavior. Manual mode anchors to the button press.
-                bpmSyncAnchorMs = if (autoBpmEnabled && lastBeat > 0L) lastBeat else now
-                bpmSyncLastCorrectionBeatMs = lastBeat
-                bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
-                bpmSyncLocked = true
-                updateDelaySyncOffsetForDivision()
-                scheduleUpdate()
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = dp(6).toFloat()
-                    setColor(colorMaster)
-                    setStroke(dp(1), colorMaster)
-                }
-                postDelayed({
-                    background = android.graphics.drawable.GradientDrawable().apply {
-                        cornerRadius = dp(6).toFloat()
-                        setColor(Color.rgb(55,62,72))
-                        setStroke(dp(1), colorMaster)
-                    }
-                }, 350L)
+                cueListening = true
+                cueStartedAtMs = android.os.SystemClock.elapsedRealtime()
+                cueFrameCount = 0
+                autoBpmHistory.clear()
+                autoBpmPreviousBass = 0f
+                autoBpmPreviousMid = 0f
+                autoBpmLowpassState = 0f
+                autoBpmMidLowpassState = 0f
+                cueAnchorMs = 0L
+                bpmSyncLocked = false
+                bpmSyncAnchorMs = 0L
+                delaySyncOffsetMs = 0f
+                paintCueButton()
+                Toast.makeText(this@MainActivity, "Ascolto per 4 secondi…", Toast.LENGTH_SHORT).show()
+                updateEffectsCapture(true)
+                save()
             }
         }
+        cueButton = cueButtonView
+        val lockButton = TextView(this).apply {
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            fun paintLock() {
+                text = if (bpmSyncLocked) "LOCK ON" else "LOCK"
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(6).toFloat()
+                    setColor(if (bpmSyncLocked) colorMaster else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorMaster)
+                }
+            }
+            paintLock()
+            setOnClickListener {
+                if (bpmSyncLocked) {
+                    bpmSyncLocked = false
+                    delaySyncOffsetMs = 0f
+                } else {
+                    bpmSyncAnchorMs = if (cueAnchorMs > 0L) cueAnchorMs else android.os.SystemClock.elapsedRealtime()
+                    bpmSyncLockedValue = delayBpm.coerceIn(60f,180f)
+                    bpmSyncLocked = true
+                    updateDelaySyncOffsetForDivision()
+                }
+                paintLock()
+                scheduleUpdate()
+                save()
+            }
+        }
+        val shiftBeatButton = TextView(this).apply {
+            text = "SHIFT ½"
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                val tempo = (if (bpmSyncLocked) bpmSyncLockedValue else delayBpm).coerceIn(60f,180f)
+                val beatMs = 60000f / tempo
+                if (bpmSyncAnchorMs <= 0L) bpmSyncAnchorMs = android.os.SystemClock.elapsedRealtime()
+                bpmSyncAnchorMs += (beatMs / 2f).roundToLong()
+                cueAnchorMs = bpmSyncAnchorMs
+                if (bpmSyncLocked) updateDelaySyncOffsetForDivision()
+                scheduleUpdate()
+                save()
+                Toast.makeText(this@MainActivity, "Fase spostata di mezza battuta", Toast.LENGTH_SHORT).show()
+            }
+        }
+        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
+        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(34), dp(42)))
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
+        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
+        delayTop.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
+        delayTop.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
+        delayTop.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3) })
         var bpmFineSeek: SeekBar? = null
         fun bpmNudgeButton(symbol: String, amount: Float): TextView = TextView(this).apply {
             text = symbol
@@ -1581,8 +1495,6 @@ class MainActivity : Activity() {
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
         delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayTop.addView(autoButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
-        delayTop.addView(syncButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
         val resetBpmButton = TextView(this).apply {
             text = "RST"
             textSize = 8f
@@ -1599,20 +1511,22 @@ class MainActivity : Activity() {
                 // Original RST behavior: release SYNC and reset only the beat-phase
                 // reference/history. Keep the current BPM and fine correction so the
                 // detector can reacquire timing without jumping back to 120 BPM.
+                cueListening = false
+                paintCueButton()
                 bpmSyncLocked = false
                 delaySyncOffsetMs = 0f
                 bpmSyncAnchorMs = 0L
-                bpmSyncLastCorrectionBeatMs = 0L
-                autoBpmNextBeatMs = 0L
+                cueAnchorMs = 0L
                 autoBpmHistory.clear()
                 autoBpmEstimateHistory.clear()
                 autoBpmPreviousBass = 0f
+                autoBpmPreviousMid = 0f
                 autoBpmLowpassState = 0f
-                autoBpmLastAnalysisMs = 0L
-                autoBpmHasEstimate = false
+                autoBpmMidLowpassState = 0f
+                cueFrameCount = 0
                 scheduleUpdate()
                 save()
-                captureDiag("RST premuto: SYNC sbloccato, fase e storico azzerati; BPM mantenuto; AUTO=$autoBpmEnabled")
+                captureDiag("RST premuto: SYNC sbloccato, fase e storico azzerati; BPM mantenuto; CUE=$cueListening")
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(6).toFloat()
                     setColor(colorMaster)
@@ -1629,13 +1543,13 @@ class MainActivity : Activity() {
         }
         delayTop.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3) })
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.6f))
-        val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
+        val bpmFineCaption = label("PITCH TEMPO   −10       0       +10 BPM", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
         delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.65f).apply { topMargin = dp(2) })
         val fineSeek = SeekBar(this).apply {
             max = 200
-            progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
+            progress = 100 // fader always opens at its physical centre / zero
             setPadding(0, 0, 0, 0)
             splitTrack = false
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
