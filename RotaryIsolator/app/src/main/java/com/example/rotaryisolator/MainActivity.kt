@@ -577,10 +577,10 @@ class MainActivity : Activity() {
             // EQ + Isolator share the upper band; FILTER + MASTER form a compact
             // middle strip; REVERB + DELAY get the full width in the lower band.
             // S25 portrait: reclaim vertical room for FX; tablet proportions remain unchanged.
-            val upperWeight = if (phonePortrait) 0.32f else 0.34f
+            val upperWeight = if (phonePortrait) 0.38f else 0.34f
             // Keep FILTER/MASTER compact and give the whole effects band more height.
-            val middleWeight = if (phonePortrait) 0.28f else 0.36f
-            val effectsWeight = if (phonePortrait) 0.40f else 0.30f
+            val middleWeight = if (phonePortrait) 0.32f else 0.36f
+            val effectsWeight = if (phonePortrait) 0.30f else 0.30f
             content.addView(upper, LinearLayout.LayoutParams(-1, 0, upperWeight))
             content.addView(middle, LinearLayout.LayoutParams(-1, 0, middleWeight))
             content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, effectsWeight))
@@ -911,8 +911,8 @@ class MainActivity : Activity() {
                 // Reduce all four MASTER rotary faces together so the 2x2
                 // grid fits comfortably inside the middle strip.
                 val phonePortraitMaster = phonePortrait && !wideLayout
-                dial.scaleX = if (phonePortraitMaster) 0.88f else 0.76f
-                dial.scaleY = if (phonePortraitMaster) 0.88f else 0.76f
+                dial.scaleX = if (phonePortraitMaster) 0.80f else 0.76f
+                dial.scaleY = if (phonePortraitMaster) 0.80f else 0.76f
                 return LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER
@@ -999,7 +999,7 @@ class MainActivity : Activity() {
                 box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(7)})
             }
         }
-        parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,if (phonePortrait && !wideLayout) 1.65f else 1f));sections["GAIN"]=box
+        parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,if (phonePortrait && !wideLayout) 1.15f else 1f));sections["GAIN"]=box
     }
 
     private fun masterToneControl(
@@ -1782,8 +1782,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.44f else if (!wideLayout) 0.37f else 0.43f))
-        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.56f else if (!wideLayout) 0.63f else 0.57f))
+        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.38f else if (!wideLayout) 0.37f else 0.43f))
+        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.62f else if (!wideLayout) 0.63f else 0.57f))
         panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
 
         return panel
