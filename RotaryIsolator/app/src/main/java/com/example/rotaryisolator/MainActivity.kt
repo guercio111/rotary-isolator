@@ -3,6 +3,8 @@ package com.example.rotaryisolator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -27,6 +29,78 @@ import kotlin.math.*
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
+    // TEST252 diffuse parallel reverb engine.
+    @Volatile private var reverbOn = false
+    @Volatile private var reverbMix = 0
+    @Volatile private var reverbSize = 950
+    @Volatile private var reverbHpHz = 420
+    @Volatile private var reverbLpHz = 14000
+    @Volatile private var reverbFadeMs = 1400
+    @Volatile private var reverbFeedbackPercent = 50
+    @Volatile private var reverbDecayPercent = 50
+    @Volatile private var reverbColorPercent = 50
+    @Volatile private var delayOn = false
+    @Volatile private var captureConsentLocked = false
+    @Volatile private var delayFadeMs = 1400
+    @Volatile private var delayDivision = 3 // 1/4, 1/2, 3/4, 1, 2, 4, 8 beats
+    @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
+    @Volatile private var selectedBeatFx = 2 // 0 SHORT, 1 LONG, 2 DUB ECHO, 3 REVERB
+    @Volatile private var delayMix = 0
+    @Volatile private var delayTimePercent = 100
+    @Volatile private var delayFeedbackPercent = 52
+    @Volatile private var delayTonePercent = 50
+    @Volatile private var fxHighEnabled = false // V10 FX frequency switch: HIGH band only, OFF = full spectrum
+    @Volatile private var delayBpm = 120f
+    @Volatile private var delayTapBpm = 120f
+    @Volatile private var delayBpmCorrection = 0f
+    @Volatile private var cueListening = false
+    @Volatile private var cueStartedAtMs = 0L
+    private var cueFrameCount = 0
+    @Volatile private var delaySyncOffsetMs = 0f
+    @Volatile private var bpmSyncAnchorMs = 0L
+    @Volatile private var cueAnchorMs = 0L
+    private var autoBpmHistory = ArrayDeque<Float>() // 10 ms bass-onset frames
+    private var autoBpmEstimateHistory = ArrayDeque<Float>() // median filter for noisy frame estimates
+    @Volatile private var bpmSyncLocked = false
+    @Volatile private var bpmSyncLockedValue = 120f
+    private var autoBpmPreviousBass = 0f
+    private var autoBpmPreviousMid = 0f
+    private var autoBpmLowpassState = 0f
+    private var autoBpmMidLowpassState = 0f
+    private var autoBpmLastAnalysisMs = 0L
+    private var bpmUiLabel: TextView? = null
+    private var cueButton: TextView? = null
+    private var lastDelayTapMs = 0L
+    private val delayTapIntervals = ArrayDeque<Long>()
+    private var captureProjection: android.media.projection.MediaProjection? = null
+    // Tracks an intentional stop so MediaProjection.Callback.onStop does not
+    // mistake our own cleanup for an Android permission revocation.
+    private var intentionallyStoppingProjection: android.media.projection.MediaProjection? = null
+    private var captureRecord: android.media.AudioRecord? = null
+    private var captureTrack: android.media.AudioTrack? = null
+    private var parallelReverbProcessor: SchroederReverb? = null
+    private var captureThread: Thread? = null
+    @Volatile private var captureRunning = false
+    @Volatile private var captureRestartAttempts = 0
+    @Volatile private var captureRestartPending = false
+    private var captureDialog: AlertDialog? = null
+    private var beatEffectsDialog: android.app.Dialog? = null
+    private var captureStatusView: TextView? = null
+    private val captureDiagLock = Any()
+    private val captureDiagnostics = ArrayDeque<String>()
+    private fun captureDiag(message: String) {
+        val line = "t+${android.os.SystemClock.elapsedRealtime()}ms $message"
+        synchronized(captureDiagLock) {
+            captureDiagnostics.addLast(line)
+            while (captureDiagnostics.size > 100) captureDiagnostics.removeFirst()
+        }
+        android.util.Log.i("FREQUALIZER_CAPTURE", line)
+    }
+    private fun captureDiagSnapshot(): String = synchronized(captureDiagLock) {
+        captureDiagnostics.joinToString("\\n")
+    }
+    private val captureRequestCode = 7420
+    private val capturePermissionRequestCode = 7421
     private var audioReady = false
     private var appEnabled = true
     private var defaultSettingsOnStart = true
@@ -44,7 +118,7 @@ class MainActivity : Activity() {
     private var colorOptions = Color.rgb(255,205,0)
     private var limiterOn = true
     private var mouseWheelAdjustOn = false
-    private var mouseWheelSensitivity = 4f
+    private var mouseWheelSensitivity = 1f
     private var compressorOn = false
     private var compThreshold = -18f
     private var compRatio = 3f
@@ -105,6 +179,35 @@ class MainActivity : Activity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
+        reverbOn = prefs.getBoolean("reverb_on", false)
+        reverbMix = prefs.getInt("reverb_mix", 0).coerceIn(0,100)
+        reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
+        reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
+        reverbDecayPercent = prefs.getInt("reverb_decay", 50).coerceIn(0,100)
+        reverbColorPercent = prefs.getInt("reverb_color", 50).coerceIn(0,100)
+        delayMix = 0 // Il livello Delay parte sempre chiuso all’avvio dell’app.
+        delayTimePercent = 100
+        delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
+        delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
+        fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", false)
+        delayOn = prefs.getBoolean("dub_delay_on", false)
+        delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
+        delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,6)
+        delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
+        delayBpmCorrection = prefs.getFloat("reverb_delay_bpm_correction", 0f).coerceIn(-10f,10f)
+        cueListening = false
+        cueAnchorMs = 0L
+        delayBpmCorrection = 0f
+        delayBpm = (prefs.all["reverb_delay_bpm"] as? Number)?.toFloat()?.coerceIn(60f,180f) ?: 120f
+        delayTapBpm = prefs.getFloat("reverb_delay_tap_bpm", (delayBpm - delayBpmCorrection).coerceIn(60f,180f)).coerceIn(60f,180f)
+        delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+        selectedBeatFx = prefs.getInt("beat_fx_selected", delayMode).coerceIn(0,2)
+        val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
+        reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
+        if (!fadePlusThreeSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus3sec_v1", true).apply()
+        val fadePlusTwoSecondsApplied = prefs.getBoolean("reverb_fade_plus2sec_v2", false)
+        reverbFadeMs = (reverbFadeMs + if (fadePlusTwoSecondsApplied) 0 else 2000).coerceIn(300, 6000)
+        if (!fadePlusTwoSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus2sec_v2", true).apply()
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
         masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
@@ -143,10 +246,17 @@ class MainActivity : Activity() {
                 .putInt("color_titles", colorTitles).putInt("color_options", colorOptions)
                 .putBoolean("color_defaults_v3", true).apply()
         }
-        val mouseDefaultsApplied = prefs.getBoolean("mouse_defaults_v1", false)
-        mouseWheelAdjustOn = if (mouseDefaultsApplied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
-        mouseWheelSensitivity = if (mouseDefaultsApplied) prefs.getFloat("mouse_wheel_sensitivity", 5f).coerceIn(1f,10f) else 5f
-        if (!mouseDefaultsApplied) prefs.edit().putBoolean("mouse_defaults_v1", true).putBoolean("mouse_wheel_adjust_on", true).putFloat("mouse_wheel_sensitivity", 5f).putBoolean("mini", false).apply()
+        // v3 sets the same one-point-per-detent response for every rotary dial.
+        // Preserve the enable/disable choice, but reset the old 5x default once.
+        val mouseDefaultsV3Applied = prefs.getBoolean("mouse_defaults_v3", false)
+        mouseWheelAdjustOn = if (mouseDefaultsV3Applied) prefs.getBoolean("mouse_wheel_adjust_on", true) else true
+        mouseWheelSensitivity = if (mouseDefaultsV3Applied) prefs.getFloat("mouse_wheel_sensitivity", 1f).coerceIn(0.7f,1.3f) else 1f
+        if (!mouseDefaultsV3Applied) prefs.edit()
+            .putBoolean("mouse_defaults_v3", true)
+            .putBoolean("mouse_wheel_adjust_on", true)
+            .putFloat("mouse_wheel_sensitivity", 1f)
+            .putBoolean("mini", false)
+            .apply()
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
         compressorOn = prefs.getBoolean("compressor_on", false)
@@ -215,13 +325,41 @@ class MainActivity : Activity() {
         connectAudio()
     }
 
+    override fun onStart() {
+        super.onStart()
+        captureDiag("ACTIVITY onStart taskId=$taskId captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        captureDiag("ACTIVITY onResume taskId=$taskId captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
+    }
+
     override fun onPause() {
+        captureDiag("ACTIVITY onPause isFinishing=$isFinishing isChangingConfigurations=$isChangingConfigurations captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
         // Persist the live mixer and mark the session as backgrounded. If Android
         // later reclaims the process for battery/memory management, the next
         // Activity instance knows to restore the saved controls, not startup defaults.
         save()
         prefs.edit().putBoolean("session_in_background", true).apply()
         super.onPause()
+    }
+
+    override fun onStop() {
+        captureDiag("ACTIVITY onStop isFinishing=$isFinishing isChangingConfigurations=$isChangingConfigurations captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
+        super.onStop()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val w = newConfig.screenWidthDp
+        val h = newConfig.screenHeightDp
+        if (w > 0 && h > 0) {
+            phonePortrait = min(w, h) < 600
+            wideLayout = w > h
+        }
+        lastWindowWidthPx = 0
+        buildUi()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -235,6 +373,7 @@ class MainActivity : Activity() {
         for(i in 0..3){eq[i]=0f;previousEq[i]=0f;sectionPreviousEq[i]=0f}
         for(i in 0..2){iso[i]=0f;previousIso[i]=0f;sectionPreviousIso[i]=0f}
         filters[0]=0f;filters[1]=0f;resonance=0f
+        reverbMix=0
         for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
         gain=0f;compMakeup=0f;compressorOn=false
         bassBoost=0f;loudness=0f;bassBoostOn=false;loudnessOn=false
@@ -280,12 +419,19 @@ class MainActivity : Activity() {
     private fun fitUiToWindow() {
         if (!::root.isInitialized || !::container.isInitialized || container.width <= 0 || container.height <= 0) return
         var scale = 1f
-        for (section in sections.values) {
-            if (section.height <= 0) continue
-            val required = requiredContentHeight(section)
-            if (required > 0) scale = min(scale, section.height.toFloat() / required.toFloat())
+        // Tablet portrait uses weighted section rows sized to the available
+        // window. The recursive intrinsic-height estimate double-counts those
+        // weighted children and used to shrink the entire interface, leaving
+        // unused space at the bottom. Keep native scale in this orientation.
+        val tabletPortraitLayout = !phonePortrait && !wideLayout
+        if (!tabletPortraitLayout) {
+            for (section in sections.values) {
+                if (section.height <= 0) continue
+                val required = requiredContentHeight(section)
+                if (required > 0) scale = min(scale, section.height.toFloat() / required.toFloat())
+            }
+            scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         }
-        scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         root.pivotX = 0f
         root.pivotY = 0f
         root.scaleX = scale
@@ -380,6 +526,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",100).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -396,25 +543,38 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         val compactPhone = phonePortrait && !wideLayout
-        root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
+        root=LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL
+            setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4))
+            setBackgroundColor(bg); clipChildren=false; clipToPadding=false
+        }
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(compactPhone)72 else 82),dp(if(compactPhone)30 else 36)).apply{rightMargin=dp(5)})
-        titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
+        titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(compactPhone)72 else 82),dp(if(compactPhone)30 else 36)).apply{rightMargin=dp(4)})
+        val beatFxButton=TextView(this).apply {
+            text="BEAT EFFECTS"
+            textSize=10f*phoneUiScale
+            setTypeface(typeface,Typeface.BOLD)
+            gravity=Gravity.CENTER
+            setTextColor(colorOptions)
+            background=android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius=dp(6).toFloat()
+                setColor(Color.rgb(42,45,52))
+                setStroke(dp(1),colorOptions)
+            }
+            setOnClickListener { showBeatEffectsDialog() }
+        }
+        titleBar.addView(beatFxButton,LinearLayout.LayoutParams(0,dp(if(compactPhone)30 else 36),1f).apply{leftMargin=dp(3);rightMargin=dp(4)})
+        titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(48),dp(if(compactPhone)30 else 36)).apply{leftMargin=dp(2)})
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
-        // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
         root.addView(content,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
-        // Fixed four-quadrant mixer in every orientation: only the available
-        // dimensions change, never the order or the set of controls.
-        val upper=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-        val lower=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-        content.addView(upper,LinearLayout.LayoutParams(-1,0,1f))
-        content.addView(lower,LinearLayout.LayoutParams(-1,0,1f))
-        addSection("EQ","EQ",eq,-14f..14f,{eqOn},upper)
-        addSection("ISOLATOR","ISOLATOR",iso,-24f..24f,{isoOn},upper)
-        addFilterSection(lower)
-        addGainSection(lower)
+        val eqHost=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+        val masterHost=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
+        content.addView(eqHost,LinearLayout.LayoutParams(-1,0,0.52f))
+        content.addView(masterHost,LinearLayout.LayoutParams(-1,0,0.48f))
+        addSection("EQ","EQ",eq,-14f..14f,{eqOn},eqHost)
+        addGainSection(masterHost)
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
@@ -449,6 +609,99 @@ class MainActivity : Activity() {
         container.post { root.post { fitUiToWindow() } }
     }
 
+    private fun showBeatEffectsDialog() {
+        if (beatEffectsDialog?.isShowing == true) return
+        val dialog = android.app.Dialog(this)
+        val overlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(3),dp(3),dp(3),dp(3))
+            setBackgroundColor(bg)
+            clipChildren = false
+            clipToPadding = false
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        header.addView(label("BEAT EFFECTS",14f,colorTitles),LinearLayout.LayoutParams(0,dp(34),1f))
+        val close = TextView(this).apply {
+            text = "CHIUDI  ✕"
+            textSize = 10f
+            setTypeface(typeface,Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(5).toFloat()
+                setColor(Color.rgb(150,35,40))
+            }
+            setOnClickListener { dialog.dismiss() }
+        }
+        header.addView(close,LinearLayout.LayoutParams(dp(82),dp(30)))
+        overlay.addView(header,LinearLayout.LayoutParams(-1,dp(36)))
+
+        fun row() = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            clipChildren = false
+            clipToPadding = false
+        }
+        val top = row()
+        val bottom = row()
+        overlay.addView(top,LinearLayout.LayoutParams(-1,0,1f))
+        overlay.addView(bottom,LinearLayout.LayoutParams(-1,0,1f))
+
+        val isolatorHost = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; clipChildren=false; clipToPadding=false }
+        val filterHost = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; clipChildren=false; clipToPadding=false }
+        top.addView(isolatorHost,LinearLayout.LayoutParams(0,-1,1f))
+        top.addView(filterHost,LinearLayout.LayoutParams(0,-1,1f))
+        addSection("ISOLATOR","ISOLATOR",iso,-24f..24f,{isoOn},isolatorHost)
+        addFilterSection(filterHost)
+
+        val effectsPanel = buildEffectsPanel()
+        val effectsBody = effectsPanel.getChildAt(1) as? LinearLayout
+            ?: throw IllegalStateException("Effects panel layout not found")
+        val reverbQuadrant = LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER
+            setPadding(dp(2),dp(2),dp(2),dp(2)); clipChildren=false; clipToPadding=false
+        }
+        val delayQuadrant = LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER
+            setPadding(dp(2),dp(2),dp(2),dp(2)); clipChildren=false; clipToPadding=false
+        }
+        reverbQuadrant.addView(effectsPanel.getChildAt(0),LinearLayout.LayoutParams(-1,dp(28)))
+        reverbQuadrant.addView(effectsBody.getChildAt(0),LinearLayout.LayoutParams(-1,0,1f))
+        delayQuadrant.addView(label("DELAY / ECHO",12f,colorMaster),LinearLayout.LayoutParams(-1,dp(28)))
+        delayQuadrant.addView(effectsBody.getChildAt(1),LinearLayout.LayoutParams(-1,0,1f))
+        bottom.addView(reverbQuadrant,LinearLayout.LayoutParams(0,-1,1f))
+        bottom.addView(delayQuadrant,LinearLayout.LayoutParams(0,-1,1f))
+
+        dialog.setContentView(overlay)
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.setOnDismissListener {
+            if (beatEffectsDialog === dialog) beatEffectsDialog = null
+            sections.remove("ISOLATOR")
+            sections.remove("FILTERS")
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(bg))
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
+        dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        beatEffectsDialog = dialog
+        overlay.post { applyUniformDialSize(overlay,58) }
+    }
+
+    private fun applyUniformDialSize(parent: View, sizeDp: Int) {
+        if (parent is RotaryControl) {
+            parent.scaleX = 1f
+            parent.scaleY = 1f
+            parent.layoutParams = LinearLayout.LayoutParams(dp(sizeDp),dp(sizeDp))
+            return
+        }
+        if (parent is ViewGroup) {
+            for (index in 0 until parent.childCount) applyUniformDialSize(parent.getChildAt(index),sizeDp)
+        }
+    }
+
     private fun scheduleUpdate() {
         // Update DSP at display cadence; persist settings off the hot interaction path.
         // Give audio parameter changes priority over UI work and persistence.
@@ -480,7 +733,7 @@ class MainActivity : Activity() {
         val indices = if(key=="EQ" && eqDoubleMid) listOf(2,3,1,0) else listOf(2,1,0)
         // Tablet portrait uses measured, weighted rows instead of guessed dp heights.
         // Every band receives exactly the same share of the real section height.
-        val verticalRowHeight = ((windowHeightDp()/2f-96f)/indices.size).roundToInt().coerceIn(52,140)
+        val verticalRowHeight = ((windowHeightDp()*0.35f-76f)/indices.size).roundToInt().coerceIn(48,112)
         val verticalDialHeight = if(useVerticalRows) dp(verticalRowHeight) else dialHeight()
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
         val names = if(key=="EQ" && eqDoubleMid) listOf("HIGH","MID HIGH","MID LOW","LOW") else listOf("HIGH","MID","LOW")
@@ -564,7 +817,8 @@ class MainActivity : Activity() {
         val compactFilter = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compactFilter)1 else 4),dp(4),dp(if(compactFilter)1 else 4),dp(1))}
         val filterAccent = accentFor("FILTERS")
-        val useVerticalRows=!wideLayout
+        val stackedTabletLandscape = !phonePortrait && wideLayout
+        val useVerticalRows = !wideLayout || stackedTabletLandscape
         val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         }
@@ -583,19 +837,19 @@ class MainActivity : Activity() {
             box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
         }
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
-        val verticalRowHeight = ((windowHeightDp()/2f-96f)/2f).roundToInt().coerceIn(52,140)
+        val verticalRowHeight = ((windowHeightDp()*0.36f-76f)/2f).roundToInt().coerceIn(50,140)
         val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else dialHeight()
         // Enlarge only the two FILTER dials on tablet landscape; leave every other control unchanged.
         val filterLandscapeDialHeight = if(wideLayout) dp(210) else dialHeight()
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
         val names=listOf("HPF","RESONANCE")
         for(i in 0..1){
-            val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val col=LinearLayout(this).apply{orientation=if(stackedTabletLandscape)LinearLayout.VERTICAL else if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==1)resonance else filters[0]
-            val filterReturnSize=if(compactFilter)18 else 42
-            val filterFlatSize=if(compactFilter)22 else 56
-            val filterActionGap=if(compactFilter)1 else 8
-            val filterActionHeight=if(compactFilter)24 else 58
+            val filterReturnSize=if(stackedTabletLandscape)22 else if(compactFilter)18 else 42
+            val filterFlatSize=if(stackedTabletLandscape)26 else if(compactFilter)22 else 56
+            val filterActionGap=if(stackedTabletLandscape)4 else if(compactFilter)1 else 8
+            val filterActionHeight=if(stackedTabletLandscape)30 else if(compactFilter)24 else 58
             val controlEnabled=filtersOn
             // Tablet portrait: EQ dials use the full row width and are centered
             // on the section's vertical axis. Do not add a blank label lane here:
@@ -621,9 +875,14 @@ class MainActivity : Activity() {
                     scheduleUpdate()
                 },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,bottomTextLift=if(useVerticalRows)8f else 0f)
                 knob.isEnabled=controlEnabled
-                controlRow.addView(knob,if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout) filterLandscapeDialHeight else verticalDialHeight,1f))
+                if(stackedTabletLandscape && i==1){knob.scaleX=0.78f;knob.scaleY=0.78f}
+                // Make the HPF dial more prominent on tablet portrait;
+                // resonance keeps its original size.
+                if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
+                if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
+                controlRow.addView(knob,if(stackedTabletLandscape) LinearLayout.LayoutParams(-1,-1) else if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout) filterLandscapeDialHeight else verticalDialHeight,1f))
             }
-            col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
+            col.addView(controlRow,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,0,1f) else if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
             val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterActions.addView(circleAction("↶",filterReturnSize){
                 val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
@@ -635,7 +894,7 @@ class MainActivity : Activity() {
                 if(i==1)resonance=0f else filters[0]=0f
                 scheduleUpdate();refreshUi()
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
-            col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
+            col.addView(filterActions,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,dp(30)) else if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row,if(useVerticalRows) LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=dp(4)} else LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(compactFilter)4 else 7)});parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
@@ -647,32 +906,91 @@ class MainActivity : Activity() {
         val compactMaster = phonePortrait && !wideLayout
         val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compactMaster)1 else 4),dp(4),dp(if(compactMaster)1 else 4),dp(1))}
         box.addView(sectionLabel("MASTER",if(compactMaster)11f else 13f,titleTint(masterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactMaster)24 else 32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
-        if(tabletPortrait){
-            // Portrait tablet: one full-width MASTER strip per control.
-            // Keep the existing rotary controls and DSP callbacks; only the layout changes.
-            val rowHeight = ((windowHeightDp()/2f-96f)/4f).roundToInt().coerceIn(52,140)
-            fun masterRow(title:String, value:String, dial:View, actionViews:List<View> = emptyList()):View {
+        val tabletLandscape = !phonePortrait && wideLayout
+        if(tabletLandscape){
+            // Tablet landscape: compact vertical MASTER controls beside the FILTER stack.
+            val rowHeight = ((windowHeightDp()*0.53f-90f)/4f).roundToInt().coerceIn(48,90)
+            fun landscapeMasterRow(dial:View, actions:List<View> = emptyList()):View {
                 return LinearLayout(this).apply {
                     orientation=LinearLayout.HORIZONTAL
-                    gravity=Gravity.CENTER_VERTICAL
+                    gravity=Gravity.CENTER
                     setPadding(dp(2),dp(1),dp(2),dp(1))
-                    // No left-side text: keep every MASTER dial on the same
-                    // centered axis and give the four controls equal space.
                     addView(dial,LinearLayout.LayoutParams(0,dp(rowHeight-2),1f))
-                    if(actionViews.isNotEmpty()){
-                        val actions=LinearLayout(this@MainActivity).apply {
-                            orientation=LinearLayout.VERTICAL
-                            gravity=Gravity.CENTER
-                            actionViews.forEachIndexed { index, action ->
-                                addView(action,LinearLayout.LayoutParams(-1,dp(28)).apply {
-                                    topMargin=if(index==0)0 else dp(4)
-                                    bottomMargin=dp(2)
+                    // Reserve the same right-hand action lane in all four rows,
+                    // including GAIN (which has no ON/RETURN buttons). This keeps
+                    // the four dial centers on one exact vertical axis.
+                    val actionBox=LinearLayout(this@MainActivity).apply{
+                        orientation=LinearLayout.HORIZONTAL
+                        gravity=Gravity.CENTER
+                        setPadding(0,0,0,0)
+                        actions.forEachIndexed { index, action ->
+                            addView(action,LinearLayout.LayoutParams(0,dp(26),1f).apply{if(index>0)leftMargin=dp(4)})
+                        }
+                    }
+                    addView(actionBox,LinearLayout.LayoutParams(dp(144),-1))
+                }.also{it.minimumHeight=dp(rowHeight)}
+            }
+            // Four equal-height MASTER rows: no extra spacer above GAIN.
+            // All four dials share the same left axis and vertical sizing.
+            val gainDial:View = if(modes["GAIN"]==true) SeekBar(this).apply {
+                max=240;progress=((gain+12)*10).roundToInt()
+                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                    override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;scheduleUpdate()}}
+                    override fun onStartTrackingTouch(b:SeekBar?){}
+                    override fun onStopTrackingTouch(b:SeekBar?){save()}
+                })
+            } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            box.addView(landscapeMasterRow(gainDial),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,masterAccent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()}
+            box.addView(landscapeMasterRow(compDial,listOf(compToggle)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val bassDial=RotaryControl(this,"BASS BOOST",bassBoost,0f,100f,masterAccent,{v->bassBoost=v;scheduleUpdate()},{bassBoost.roundToInt().toString()+"%"},titleInside=false,onStart={previousBassBoost=bassBoost},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val bassToggle=roundAction("",if(bassBoostOn)"ON" else "OFF",bassBoostOn){bassBoostOn=!bassBoostOn;save();refreshUi();scheduleUpdate()}
+            val bassReturn=roundAction("↶","RETURN",true){bassBoost=previousBassBoost;save();refreshUi();scheduleUpdate()}
+            box.addView(landscapeMasterRow(bassDial,listOf(bassToggle,bassReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,masterAccent,{v->loudness=v;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,onStart={previousLoudness=loudness},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val loudToggle=roundAction("",if(loudnessOn)"ON" else "OFF",loudnessOn){loudnessOn=!loudnessOn;save();refreshUi();scheduleUpdate()}
+            val loudReturn=roundAction("↶","RETURN",true){loudness=previousLoudness;save();refreshUi();scheduleUpdate()}
+            box.addView(landscapeMasterRow(loudDial,listOf(loudToggle,loudReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+        }else if(tabletPortrait){
+            // Tablet portrait MASTER: compact 2x2 grid so all four controls
+            // remain fully inside the middle band without clipping.
+            val grid = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(2), dp(2), dp(2), dp(2))
+            }
+            fun masterCell(dial:View, actions:List<View> = emptyList()):View {
+                // Reduce all four MASTER rotary faces together so the 2x2
+                // grid fits comfortably inside the middle strip.
+                dial.scaleX = 0.76f
+                dial.scaleY = 0.76f
+                return LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER
+                    setPadding(dp(2), dp(1), dp(2), dp(1))
+                    addView(dial, LinearLayout.LayoutParams(0, -1, 1f))
+                    if (actions.isNotEmpty()) {
+                        val actionColumn = LinearLayout(this@MainActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            gravity = Gravity.CENTER
+                            actions.forEachIndexed { index, action ->
+                                addView(action, LinearLayout.LayoutParams(-1, dp(25)).apply {
+                                    if (index > 0) topMargin = dp(3)
                                 })
                             }
                         }
-                        addView(actions,LinearLayout.LayoutParams(dp(112),-1))
+                        addView(actionColumn, LinearLayout.LayoutParams(dp(76), -1))
                     }
-                }.also { it.minimumHeight=dp(rowHeight) }
+                }
+            }
+            val topRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            val bottomRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
             }
             val gainDial:View = if(modes["GAIN"]==true){
                 SeekBar(this).apply {
@@ -683,25 +1001,24 @@ class MainActivity : Activity() {
                         override fun onStopTrackingTouch(b:SeekBar?){save()}
                     })
                 }
-            } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-            // Match the common section header height: all four sections start
-            // their rotary rows on the same baseline.
-            box.addView(View(this),LinearLayout.LayoutParams(-1,dp(44)))
-            val gainSpacer=View(this).apply{isClickable=false}
-            box.addView(masterRow("GAIN",fmt(gain)+" dB",gainDial,listOf(gainSpacer)),LinearLayout.LayoutParams(-1,dp(rowHeight)).apply{topMargin=dp(7)})
-            val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            } else RotaryControl(this,"GAIN",gain,-12f,12f,masterAccent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,masterAccent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
                 compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()
             }
-            box.addView(masterRow("COMP",compMakeup.roundToInt().toString()+"%",compDial,listOf(compToggle)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
-            val bassDial=RotaryControl(this,"BASS BOOST",bassBoost,0f,100f,masterAccent,{v->bassBoost=v;scheduleUpdate()},{bassBoost.roundToInt().toString()+"%"},onStart={previousBassBoost=bassBoost},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val bassDial=RotaryControl(this,"BASS BOOST",bassBoost,0f,100f,masterAccent,{v->bassBoost=v;scheduleUpdate()},{bassBoost.roundToInt().toString()+"%"},titleInside=false,onStart={previousBassBoost=bassBoost},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val bassToggle=roundAction("",if(bassBoostOn)"ON" else "OFF",bassBoostOn){bassBoostOn=!bassBoostOn;save();refreshUi();scheduleUpdate()}
             val bassReturn=roundAction("↶","RETURN",true){bassBoost=previousBassBoost;save();refreshUi();scheduleUpdate()}
-            box.addView(masterRow("BASS BOOST",bassBoost.roundToInt().toString()+"%",bassDial,listOf(bassToggle,bassReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
-            val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,masterAccent,{v->loudness=v;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},onStart={previousLoudness=loudness},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,masterAccent,{v->loudness=v;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,onStart={previousLoudness=loudness},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val loudToggle=roundAction("",if(loudnessOn)"ON" else "OFF",loudnessOn){loudnessOn=!loudnessOn;save();refreshUi();scheduleUpdate()}
             val loudReturn=roundAction("↶","RETURN",true){loudness=previousLoudness;save();refreshUi();scheduleUpdate()}
-            box.addView(masterRow("LOUDNESS",loudness.roundToInt().toString()+"%",loudDial,listOf(loudToggle,loudReturn)),LinearLayout.LayoutParams(-1,dp(rowHeight)))
+            topRow.addView(masterCell(gainDial), LinearLayout.LayoutParams(0, -1, 1f))
+            topRow.addView(masterCell(compDial,listOf(compToggle)), LinearLayout.LayoutParams(0, -1, 1f))
+            bottomRow.addView(masterCell(bassDial,listOf(bassToggle,bassReturn)), LinearLayout.LayoutParams(0, -1, 1f))
+            bottomRow.addView(masterCell(loudDial,listOf(loudToggle,loudReturn)), LinearLayout.LayoutParams(0, -1, 1f))
+            grid.addView(topRow, LinearLayout.LayoutParams(-1, 0, 1f))
+            grid.addView(bottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
+            box.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
         }else{
             val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val gainValueLabel=label(fmt(gain)+" dB",if(compactMaster)9f else 10f,Color.WHITE)
@@ -826,6 +1143,1101 @@ class MainActivity : Activity() {
                         save();refreshUi();dialog.dismiss()
                     }.setNegativeButton("ANNULLA",null).show()
             }.setNegativeButton("CHIUDI",null).show()
+    }
+
+
+    // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
+    private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
+    // CUE capture is temporary; otherwise capture is needed only for audible FX.
+    private fun captureNeeded() = effectsActive() || cueListening
+
+    private fun paintCueButton() {
+        cueButton?.let { button ->
+            button.text = if (cueListening) "LISTEN…" else "CUE"
+            button.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(if (cueListening) colorMaster else Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+        }
+    }
+
+
+    // CUE listens for four seconds and selects the strongest isolated transient.
+    // It does not estimate BPM: tempo remains entirely under manual fader control.
+    private fun analyzeAutoBpm(samples: ShortArray, count: Int, nowMs: Long, sampleRate: Int) {
+        if (!cueListening || count <= 0) return
+        if (cueFrameCount == 0) cueStartedAtMs = nowMs - (count * 1000L / sampleRate)
+        val frameSamples = (sampleRate / 200).coerceAtLeast(1)
+        val bassAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 150.0 / sampleRate)).toFloat()
+        val midAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 3200.0 / sampleRate)).toFloat()
+        var offset = 0
+        while (offset < count && cueListening) {
+            val end = minOf(offset + frameSamples, count)
+            var bassEnergy = 0.0
+            var midEnergy = 0.0
+            var n = 0
+            for (i in offset until end) {
+                val input = samples[i].toFloat() / 32768f
+                autoBpmLowpassState += bassAlpha * (input - autoBpmLowpassState)
+                autoBpmMidLowpassState += midAlpha * (input - autoBpmMidLowpassState)
+                val bass = autoBpmLowpassState
+                val mid = autoBpmMidLowpassState - autoBpmLowpassState
+                bassEnergy += bass.toDouble() * bass.toDouble()
+                midEnergy += mid.toDouble() * mid.toDouble()
+                n++
+            }
+            if (n > 0) {
+                val bassRms = kotlin.math.sqrt(bassEnergy / n).toFloat()
+                val midRms = kotlin.math.sqrt(midEnergy / n).toFloat()
+                val bassRise = (bassRms - autoBpmPreviousBass * 0.88f).coerceAtLeast(0f)
+                val midRise = (midRms - autoBpmPreviousMid * 0.88f).coerceAtLeast(0f)
+                autoBpmHistory.addLast(max(bassRise, midRise * 0.65f))
+                autoBpmPreviousBass = bassRms
+                autoBpmPreviousMid = midRms
+                cueFrameCount++
+            }
+            offset = end
+        }
+        if (cueFrameCount < 800) return
+        val values = autoBpmHistory.toList()
+        val searchStart = minOf(50, values.size - 1)
+        var bestIndex = searchStart
+        var bestScore = 0f
+        for (i in (searchStart + 1) until values.lastIndex) {
+            val score = values[i]
+            if (score >= values[i - 1] && score >= values[i + 1] && score > bestScore) {
+                bestScore = score
+                bestIndex = i
+            }
+        }
+        if (bestScore <= 0f) bestIndex = (searchStart until values.size).maxByOrNull { values[it] } ?: searchStart
+        cueAnchorMs = cueStartedAtMs + bestIndex * 5L
+        bpmSyncAnchorMs = cueAnchorMs
+        bpmSyncLocked = false
+        delaySyncOffsetMs = 0f
+        cueListening = false
+        handler.post {
+            paintCueButton()
+            Toast.makeText(this, "CUE agganciato. Regola TEMPO e premi LOCK.", Toast.LENGTH_LONG).show()
+        }
+        captureDiag("CUE completato: frame=$bestIndex onset=$bestScore anchor=$cueAnchorMs")
+    }
+
+    // Recalculate the delay read-head offset against the same SYNC phase anchor
+    // whenever the user changes beat division. The selected interval then lands
+    // on the next subdivision instead of adding a stale positive phase offset.
+    private fun updateDelaySyncOffsetForDivision() {
+        if (!bpmSyncLocked || bpmSyncAnchorMs <= 0L) {
+            delaySyncOffsetMs = 0f
+            return
+        }
+        val beatMs = 60000f / bpmSyncLockedValue.coerceIn(60f, 180f)
+        val fraction = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 2f, 4f, 8f)[delayDivision.coerceIn(0, 6)]
+        val intervalMs = beatMs * fraction
+        val elapsedMs = (android.os.SystemClock.elapsedRealtime() - bpmSyncAnchorMs)
+            .coerceAtLeast(0L).toFloat()
+        val remainingMs = if (fraction < 1f) {
+            val withinSubdivision = elapsedMs % intervalMs
+            intervalMs - withinSubdivision
+        } else {
+            val withinBeat = elapsedMs % beatMs
+            val untilNextBeat = if (withinBeat < 1f) beatMs else beatMs - withinBeat
+            untilNextBeat + (fraction - 1f) * beatMs
+        }
+        delaySyncOffsetMs = (remainingMs - intervalMs).coerceIn(-1000f, 1000f)
+    }
+
+    private fun registerDelayTap(): Float {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastDelayTapMs != 0L) {
+            val interval = now - lastDelayTapMs
+            if (interval in 250L..1500L) {
+                delayTapIntervals.addLast(interval)
+                while (delayTapIntervals.size > 4) delayTapIntervals.removeFirst()
+                val sorted = delayTapIntervals.toList().sorted()
+                val median = if (sorted.size % 2 == 0)
+                    (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2L
+                else sorted[sorted.size / 2]
+                delayTapBpm = (60000.0 / median.toDouble()).toFloat().coerceIn(60f,180f)
+                delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                prefs.edit().putFloat("reverb_delay_tap_bpm", delayTapBpm).putFloat("reverb_delay_bpm", delayBpm).apply()
+            } else delayTapIntervals.clear()
+        } else delayTapIntervals.clear()
+        lastDelayTapMs = now
+        return delayBpm
+    }
+
+    private fun updateEffectsCapture(allowNewConsent: Boolean = false) {
+        // Only an explicit ON action can start a new Android consent flow.
+        // Temporary stream errors reuse the current MediaProjection token.
+        if (!captureNeeded() || captureRunning || captureRestartPending) return
+        if (captureProjection != null) startAudioCaptureTest()
+        else if (allowNewConsent) {
+            captureConsentLocked = false
+            startAudioCaptureTest()
+        }
+    }
+
+    private fun buildEffectsPanel(): LinearLayout {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 0)
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+        fun styleToggle(view: TextView, enabled: Boolean) {
+            view.text = if (enabled) "ON" else "OFF"
+            view.setTextColor(Color.WHITE)
+            view.textSize = 10f
+            view.setTypeface(view.typeface, Typeface.BOLD)
+            view.gravity = Gravity.CENTER
+            view.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(if (enabled) Color.rgb(28,170,75) else Color.rgb(185,42,48))
+                setStroke(dp(1), if (enabled) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+            }
+        }
+        fun fadeRow(title: String, initial: Int, update: (Int) -> Unit): LinearLayout {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(2), 0, dp(2), 0)
+            }
+            val caption = label("$title  " + "%.1f".format(initial / 1000f) + " s", 10f, colorMaster)
+            caption.gravity = Gravity.CENTER_VERTICAL
+            val seek = SeekBar(this).apply {
+                max = 5700
+                progress = (initial - 300).coerceIn(0,5700)
+                setPadding(0, 0, 0, 0)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            val value = 300 + progress
+                            caption.text = "$title  " + "%.1f".format(value / 1000f) + " s"
+                            update(value)
+                            scheduleUpdate()
+                        }
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar?) {}
+                    override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+                })
+            }
+            row.addView(caption, LinearLayout.LayoutParams(-1, dp(17)))
+            row.addView(seek, LinearLayout.LayoutParams(-1, dp(25)))
+            return row
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP or Gravity.START
+        }
+        val reverbPower = TextView(this).apply {
+            styleToggle(this, reverbOn)
+            setOnClickListener {
+                reverbOn = !reverbOn
+                styleToggle(this, reverbOn)
+                save(); scheduleUpdate()
+                if (reverbOn) updateEffectsCapture(true)
+            }
+        }
+        val reverbTitle = label("REVERB", 13f, colorMaster)
+        reverbTitle.gravity = Gravity.CENTER_VERTICAL
+        header.gravity = Gravity.CENTER_VERTICAL
+        header.addView(reverbTitle, LinearLayout.LayoutParams(-2, -1).apply { rightMargin = dp(8) })
+        header.addView(reverbPower, LinearLayout.LayoutParams(dp(42), dp(20)))
+        panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
+
+        val depthDial = RotaryControl(
+            this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
+        )
+        val timeDial = RotaryControl(
+            this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
+            { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
+            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
+        )
+        val reverbRow = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        // In tablet portrait the Reverb main dials were visually larger
+        // than the four Delay dials. Scale only their drawing, not their
+        // touch/layout bounds, to match the Delay rotary size.
+        if (!phonePortrait && !wideLayout) {
+            listOf(depthDial, timeDial).forEach { it.scaleX = 0.72f; it.scaleY = 0.72f }
+        }
+        reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        val reverbFeedbackDial = RotaryControl(
+            this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        if (!phonePortrait && !wideLayout) { reverbFeedbackDial.scaleX = 0.72f; reverbFeedbackDial.scaleY = 0.72f }
+        reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        val reverbDecayDial = RotaryControl(
+            this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
+        )
+        val reverbColorDial = RotaryControl(
+            this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbColorPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
+        )
+        // The Reverb fade strip is intentionally replaced by this third rotary control.
+        // The existing smooth Reverb fade remains internal to the DSP.
+        val delayDial = RotaryControl(
+            this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val delayControls = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        val delayTop = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val bpmLabel = TextView(this).apply {
+            text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+            textSize = 10f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }
+        bpmUiLabel = bpmLabel
+        var bpmFineSeek: SeekBar? = null
+        val tapButton = TextView(this).apply {
+            text = "TAP"
+            textSize = 9f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                cueListening = false
+                paintCueButton()
+                cueAnchorMs = 0L
+                bpmSyncLocked = false
+                bpmSyncAnchorMs = 0L
+                delaySyncOffsetMs = 0f
+                delayBpm = registerDelayTap()
+                delayTapBpm = delayBpm
+                delayBpmCorrection = 0f
+                bpmFineSeek?.progress = 100
+                bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+                save(); scheduleUpdate()
+            }
+        }
+        val cueButtonView = TextView(this).apply {
+            text = "CUE"
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                cueListening = true
+                cueStartedAtMs = 0L
+                cueFrameCount = 0
+                autoBpmHistory.clear()
+                autoBpmPreviousBass = 0f
+                autoBpmPreviousMid = 0f
+                autoBpmLowpassState = 0f
+                autoBpmMidLowpassState = 0f
+                cueAnchorMs = 0L
+                bpmSyncLocked = false
+                bpmSyncAnchorMs = 0L
+                delaySyncOffsetMs = 0f
+                paintCueButton()
+                Toast.makeText(this@MainActivity, "Ascolto per 4 secondi…", Toast.LENGTH_SHORT).show()
+                updateEffectsCapture(true)
+                save()
+            }
+        }
+        cueButton = cueButtonView
+        val lockButton = TextView(this).apply {
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            fun paintLock() {
+                text = if (bpmSyncLocked) "LOCK ON" else "LOCK"
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(6).toFloat()
+                    setColor(if (bpmSyncLocked) colorMaster else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorMaster)
+                }
+            }
+            paintLock()
+            setOnClickListener {
+                if (bpmSyncLocked) {
+                    bpmSyncLocked = false
+                    delaySyncOffsetMs = 0f
+                } else {
+                    bpmSyncAnchorMs = if (cueAnchorMs > 0L) cueAnchorMs else android.os.SystemClock.elapsedRealtime()
+                    bpmSyncLockedValue = delayBpm.coerceIn(60f,180f)
+                    bpmSyncLocked = true
+                    updateDelaySyncOffsetForDivision()
+                }
+                paintLock()
+                scheduleUpdate()
+                save()
+            }
+        }
+        val shiftBeatButton = TextView(this).apply {
+            text = "SHIFT ½"
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                val tempo = (if (bpmSyncLocked) bpmSyncLockedValue else delayBpm).coerceIn(60f,180f)
+                val beatMs = 60000f / tempo
+                if (bpmSyncAnchorMs <= 0L) bpmSyncAnchorMs = android.os.SystemClock.elapsedRealtime()
+                bpmSyncAnchorMs += (beatMs / 2f).roundToLong()
+                cueAnchorMs = bpmSyncAnchorMs
+                if (bpmSyncLocked) updateDelaySyncOffsetForDivision()
+                scheduleUpdate()
+                save()
+                Toast.makeText(this@MainActivity, "Fase spostata di mezza battuta", Toast.LENGTH_SHORT).show()
+            }
+        }
+        fun bpmNudgeButton(symbol: String, amount: Float): TextView = TextView(this).apply {
+            text = symbol
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                delayBpmCorrection = (delayBpmCorrection + amount).coerceIn(-10f,10f)
+                delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
+                bpmFineSeek?.progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
+                bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+                save(); scheduleUpdate()
+            }
+        }
+        val delayPower = TextView(this).apply {
+            styleToggle(this, delayOn)
+            setOnClickListener {
+                delayOn = !delayOn
+                styleToggle(this, delayOn)
+                save(); scheduleUpdate()
+                if (delayOn) updateEffectsCapture(true)
+            }
+        }
+        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
+        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(34), dp(42)))
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
+        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
+        delayTop.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
+        delayTop.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
+        delayTop.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3) })
+        val resetBpmButton = TextView(this).apply {
+            text = "RST"
+            textSize = 8f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            contentDescription = "Reset contabattute e SYNC"
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+            setOnClickListener {
+                // Original RST behavior: release SYNC and reset only the beat-phase
+                // reference/history. Keep the current BPM and fine correction so the
+                // detector can reacquire timing without jumping back to 120 BPM.
+                cueListening = false
+                paintCueButton()
+                bpmSyncLocked = false
+                delaySyncOffsetMs = 0f
+                bpmSyncAnchorMs = 0L
+                cueAnchorMs = 0L
+                autoBpmHistory.clear()
+                autoBpmEstimateHistory.clear()
+                autoBpmPreviousBass = 0f
+                autoBpmPreviousMid = 0f
+                autoBpmLowpassState = 0f
+                autoBpmMidLowpassState = 0f
+                cueFrameCount = 0
+                scheduleUpdate()
+                save()
+                captureDiag("RST premuto: SYNC sbloccato, fase e storico azzerati; BPM mantenuto; CUE=$cueListening")
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(6).toFloat()
+                    setColor(colorMaster)
+                    setStroke(dp(1), colorMaster)
+                }
+                postDelayed({
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(6).toFloat()
+                        setColor(Color.rgb(55,62,72))
+                        setStroke(dp(1), colorMaster)
+                    }
+                }, 300L)
+            }
+        }
+        delayTop.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3) })
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.6f))
+        val bpmFineCaption = label("PITCH TEMPO   −10       0       +10 BPM", 8f, colorMaster).apply {
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.65f).apply { topMargin = dp(2) })
+        val fineSeek = SeekBar(this).apply {
+            max = 200
+            progress = 100 // fader always opens at its physical centre / zero
+            setPadding(0, 0, 0, 0)
+            splitTrack = false
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        delayBpmCorrection = (progress - 100) * 0.1f
+                        delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                        if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
+                        bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+                        scheduleUpdate()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) { save() }
+            })
+        }
+        bpmFineSeek = fineSeek
+        delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, 0, 0.9f).apply { topMargin = dp(2); bottomMargin = dp(2) })
+
+        val modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val modeLabels = arrayOf("SHORT DELAY", "LONG DELAY", "DUB ECHO")
+        val modeViews = ArrayList<TextView>()
+        fun paintModeButtons() {
+            modeViews.forEachIndexed { index, button ->
+                val selected = selectedBeatFx == index
+                button.background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(4).toFloat()
+                    setColor(if (selected) colorMaster else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorMaster)
+                }
+                button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
+            }
+        }
+        modeLabels.forEachIndexed { index, caption ->
+            val button = TextView(this).apply {
+                text = caption
+                textSize = 9f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setPadding(dp(3), 0, dp(3), 0)
+                setOnClickListener {
+                    selectedBeatFx = index
+                    delayMode = index
+                    // Keep the active musical clock and re-align the delay tap
+                    // when changing voicing, without resetting the SYNC anchor.
+                    if (bpmSyncLocked) updateDelaySyncOffsetForDivision()
+                    paintModeButtons()
+                    save(); scheduleUpdate()
+                }
+            }
+            modeViews.add(button)
+            modeRow.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                if (index > 0) leftMargin = dp(3)
+            })
+        }
+        paintModeButtons()
+        delayControls.addView(modeRow, LinearLayout.LayoutParams(-1, 0, 1.1f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+
+        val divisions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val divisionLabels = arrayOf("¼", "½", "¾", "1", "2", "4", "8")
+        val divisionViews = ArrayList<TextView>()
+        fun paintDivisionButtons() {
+            divisionViews.forEachIndexed { index, button ->
+                val selected = delayDivision == index
+                button.background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(4).toFloat()
+                    setColor(if (selected) colorMaster else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorMaster)
+                }
+                button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
+            }
+        }
+        divisionLabels.forEachIndexed { index, caption ->
+            val button = TextView(this).apply {
+                text = caption
+                textSize = 10f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setOnClickListener {
+                    delayDivision = index
+                    if (bpmSyncLocked) updateDelaySyncOffsetForDivision()
+                    paintDivisionButtons()
+                    save(); scheduleUpdate()
+                }
+            }
+            divisionViews.add(button)
+            divisions.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                if (index > 0) leftMargin = dp(3)
+            })
+        }
+        paintDivisionButtons()
+        delayControls.addView(divisions, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+
+        val frequencyRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val frequencyLabels = arrayOf("FX HIGH")
+        val frequencyViews = ArrayList<TextView>()
+        fun paintFrequencyButtons() {
+            frequencyViews.forEachIndexed { index, button ->
+                val active = fxHighEnabled
+                button.background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(4).toFloat()
+                    setColor(if (active) colorMaster else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorMaster)
+                }
+                button.setTextColor(if (active) Color.BLACK else Color.WHITE)
+            }
+        }
+        frequencyLabels.forEachIndexed { index, caption ->
+            val button = TextView(this).apply {
+                text = caption
+                textSize = 9f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setOnClickListener {
+                    fxHighEnabled = !fxHighEnabled
+                    paintFrequencyButtons()
+                    save(); scheduleUpdate()
+                }
+            }
+            frequencyViews.add(button)
+            frequencyRow.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                if (index > 0) leftMargin = dp(4)
+            })
+        }
+        paintFrequencyButtons()
+        delayControls.addView(frequencyRow, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+
+
+
+        val delayFeedbackDial = RotaryControl(
+            this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
+            { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
+            { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val delayToneDial = RotaryControl(
+            this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> delayTonePercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val delayRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        delayRow.addView(delayDial, LinearLayout.LayoutParams(0, -1, 1f))
+        delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
+        delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, -1, 1f))
+        val reverbColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+        }
+        val reverbControlsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val reverbSideColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        reverbSideColumn.addView(reverbDecayDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        // Give DECAY and COLOR enough width for noticeably larger rotary faces
+        // while keeping their captions and values below each dial.
+        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(if (!phonePortrait && !wideLayout) 58 else 74), -1).apply {
+            rightMargin = dp(3)
+        })
+        reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        val delayColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(3), dp(2), dp(3), dp(2))
+        }
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
+        val effectsBody = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (!phonePortrait && !wideLayout) 0.37f else 0.43f))
+        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (!phonePortrait && !wideLayout) 0.63f else 0.57f))
+        panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        return panel
+    }
+
+    private fun addEffectsSection(parent: LinearLayout) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP
+            setPadding(0, 0, 0, 0)
+            setBackgroundColor(Color.TRANSPARENT)
+            clipChildren = false
+            clipToPadding = false
+        }
+        box.addView(buildEffectsPanel(), LinearLayout.LayoutParams(-1, -1))
+        parent.addView(box, LinearLayout.LayoutParams(0, -1, 1f))
+        sections["FX"] = box
+    }
+    private fun startAudioCaptureTest() {
+        // Reuse the existing MediaProjection session after a track/route switch.
+        // Only request Android approval when no live session exists.
+        if (captureRunning || captureRestartPending) return
+        captureProjection?.let { existingProjection ->
+            captureRestartAttempts = 0
+            beginAudioCapture(existingProjection)
+            return
+        }
+        if (Build.VERSION.SDK_INT < 29) {
+            AlertDialog.Builder(this).setTitle("TEST NON SUPPORTATO")
+                .setMessage("La cattura audio interna richiede Android 10 o superiore.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), capturePermissionRequestCode)
+            return
+        }
+        try {
+            val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+            startActivityForResult(manager.createScreenCaptureIntent(), captureRequestCode)
+        } catch (t: Throwable) {
+            showCaptureError("IMPOSSIBILE AVVIARE LA RICHIESTA DI CATTURA", t)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == capturePermissionRequestCode) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startAudioCaptureTest()
+            } else {
+                AlertDialog.Builder(this).setTitle("PERMESSO NEGATO")
+                    .setMessage("Senza il permesso microfono Android non consente di avviare il test di cattura audio.")
+                    .setPositiveButton("OK", null).show()
+            }
+        }
+    }
+
+    @Deprecated("Deprecated in Android API  Activity Result migration is not required for this diagnostic")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != captureRequestCode) return
+        if (resultCode != RESULT_OK || data == null) {
+            captureConsentLocked = true
+            Toast.makeText(this, "Cattura non autorizzata • attiva AUTO BPM oppure ON su Reverb/Delay per riprovare", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!captureNeeded()) return
+        try {
+            // Use the same proven startup sequence as the S25 build:
+            // start the mediaProjection foreground service first, then obtain
+            // the projection only after Android has had time to promote it.
+            val serviceIntent = android.content.Intent(this, AudioCaptureForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+            handler.postDelayed({
+                try {
+                    val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                    val projection = manager.getMediaProjection(resultCode, data)
+                    if (projection == null) {
+                        showCaptureError("ANDROID NON HA RESTITUITO LA SESSIONE DI CATTURA", null)
+                        stopAudioCaptureTest()
+                        return@postDelayed
+                    }
+                    intentionallyStoppingProjection = null
+                    captureProjection = projection
+                    projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
+                        override fun onStop() {
+                            runOnUiThread {
+                                // Ignore the callback caused by our own stop/cleanup.
+                                if (intentionallyStoppingProjection === projection) {
+                                    intentionallyStoppingProjection = null
+                                    return@runOnUiThread
+                                }
+                                // A delayed callback from an older projection must never tear down
+                                // a newer capture session that is already active.
+                                if (captureProjection !== projection) {
+                                    captureDiag("MEDIA_PROJECTION onStop ignorato: callback di sessione non corrente; activeProjectionPresent=${captureProjection != null} captureRunning=$captureRunning")
+                                    return@runOnUiThread
+                                }
+                                captureDiag("MEDIA_PROJECTION onStop della sessione corrente; captureRunning=$captureRunning restartPending=$captureRestartPending projectionId=${System.identityHashCode(projection)}")
+                                captureRunning = false
+                                captureRestartPending = false
+                                captureProjection = null
+                                // A revoked capture must never leave a wet return playing
+                                // or FX switches latched ON with no controllable audio stream.
+                                reverbOn = false
+                                delayOn = false
+                                releaseCaptureIoOnly() // stop + flush + release AudioTrack immediately
+                                save()                  // preserve all knob values, persist safe OFF state
+                                refreshUi()
+                                captureConsentLocked = true
+                                try { stopService(android.content.Intent(this@MainActivity, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
+                                showCaptureRevokedDialog()
+                            }
+                        }
+                    }, handler)
+                    beginAudioCapture(projection)
+                } catch (t: Throwable) {
+                    showCaptureError("ERRORE CREAZIONE SESSIONE DI CATTURA", t)
+                    stopAudioCaptureTest()
+                }
+            }, 500)
+        } catch (t: Throwable) {
+            showCaptureError("IMPOSSIBILE AVVIARE IL SERVIZIO MEDIA PROJECTION", t)
+            stopAudioCaptureTest()
+        }
+    }
+
+    private fun beginAudioCapture(projection: android.media.projection.MediaProjection) {
+        try {
+            val sampleRate = 48000
+            val format = android.media.AudioFormat.Builder()
+                .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sampleRate)
+                .setChannelMask(android.media.AudioFormat.CHANNEL_IN_MONO)
+                .build()
+            val minBuffer = android.media.AudioRecord.getMinBufferSize(
+                sampleRate,
+                android.media.AudioFormat.CHANNEL_IN_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (minBuffer <= 0) throw IllegalStateException("AudioRecord buffer non valido: $minBuffer")
+            val config = android.media.AudioPlaybackCaptureConfiguration.Builder(projection)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(android.media.AudioAttributes.USAGE_GAME)
+                // Capture other apps (Morphe), never FREQUALIZER's own wet return.
+                .excludeUid(android.os.Process.myUid())
+                .build()
+            val record = android.media.AudioRecord.Builder()
+                .setAudioFormat(format)
+                .setBufferSizeInBytes(maxOf(minBuffer * 2, 8192))
+                .setAudioPlaybackCaptureConfig(config)
+                .build()
+            if (record.state != android.media.AudioRecord.STATE_INITIALIZED) {
+                record.release()
+                throw IllegalStateException("AudioRecord non inizializzato sul dispositivo")
+            }
+            val minOut = android.media.AudioTrack.getMinBufferSize(
+                sampleRate, android.media.AudioFormat.CHANNEL_OUT_MONO,
+                android.media.AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (minOut <= 0) throw IllegalStateException("AudioTrack buffer non valido: $minOut")
+            val outputFormat = android.media.AudioFormat.Builder()
+                .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(sampleRate)
+                .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO)
+                .build()
+            // Route the wet return as normal media so it follows the selected
+            // music output (including Bluetooth). The capture config excludes
+            // this app UID to prevent recursive feedback.
+            val outputAttributes = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            val track = android.media.AudioTrack.Builder()
+                .setAudioAttributes(outputAttributes)
+                .setAudioFormat(outputFormat)
+                .setBufferSizeInBytes(maxOf(minOut * 2, 8192))
+                .setTransferMode(android.media.AudioTrack.MODE_STREAM)
+                .build()
+            if (track.state != android.media.AudioTrack.STATE_INITIALIZED) {
+                track.release()
+                throw IllegalStateException("AudioTrack non inizializzato sull'uscita audio")
+            }
+            captureTrack = track
+            parallelReverbProcessor = SchroederReverb(sampleRate)
+            captureRecord = record
+            track.play()
+            record.startRecording()
+            captureDiag("I/O avviato: rate=$sampleRate minInBuffer=$minBuffer inBuffer=${maxOf(minBuffer * 2, 8192)} minOutBuffer=$minOut outBuffer=${maxOf(minOut * 2, 8192)} recordState=${record.state} recordingState=${record.recordingState} trackState=${track.state} playState=${track.playState}")
+            captureRunning = true
+            captureThread = Thread({
+                val buffer = ShortArray(2048)
+                val wetBuffer = ShortArray(buffer.size)
+                val processor = parallelReverbProcessor ?: return@Thread
+                var lastUi = 0L
+                var lastReadCompleted = 0L
+                try {
+                    while (captureRunning) {
+                        val readStarted = android.os.SystemClock.elapsedRealtime()
+                        val count = record.read(buffer, 0, buffer.size)
+                        val readCompleted = android.os.SystemClock.elapsedRealtime()
+                        if (lastReadCompleted > 0L && readCompleted - lastReadCompleted > 100L) {
+                            captureDiag("GAP tra letture AudioRecord: ${readCompleted - lastReadCompleted}ms; readDuration=${readCompleted - readStarted}ms count=$count recordState=${record.state} recordingState=${record.recordingState} trackPlayState=${track.playState}")
+                        }
+                        lastReadCompleted = readCompleted
+                        if (count > 0) {
+                            captureRestartAttempts = 0
+                            var peak = 0
+                            var sum = 0.0
+                            for (i in 0 until count) {
+                                val sample = buffer[i].toInt()
+                                val absolute = kotlin.math.abs(sample)
+                                if (absolute > peak) peak = absolute
+                                sum += sample.toDouble() * sample.toDouble()
+                            }
+                            processor.process(
+                                buffer, wetBuffer, count,
+                                reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
+                                reverbOn, reverbFadeMs, delayMix, delayBpm,
+                                delayOn, delayFadeMs, delayDivision, delayMode, 100, delayFeedbackPercent, delayTonePercent, fxHighEnabled,
+                                reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
+                                delaySyncOffsetMs, bpmSyncLocked
+                            )
+                            var written = 0
+                            while (written < count && captureRunning) {
+                                val writeStarted = android.os.SystemClock.elapsedRealtime()
+                                val n = track.write(wetBuffer, written, count - written, android.media.AudioTrack.WRITE_BLOCKING)
+                                val writeDuration = android.os.SystemClock.elapsedRealtime() - writeStarted
+                                if (writeDuration > 80L || n <= 0) captureDiag("AudioTrack.write: n=$n duration=${writeDuration}ms written=$written/$count trackState=${track.state} playState=${track.playState}")
+                                if (n <= 0) throw IllegalStateException("AudioTrack write non riuscita: $n")
+                                written += n
+                            }
+                            val rms = kotlin.math.sqrt(sum / count)
+                            analyzeAutoBpm(buffer, count, readCompleted, sampleRate)
+                            val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
+                            val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (now - lastUi >= 400) {
+                                lastUi = now
+                                handler.post {
+                                    captureStatusView?.text =
+                                        "REVERB PARALLELO ATTIVO • 48 kHz mono\n" +
+                                        "Ingresso Morphe RMS: ${"%.1f".format(rmsDb)} dBFS\n" +
+                                        "Picco: ${"%.1f".format(peakDb)} dBFS\n" +
+                                        "DISSOLVENZA: ${"%.1f".format(reverbFadeMs / 1000f)} s • ${if (reverbOn) "ON" else "OFF"}\n\n" +
+                                        "La traccia originale resta attiva; FREQUALIZER riproduce il ritorno riverberato."
+                                }
+                            }
+                        } else if (count < 0 && captureRunning) {
+                            captureDiag("AudioRecord.read errore: $count recordState=${record.state} recordingState=${record.recordingState}")
+                            throw IllegalStateException("AudioRecord read: $count")
+                        }
+                    }
+                } catch (t: Throwable) {
+                    if (captureRunning) scheduleCaptureRestart(projection, t)
+                } finally {
+                    captureRunning = false
+                }
+            }, "Frequalizer-ReverbReturn").apply { priority = Thread.MAX_PRIORITY; start() }
+        } catch (t: Throwable) {
+            scheduleCaptureRestart(projection, t)
+        }
+    }
+
+    // Rebuild only the input/output audio streams after a track or route change.
+    // Keep the MediaProjection token and its foreground service alive, so Android
+    // does not ask for a new screen-capture approval for every song.
+    private fun releaseCaptureIoOnly() {
+        val record = captureRecord
+        captureRecord = null
+        try { record?.stop() } catch (_: Throwable) {}
+        try { record?.release() } catch (_: Throwable) {}
+        val track = captureTrack
+        captureTrack = null
+        try { track?.pause() } catch (_: Throwable) {}
+        try { track?.flush() } catch (_: Throwable) {}
+        try { track?.stop() } catch (_: Throwable) {}
+        try { track?.release() } catch (_: Throwable) {}
+        parallelReverbProcessor = null
+        captureThread = null
+    }
+
+    private fun scheduleCaptureRestart(projection: android.media.projection.MediaProjection, error: Throwable) {
+        captureDiag("RESTART richiesto: ${error.javaClass.simpleName}: ${error.message}; projectionSame=${captureProjection === projection} effectsActive=${effectsActive()}")
+        captureRunning = false
+        handler.post {
+            releaseCaptureIoOnly()
+            if (captureProjection !== projection || !captureNeeded()) {
+                captureRestartPending = false
+                return@post
+            }
+            if (captureRestartAttempts >= 20) {
+                // Keep the user's MediaProjection consent and foreground service alive.
+                // A temporary AudioRecord/AudioTrack failure must not destroy the
+                // projection token: the next effect ON or route retry can rebuild I/O
+                // without showing Android's consent dialog again.
+                captureRestartPending = false
+                showCaptureError("FLUSSO AUDIO MOMENTANEAMENTE NON DISPONIBILE • SESSIONE AUTORIZZATA CONSERVATA", error)
+                return@post
+            }
+            captureRestartAttempts++
+            val waitMs = (250L + captureRestartAttempts * 250L).coerceAtMost(5000L)
+            captureRestartPending = true
+            handler.postDelayed({
+                captureRestartPending = false
+                if (captureProjection === projection && captureNeeded() && !captureRunning) {
+                    beginAudioCapture(projection)
+                }
+            }, waitMs)
+        }
+    }
+
+    private fun showCaptureMeter() {
+        val view = TextView(this).apply {
+            text = "Richiesta di avvio Reverb parallelo…\n\nApri YouTube Morphe e fai partire un brano. FREQUALIZER elaborerà la copia catturata e riprodurrà il ritorno riverberato. L'audio originale continuerà a suonare."
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+        }
+        captureStatusView = view
+        // If the capture is already running, simply reopen its status window.
+        captureDialog?.let { if (it.isShowing) { it.dismiss() } }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("TEST CATTURA AUDIO")
+            .setView(view)
+            .setPositiveButton("FERMA TEST", null)
+            .setNegativeButton("NASCONDI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                stopAudioCaptureTest()
+                dialog.dismiss()
+            }
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { dialog.dismiss() }
+        }
+        // Dismissing or hiding this window no longer ends MediaProjection.
+        dialog.setOnDismissListener {
+            if (captureDialog === dialog) captureDialog = null
+            if (captureStatusView === view) captureStatusView = null
+        }
+        captureDialog = dialog
+        dialog.show()
+    }
+
+    // A revoked MediaProjection token cannot be reused on Android 14+.
+    // Keep the user's FX/AUTO selections intact and offer a fresh, explicit
+    // consent flow instead of leaving the user with only a generic error dialog.
+    private fun showCaptureRevokedDialog() {
+        val detail = "Android ha terminato la sessione di cattura.\\n" +
+            "Le impostazioni degli effetti sono conservate, ma il flusso audio resta fermo finché non autorizzi una nuova sessione.\\n\\n" +
+            "DIAGNOSTICA CATTURA (ultimi eventi):\\n" + captureDiagSnapshot()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("SESSIONE DI CATTURA INTERROTTA")
+            .setMessage(detail)
+            .setPositiveButton("RIATTIVA CATTURA") { _, _ ->
+                captureConsentLocked = false
+                if (captureNeeded()) {
+                    startAudioCaptureTest()
+                } else {
+                    Toast.makeText(this, "Attiva prima Reverb, Delay o AUTO BPM.", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("CHIUDI", null)
+            .setNeutralButton("COPIA DETTAGLI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Capture Error", detail))
+                Toast.makeText(this, "Dettagli copiati", Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun showCaptureError(title: String, error: Throwable?) {
+        val detail = buildString {
+            append(title)
+            if (error != null) {
+                append("\n\n")
+                append(error.javaClass.name)
+                append(": ")
+                append(error.message ?: "(nessun messaggio)")
+                append("\n\nDETTAGLI TECNICI:\n")
+                append(android.util.Log.getStackTraceString(error))
+            }
+            append("\\n\\nDIAGNOSTICA CATTURA (ultimi eventi):\\n")
+            append(captureDiagSnapshot())
+        }
+        val detailsView = ScrollView(this).apply {
+            addView(TextView(this@MainActivity).apply {
+                text = detail
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setTextIsSelectable(true)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+            })
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("TEST CATTURA AUDIO • ERRORE")
+            .setView(detailsView)
+            .setPositiveButton("CHIUDI", null)
+            .setNeutralButton("COPIA DETTAGLI", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER Capture Error", detail))
+                Toast.makeText(this, "Dettagli copiati", Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun stopAudioCaptureTest() {
+        captureRunning = false
+        captureRestartPending = false
+        releaseCaptureIoOnly()
+        captureRestartAttempts = 0
+        val projection = captureProjection
+        captureProjection = null
+        if (projection != null) {
+            intentionallyStoppingProjection = projection
+            try { projection.stop() } catch (_: Throwable) {}
+        }
+        try { stopService(android.content.Intent(this, AudioCaptureForegroundService::class.java)) } catch (_: Throwable) {}
+        captureStatusView = null
+        captureDialog = null
     }
 
 
@@ -956,13 +2368,21 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener{_,checked->mouseWheelAdjustOn=checked;save()}
         }
         wheelRow.addView(wheelSwitch);panel.addView(wheelRow)
-        val wheelValue=label("Velocità: ${mouseWheelSensitivity.roundToInt()}x",12f,gold)
+        val wheelValue=label("Velocità: ${"%.1f".format(java.util.Locale.US,mouseWheelSensitivity)}X",12f,gold)
         panel.addView(wheelValue,LinearLayout.LayoutParams(-1,dp(28)))
+        val wheelScaleLabels=LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL
+            gravity=Gravity.CENTER
+            addView(label("−3",10f,Color.LTGRAY),LinearLayout.LayoutParams(0,dp(18),1f))
+            addView(label("1X • STANDARD",10f,gold),LinearLayout.LayoutParams(0,dp(18),1f))
+            addView(label("+3",10f,Color.LTGRAY),LinearLayout.LayoutParams(0,dp(18),1f))
+        }
+        panel.addView(wheelScaleLabels,LinearLayout.LayoutParams(-1,dp(20)))
         val wheelSeek=SeekBar(this).apply{
-            max=9;progress=(mouseWheelSensitivity.roundToInt()-1).coerceIn(0,9);isEnabled=mouseWheelAdjustOn
+            max=6;progress=((mouseWheelSensitivity-0.7f)*10f).roundToInt().coerceIn(0,6);isEnabled=mouseWheelAdjustOn
             setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
                 override fun onProgressChanged(seek:SeekBar?,progress:Int,fromUser:Boolean){
-                    if(fromUser){mouseWheelSensitivity=(progress+1).toFloat();wheelValue.text="Velocità: ${mouseWheelSensitivity.roundToInt()}x";save()}
+                    if(fromUser){mouseWheelSensitivity=(0.7f+progress*0.1f).coerceIn(0.7f,1.3f);wheelValue.text="Velocità: ${"%.1f".format(java.util.Locale.US,mouseWheelSensitivity)}X";save()}
                 }
                 override fun onStartTrackingTouch(seek:SeekBar?){}
                 override fun onStopTrackingTouch(seek:SeekBar?){}
@@ -984,9 +2404,13 @@ class MainActivity : Activity() {
     }
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
+        captureDiag("ACTIVITY onDestroy isFinishing=$isFinishing isChangingConfigurations=$isChangingConfigurations captureRunning=$captureRunning projectionPresent=${captureProjection != null}")
         // An intentional close starts a fresh session next time; background
         // process reclamation and configuration changes keep the saved state.
-        if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
+        if (isFinishing) {
+            prefs.edit().putBoolean("session_in_background", false).apply()
+            stopAudioCaptureTest()
+        }
         try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
@@ -1006,7 +2430,11 @@ private class RotaryControl(
     private val titleInside:Boolean = false,
     private val wheelMultiplier:()->Float = {1f},
     private val portraitDialFit:Boolean = false,
-    private val bottomTextLift:Float = 0f
+    private val bottomTextLift:Float = 0f,
+    private val step:Float = 0f,
+    private val spaciousText:Boolean = false,
+    private val labelScale:Float = 1f,
+    private val wheelStep:Float = 0f
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -1024,9 +2452,9 @@ private class RotaryControl(
         // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
         // for title and value. The dial itself is sized from the remaining square
         // area, so the LOW face cannot be squeezed into an oval or cut by its labels.
-        val dialTextReserve=if(portraitDialFit) dp(27f) else dp(18f)
+        val dialTextReserve=if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f)
         val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .94f
-        val cy=if(portraitDialFit) (height-dp(27f))/2f else (height-dp(26f))/2f
+        val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
         RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
     }()
     init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
@@ -1057,11 +2485,15 @@ private class RotaryControl(
         p.color=Color.WHITE;p.strokeWidth=dp(3f)
         c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
         p.textAlign=Paint.Align.CENTER
-        val titleSize=min(dp(11f),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
+        val titleSize=min(dp(11f*labelScale),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
         p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
-        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp(17f+bottomTextLift),p)}
+        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)25f else 17f)+bottomTextLift),p)}
         val value=valueText()
-        p.color=accent;p.textSize=min(dp(10f),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp(4f+bottomTextLift),p)
+        p.color=accent;p.textSize=min(dp(10f*labelScale),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
+    }
+    private fun quantize(value:Float):Float {
+        if (step <= 0f) return value.coerceIn(minV,maxV)
+        return (minV + ((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
     }
     private fun updateFromPoint(x:Float,y:Float){
         val r=rect;val cx=r.centerX();val cy=r.centerY()
@@ -1069,7 +2501,7 @@ private class RotaryControl(
         if(degrees<0f)degrees+=360f
         if(degrees<45f)degrees+=360f
         val fraction=((degrees.coerceIn(135f,405f)-135f)/270f).coerceIn(0f,1f)
-        v=minV+fraction*(maxV-minV)
+        v=quantize(minV+fraction*(maxV-minV))
         changed(v);invalidate()
     }
     override fun onTouchEvent(e:MotionEvent):Boolean{
@@ -1082,8 +2514,13 @@ private class RotaryControl(
             }
             MotionEvent.ACTION_MOVE->{
                 val delta=downY-e.y
-                if(abs(delta)>dp(4f)) dragged=true
-                if(dragged){val sensitivity=(maxV-minV)*2.2f/height.coerceAtLeast(1);v=(downV+delta*sensitivity).coerceIn(minV,maxV);changed(v);invalidate()}
+                if(abs(delta)>dp(if(step>0f)1f else 4f)) dragged=true
+                if(dragged){
+                    // Effect dials use a deliberately fine 1-unit-per-step feel;
+                    // the other mixer controls retain their original response.
+                    val sensitivity=(maxV-minV)*(if(step>0f)0.25f else 2.2f)/height.coerceAtLeast(1)
+                    v=quantize(downV+delta*sensitivity);changed(v);invalidate()
+                }
                 return true
             }
             MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);onEnd();performClick();return true}
@@ -1094,7 +2531,15 @@ private class RotaryControl(
     override fun onGenericMotionEvent(e:MotionEvent):Boolean{
         if(e.action==MotionEvent.ACTION_SCROLL){
             onStart()
-            v=(v+e.getAxisValue(MotionEvent.AXIS_VSCROLL)*(maxV-minV)*.012f*wheelMultiplier().coerceIn(1f,10f)).coerceIn(minV,maxV)
+            val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            // Match the main EQ wheel response exactly. The shared sensitivity
+            // option scales every dial, including the effect controls.
+            // Every mouse-wheel detent advances every rotary by the same fraction
+            // of its total travel: 1/28 of the range, matching EQ's 1 dB step
+            // across its 28 dB sweep. This keeps physical dial response identical.
+            val wheelUnit = if (wheelStep > 0f) wheelStep else (maxV - minV) / 28f
+            val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(0.7f, 1.3f)
+            v=quantize(v+delta)
             changed(v);invalidate();onEnd();return true
         }
         return super.onGenericMotionEvent(e)
