@@ -1149,11 +1149,15 @@ class MainActivity : Activity() {
             }
         }
 
-        // Prefer the faster fundamental when a slower half-tempo candidate is
-        // almost as correlated (a common ambiguity with kick/snare patterns).
+        // Prefer the beat-level (faster) period when autocorrelation locks
+        // onto every second beat. Real music timing is not sample-perfect, so
+        // do not require an exact integer divisor; allow a near-2:1 lag ratio
+        // and a meaningful, but not near-identical, faster-period correlation.
         if (bestLag > 0) {
             for (lag in minLag until bestLag) {
-                if (bestLag % lag == 0 && scores[lag] >= bestScore * 0.92f) {
+                val periodRatio = bestLag.toFloat() / lag.toFloat()
+                if (periodRatio in 1.85f..2.15f &&
+                    scores[lag] >= bestScore * 0.72f) {
                     bestLag = lag
                     break
                 }
