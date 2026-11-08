@@ -64,7 +64,9 @@ class MainActivity : Activity() {
     @Volatile private var bpmSyncLocked = false
     @Volatile private var bpmSyncLockedValue = 120f
     private var autoBpmPreviousBass = 0f
+    private var autoBpmPreviousMid = 0f
     private var autoBpmLowpassState = 0f
+    private var autoBpmMidLowpassState = 0f
     private var autoBpmLastAnalysisMs = 0L
     private var bpmUiLabel: TextView? = null
     private var autoBpmButton: TextView? = null
@@ -1088,29 +1090,41 @@ class MainActivity : Activity() {
         }
     }
 
-    // Autonomous beat detector: derive a 10 ms low-frequency onset envelope
-    // directly from captured PCM, then search its periodicity over a rolling window.
-    // It does not depend on TAP and never modifies the audio being played.
+    // Autonomous beat detector: combine low-bass and mid-band transients
+    // from the ORIGINAL captured PCM. This analysis runs before FX processing
+    // and is deliberately independent of the FX HIGH switch and wet return.
     private fun analyzeAutoBpm(samples: ShortArray, count: Int, nowMs: Long, sampleRate: Int) {
         if (!autoBpmEnabled || count <= 0) return
 
-        val frameSamples = (sampleRate / 200).coerceAtLeast(1) // 5 ms: finer BPM resolution
-        val alpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 150.0 / sampleRate)).toFloat()
+        val frameSamples = (sampleRate / 200).coerceAtLeast(1) // 5 ms analysis frames
+        val bassAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 150.0 / sampleRate)).toFloat()
+        val midAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 3200.0 / sampleRate)).toFloat()
         var offset = 0
         while (offset < count) {
             val end = minOf(offset + frameSamples, count)
             var bassEnergy = 0.0
+            var midEnergy = 0.0
             var n = 0
             for (i in offset until end) {
                 val input = samples[i].toFloat() / 32768f
-                autoBpmLowpassState += alpha * (input - autoBpmLowpassState)
-                bassEnergy += autoBpmLowpassState.toDouble() * autoBpmLowpassState.toDouble()
+                autoBpmLowpassState += bassAlpha * (input - autoBpmLowpassState)
+                autoBpmMidLowpassState += midAlpha * (input - autoBpmMidLowpassState)
+                val bass = autoBpmLowpassState
+                val mid = autoBpmMidLowpassState - autoBpmLowpassState
+                bassEnergy += bass.toDouble() * bass.toDouble()
+                midEnergy += mid.toDouble() * mid.toDouble()
                 n++
             }
             if (n > 0) {
                 val bassRms = kotlin.math.sqrt(bassEnergy / n).toFloat()
-                val onset = (bassRms - autoBpmPreviousBass * 0.90f).coerceAtLeast(0f)
+                val midRms = kotlin.math.sqrt(midEnergy / n).toFloat()
+                // Keep both kinds of attack useful without letting a louder
+                // frequency band dominate simply because of its mix level.
+                val bassRise = (bassRms - autoBpmPreviousBass * 0.90f).coerceAtLeast(0f)
+                val midRise = (midRms - autoBpmPreviousMid * 0.90f).coerceAtLeast(0f)
+                val onset = max(bassRise, midRise * 0.65f)
                 autoBpmPreviousBass = bassRms
+                autoBpmPreviousMid = midRms
                 autoBpmHistory.addLast(onset)
                 while (autoBpmHistory.size > 2000) autoBpmHistory.removeFirst()
             }
@@ -1463,7 +1477,9 @@ class MainActivity : Activity() {
                     bpmSyncLastCorrectionBeatMs = 0L
                     delaySyncOffsetMs = 0f
                     autoBpmPreviousBass = 0f
+                    autoBpmPreviousMid = 0f
                     autoBpmLowpassState = 0f
+                    autoBpmMidLowpassState = 0f
                     autoBpmLastAnalysisMs = 0L
                     autoBpmNextBeatMs = 0L
                     autoBpmHasEstimate = false
