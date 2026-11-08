@@ -578,8 +578,9 @@ class MainActivity : Activity() {
             // middle strip; REVERB + DELAY get the full width in the lower band.
             // S25 portrait: reclaim vertical room for FX; tablet proportions remain unchanged.
             val upperWeight = if (phonePortrait) 0.32f else 0.34f
-            val middleWeight = if (phonePortrait) 0.33f else 0.36f
-            val effectsWeight = if (phonePortrait) 0.35f else 0.30f
+            // Keep FILTER/MASTER compact and give the whole effects band more height.
+            val middleWeight = if (phonePortrait) 0.28f else 0.36f
+            val effectsWeight = if (phonePortrait) 0.40f else 0.30f
             content.addView(upper, LinearLayout.LayoutParams(-1, 0, upperWeight))
             content.addView(middle, LinearLayout.LayoutParams(-1, 0, middleWeight))
             content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, effectsWeight))
@@ -1773,8 +1774,10 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(3), dp(2), dp(3), dp(2))
         }
-        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.44f else 0.36f))
-        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.56f else 0.64f))
+        // On S25 portrait, reserve most of DELAY's vertical height for the
+        // BPM/CUE/LOCK and beat-selection controls so none of those rows are clipped.
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.30f else 0.36f))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.70f else 0.64f))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
