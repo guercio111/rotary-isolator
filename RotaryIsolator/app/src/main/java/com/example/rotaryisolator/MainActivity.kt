@@ -1072,12 +1072,12 @@ class MainActivity : Activity() {
             refreshUi()
             scheduleUpdate()
         })
-        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactMaster)20 else 24)))
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(phonePortrait && !wideLayout)20 else 24)))
         col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->
             compMakeup=v.coerceIn(0f,100f)
             scheduleUpdate()
         },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
-            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(if(compactMaster)3 else 6)})
+            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(if(phonePortrait && !wideLayout)3 else 6)})
         return col
     }
 
