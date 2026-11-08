@@ -659,6 +659,11 @@ class MainActivity : Activity() {
         val effectsPanel = buildEffectsPanel()
         val effectsBody = effectsPanel.getChildAt(1) as? LinearLayout
             ?: throw IllegalStateException("Effects panel layout not found")
+        val reverbHeader = effectsPanel.getChildAt(0)
+        val reverbColumn = effectsBody.getChildAt(0)
+        val delayColumn = effectsBody.getChildAt(1)
+        effectsPanel.removeAllViews()
+        effectsBody.removeAllViews()
         val reverbQuadrant = LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER
             setPadding(dp(2),dp(2),dp(2),dp(2)); clipChildren=false; clipToPadding=false
@@ -667,10 +672,10 @@ class MainActivity : Activity() {
             orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER
             setPadding(dp(2),dp(2),dp(2),dp(2)); clipChildren=false; clipToPadding=false
         }
-        reverbQuadrant.addView(effectsPanel.getChildAt(0),LinearLayout.LayoutParams(-1,dp(28)))
-        reverbQuadrant.addView(effectsBody.getChildAt(0),LinearLayout.LayoutParams(-1,0,1f))
+        reverbQuadrant.addView(reverbHeader,LinearLayout.LayoutParams(-1,dp(28)))
+        reverbQuadrant.addView(reverbColumn,LinearLayout.LayoutParams(-1,0,1f))
         delayQuadrant.addView(label("DELAY / ECHO",12f,colorMaster),LinearLayout.LayoutParams(-1,dp(28)))
-        delayQuadrant.addView(effectsBody.getChildAt(1),LinearLayout.LayoutParams(-1,0,1f))
+        delayQuadrant.addView(delayColumn,LinearLayout.LayoutParams(-1,0,1f))
         bottom.addView(reverbQuadrant,LinearLayout.LayoutParams(0,-1,1f))
         bottom.addView(delayQuadrant,LinearLayout.LayoutParams(0,-1,1f))
 
