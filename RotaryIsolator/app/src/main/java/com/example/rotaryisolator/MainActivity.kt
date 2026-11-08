@@ -1344,6 +1344,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         bpmUiLabel = bpmLabel
+        var bpmFineSeek: SeekBar? = null
         val tapButton = TextView(this).apply {
             text = "TAP"
             textSize = 9f
@@ -1452,15 +1453,6 @@ class MainActivity : Activity() {
                 Toast.makeText(this@MainActivity, "Fase spostata di mezza battuta", Toast.LENGTH_SHORT).show()
             }
         }
-        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
-        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(34), dp(42)))
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
-        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
-        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayTop.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
-        delayTop.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
-        delayTop.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3) })
-        var bpmFineSeek: SeekBar? = null
         fun bpmNudgeButton(symbol: String, amount: Float): TextView = TextView(this).apply {
             text = symbol
             textSize = 17f
@@ -1495,6 +1487,9 @@ class MainActivity : Activity() {
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
         delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
+        delayTop.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
+        delayTop.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
+        delayTop.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3) })
         val resetBpmButton = TextView(this).apply {
             text = "RST"
             textSize = 8f
