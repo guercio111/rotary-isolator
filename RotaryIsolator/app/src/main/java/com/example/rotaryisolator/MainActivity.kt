@@ -993,7 +993,7 @@ class MainActivity : Activity() {
             val gainCol=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val gainValueLabel=label(fmt(gain)+" dB",if(compactMaster)9f else 10f,Color.WHITE)
             gainCol.addView(gainValueLabel,LinearLayout.LayoutParams(-1,dp(16)))
-            gainCol.addView(LinearLayout(this),LinearLayout.LayoutParams(-1,dp(24)))
+            gainCol.addView(LinearLayout(this),LinearLayout.LayoutParams(-1,dp(if(compactMaster)8 else 24)))
             if(modes["GAIN"]==true){
                 val s=SeekBar(this).apply{max=240;progress=((gain+12)*10).roundToInt();setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
                     override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){gain=p/10f-12f;gainValueLabel.text=fmt(gain)+" dB";scheduleUpdate()}}
@@ -1039,15 +1039,15 @@ class MainActivity : Activity() {
             restore();save();refreshUi();scheduleUpdate()
         }
         if(compactActions){
-            actions.addView(onAction,LinearLayout.LayoutParams(-1,dp(24)).apply{bottomMargin=dp(5)})
-            actions.addView(returnAction,LinearLayout.LayoutParams(-1,dp(24)))
+            actions.addView(onAction,LinearLayout.LayoutParams(-1,dp(if(compactActions)18 else 24)).apply{bottomMargin=dp(if(compactActions)2 else 5)})
+            actions.addView(returnAction,LinearLayout.LayoutParams(-1,dp(if(compactActions)18 else 24)))
         }else{
             actions.addView(onAction,LinearLayout.LayoutParams(-2,dp(24)).apply{rightMargin=dp(8)})
             actions.addView(returnAction,LinearLayout.LayoutParams(-2,dp(24)).apply{leftMargin=dp(8)})
         }
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)56 else 28)))
         col.addView(RotaryControl(this,title,value,0f,100f,accentFor("MASTER"),{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
-            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
+            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(if(compactActions)2 else 6)})
         return col
     }
 
@@ -1055,7 +1055,7 @@ class MainActivity : Activity() {
         if(phonePortrait && wideLayout) return dialHeight()
         if(phonePortrait && !wideLayout){
             // S25 lower control strip: keep MASTER dials deliberately compact.
-            return dp(34)
+            return dp(28)
         }
         // Give MASTER dials a little more vertical room so their faces sit
         // centrally in each control column without changing the four-column layout.
@@ -1072,12 +1072,12 @@ class MainActivity : Activity() {
             refreshUi()
             scheduleUpdate()
         })
-        col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactMaster)20 else 24)))
         col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->
             compMakeup=v.coerceIn(0f,100f)
             scheduleUpdate()
         },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
-            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
+            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(if(compactMaster)3 else 6)})
         return col
     }
 
