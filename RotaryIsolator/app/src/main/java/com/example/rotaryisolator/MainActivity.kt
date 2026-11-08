@@ -897,8 +897,9 @@ class MainActivity : Activity() {
             fun masterCell(dial:View, actions:List<View> = emptyList()):View {
                 // Reduce all four MASTER rotary faces together so the 2x2
                 // grid fits comfortably inside the middle strip.
-                dial.scaleX = 0.76f
-                dial.scaleY = 0.76f
+                val phonePortraitMaster = phonePortrait && !wideLayout
+                dial.scaleX = if (phonePortraitMaster) 0.88f else 0.76f
+                dial.scaleY = if (phonePortraitMaster) 0.88f else 0.76f
                 return LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER
@@ -914,7 +915,7 @@ class MainActivity : Activity() {
                                 })
                             }
                         }
-                        addView(actionColumn, LinearLayout.LayoutParams(dp(76), -1))
+                        addView(actionColumn, LinearLayout.LayoutParams(dp(if (phonePortrait && !wideLayout) 42 else 76), -1))
                     }
                 }
             }
@@ -986,7 +987,7 @@ class MainActivity : Activity() {
                 box.addView(row,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(7)})
             }
         }
-        parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["GAIN"]=box
+        parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,if (phonePortrait && !wideLayout) 1.65f else 1f));sections["GAIN"]=box
     }
 
     private fun masterToneControl(
@@ -1495,11 +1496,12 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(if(compactFxPhone)34 else 50), dp(if(compactFxPhone)32 else 42)))
-        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(if(compactFxPhone)30 else 34), dp(if(compactFxPhone)32 else 42)))
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(if(compactFxPhone)34 else 50), dp(if(compactFxPhone)34 else 50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
-        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(if(compactFxPhone)30 else 34), dp(if(compactFxPhone)32 else 42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
-        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(if(compactFxPhone)34 else 46), 1f))
+        val topControlHeight = if (compactFxPhone || wrapCueControls) 32 else 42
+        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(if(compactFxPhone)34 else if(wrapCueControls)34 else 50), dp(topControlHeight)))
+        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(if(compactFxPhone)30 else if(wrapCueControls)28 else 34), dp(topControlHeight)))
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(if(compactFxPhone)34 else if(wrapCueControls)36 else 50), dp(if(compactFxPhone)34 else if(wrapCueControls)36 else 50)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(if(compactFxPhone)30 else if(wrapCueControls)28 else 34), dp(topControlHeight)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(if(compactFxPhone)34 else if(wrapCueControls)34 else 46), 1f))
         if (!compactFxPhone && !wrapCueControls) {
             delayTop.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
             delayTop.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
@@ -1509,9 +1511,9 @@ class MainActivity : Activity() {
             cueRow.addView(lockButton, LinearLayout.LayoutParams(dp(42), dp(30)).apply { leftMargin = dp(3); rightMargin = dp(3) })
             cueRow.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(48), dp(30)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         } else if (wrapCueControls) {
-            cueRow.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
-            cueRow.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
-            cueRow.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+            cueRow.addView(cueButtonView, LinearLayout.LayoutParams(dp(42), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+            cueRow.addView(lockButton, LinearLayout.LayoutParams(dp(42), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
+            cueRow.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(48), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
         }
         val resetBpmButton = TextView(this).apply {
             text = "RST"
@@ -1562,13 +1564,13 @@ class MainActivity : Activity() {
         if (compactFxPhone) {
             cueRow.addView(resetBpmButton, LinearLayout.LayoutParams(dp(32), dp(30)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         } else if (wrapCueControls) {
-            cueRow.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+            cueRow.addView(resetBpmButton, LinearLayout.LayoutParams(dp(34), dp(32)).apply { leftMargin = dp(2); rightMargin = dp(2) })
         } else {
             delayTop.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3) })
         }
         delayControls.addView(delayTop, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(36)) else LinearLayout.LayoutParams(-1, 0, 1.6f))
         if (compactFxPhone) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(32)))
-        else if (wrapCueControls) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(42)))
+        else if (wrapCueControls) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(36)))
         val bpmFineCaption = label("PITCH TEMPO   −10       0       +10 BPM", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
@@ -1752,7 +1754,7 @@ class MainActivity : Activity() {
         // while keeping their captions and values below each dial.
         // Main REVERB controls first; the smaller DECAY/COLOR pair sits to their right.
         reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(if (!wideLayout) 58 else 74), -1).apply {
+        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(if (phonePortrait && !wideLayout) 48 else if (!wideLayout) 58 else 74), -1).apply {
             rightMargin = dp(3)
         })
         reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -1761,14 +1763,14 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(3), dp(2), dp(3), dp(2))
         }
-        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
-        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.44f else 0.36f))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.56f else 0.64f))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (!wideLayout) 0.37f else 0.43f))
-        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (!wideLayout) 0.63f else 0.57f))
+        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.44f else if (!wideLayout) 0.37f else 0.43f))
+        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.56f else if (!wideLayout) 0.63f else 0.57f))
         panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
 
         return panel
