@@ -63,7 +63,6 @@ class MainActivity : Activity() {
     private var autoBpmEstimateHistory = ArrayDeque<Float>() // median filter for noisy frame estimates
     @Volatile private var bpmSyncLocked = false
     @Volatile private var bpmSyncLockedValue = 120f
-    @Volatile private var bpmSyncManualTempoPending = false
     private var autoBpmPreviousBass = 0f
     private var autoBpmLowpassState = 0f
     private var autoBpmLastAnalysisMs = 0L
@@ -1149,15 +1148,11 @@ class MainActivity : Activity() {
             }
         }
 
-        // Prefer the beat-level (faster) period when autocorrelation locks
-        // onto every second beat. Real music timing is not sample-perfect, so
-        // do not require an exact integer divisor; allow a near-2:1 lag ratio
-        // and a meaningful, but not near-identical, faster-period correlation.
+        // Prefer the faster fundamental when a slower half-tempo candidate is
+        // almost as correlated (a common ambiguity with kick/snare patterns).
         if (bestLag > 0) {
             for (lag in minLag until bestLag) {
-                val periodRatio = bestLag.toFloat() / lag.toFloat()
-                if (periodRatio in 1.85f..2.15f &&
-                    scores[lag] >= bestScore * 0.72f) {
+                if (bestLag % lag == 0 && scores[lag] >= bestScore * 0.92f) {
                     bestLag = lag
                     break
                 }
@@ -1177,83 +1172,35 @@ class MainActivity : Activity() {
             val detected = (12000f / refinedLag).coerceIn(60f, 180f)
             autoBpmEstimateHistory.addLast(detected)
             while (autoBpmEstimateHistory.size > 7) autoBpmEstimateHistory.removeFirst()
-            val estimates = autoBpmEstimateHistory.toList()
-            val orderedEstimates = estimates.sorted()
+            val orderedEstimates = autoBpmEstimateHistory.toList().sorted()
             val stableDetected = orderedEstimates[orderedEstimates.size / 2]
-            // Require agreement across several analysis windows before changing
-            // the displayed tempo or publishing a new phase reference.
-            val agreementTolerance = maxOf(2.0f, stableDetected * 0.035f)
-            val agreeingEstimates = estimates.count { abs(it - stableDetected) <= agreementTolerance }
-            if (agreeingEstimates >= 4) {
-                var candidateBpm = stableDetected
-                if (autoBpmHasEstimate) {
-                    // Protect the established tempo from octave errors: kick patterns
-                    // can make autocorrelation alternate between real and half/double time.
-                    val ratio = candidateBpm / delayTapBpm.coerceIn(60f, 180f)
-                    if (ratio in 0.45f..0.55f) candidateBpm *= 2f
-                    else if (ratio in 1.80f..2.20f) candidateBpm *= 0.5f
-                }
+            delayTapBpm = if (autoBpmHasEstimate)
+                delayTapBpm * 0.88f + stableDetected * 0.12f else stableDetected
+            autoBpmHasEstimate = true
+            val liveEstimate = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
+            if (bpmSyncLocked) {
+                // Once SYNC is pressed, keep the musical clock fixed.
+                // The detector may keep analysing, but cannot pull the effects off beat.
+                delayBpm = bpmSyncLockedValue
+            } else {
+                delayBpm = liveEstimate
+            }
 
-                val relativeChange = abs(candidateBpm - delayTapBpm) / delayTapBpm.coerceAtLeast(1f)
-                if (!autoBpmHasEstimate) {
-                    // Initial acquisition uses the median of several agreeing windows.
-                    delayTapBpm = candidateBpm.coerceIn(60f, 180f)
-                    autoBpmHasEstimate = true
-                } else if (relativeChange <= 0.08f) {
-                    // Follow small tempo movements smoothly.
-                    delayTapBpm = delayTapBpm * 0.90f + candidateBpm * 0.10f
-                } else if (agreeingEstimates >= 6) {
-                    // A larger genuine tempo change needs near-unanimous confirmation.
-                    delayTapBpm = delayTapBpm * 0.92f + candidateBpm * 0.08f
+            // Anchor the phase to the strongest onset in the most recent beat window.
+            var strongestIndex = values.lastIndex
+            var strongest = Float.NEGATIVE_INFINITY
+            val searchStart = (values.size - bestLag * 2).coerceAtLeast(0)
+            for (i in searchStart..values.lastIndex) {
+                if (values[i] > strongest) {
+                    strongest = values[i]
+                    strongestIndex = i
                 }
+            }
+            val ageMs = ((values.lastIndex - strongestIndex) * 5L)
+            autoBpmNextBeatMs = nowMs - ageMs
 
-                val liveEstimate = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
-                if (bpmSyncLocked) {
-                    // Once SYNC is pressed, the musical clock remains fixed.
-                    delayBpm = bpmSyncLockedValue
-                } else {
-                    delayBpm = liveEstimate
-                }
-
-                // Select phase from the accepted tempo's beat window, not a raw
-                // autocorrelation lag that may represent half/double time.
-                val expectedLag = (12000f / delayTapBpm.coerceIn(60f, 180f)).roundToInt()
-                    .coerceIn(minLag, maxLag)
-                // Use the most recent credible onset, not simply the loudest
-                // onset in the last two beats. A louder kick from the previous
-                // beat must not pull the phase reference backwards.
-                val searchStart = (values.size - expectedLag * 2).coerceAtLeast(1)
-                var strongest = 0f
-                var strongestIndex = values.lastIndex
-                for (i in searchStart..values.lastIndex) {
-                    if (values[i] > strongest) {
-                        strongest = values[i]
-                        strongestIndex = i
-                    }
-                }
-                val onsetThreshold = strongest * 0.30f
-                var latestOnsetIndex = -1
-                if (values.lastIndex > searchStart &&
-                    values.last() >= values[values.lastIndex - 1] &&
-                    values.last() >= onsetThreshold) {
-                    latestOnsetIndex = values.lastIndex
-                } else {
-                    for (i in values.lastIndex - 1 downTo searchStart) {
-                        if (values[i] >= onsetThreshold &&
-                            values[i] >= values[i - 1] &&
-                            values[i] > values[i + 1]) {
-                            latestOnsetIndex = i
-                            break
-                        }
-                    }
-                }
-                val phaseIndex = if (latestOnsetIndex >= 0) latestOnsetIndex else strongestIndex
-                val ageMs = ((values.lastIndex - phaseIndex) * 5L)
-                autoBpmNextBeatMs = nowMs - ageMs
-
-                handler.post {
-                    bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
-                }
+            handler.post {
+                bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
             }
         }
     }
@@ -1518,39 +1465,11 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
                 val lastBeat = autoBpmNextBeatMs
-                val beatDurationForFreshness = (60000f / delayBpm.coerceIn(60f,180f)).toLong()
-                val autoBeatFresh = autoBpmEnabled && lastBeat > 0L &&
-                    lastBeat <= now + 100L &&
-                    now - lastBeat <= maxOf(1200L, (beatDurationForFreshness * 1.5f).toLong())
-                if (bpmSyncLocked && bpmSyncManualTempoPending) {
-                    // A manual BPM adjustment explicitly asks for a fresh phase lock.
-                    // Re-anchor at this SYNC press using the manually selected tempo.
-                    bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
-                    bpmSyncAnchorMs = now
-                    bpmSyncLastCorrectionBeatMs = 0L
-                    bpmSyncManualTempoPending = false
-                    updateDelaySyncOffsetForDivision()
-                    scheduleUpdate()
-                    captureDiag("SYNC riagganciato al BPM manuale: " + bpmSyncLockedValue)
-                    background = android.graphics.drawable.GradientDrawable().apply {
-                        cornerRadius = dp(6).toFloat()
-                        setColor(colorMaster)
-                        setStroke(dp(1), colorMaster)
-                    }
-                    postDelayed({
-                        background = android.graphics.drawable.GradientDrawable().apply {
-                            cornerRadius = dp(6).toFloat()
-                            setColor(Color.rgb(55,62,72))
-                            setStroke(dp(1), colorMaster)
-                        }
-                    }, 350L)
-                    return@setOnClickListener
-                }
                 if (bpmSyncLocked) {
-                    // A repeated SYNC is a gentle phase trim, never a new clock/tempo lock.
-                    // Use each newly detected onset only once; limit each correction so
-                    // an imperfect BPM/onset estimate cannot throw the delay off beat.
-                    if (autoBeatFresh && lastBeat != bpmSyncLastCorrectionBeatMs) {
+                    // Keep the original lock. A later press can make only a tiny
+                    // correction, and only when AUTO has published a new beat.
+                    if (autoBpmEnabled && lastBeat > 0L &&
+                        lastBeat != bpmSyncLastCorrectionBeatMs) {
                         val beatMs = 60000f / bpmSyncLockedValue.coerceIn(60f, 180f)
                         var phaseError = ((lastBeat - bpmSyncAnchorMs).toFloat() % beatMs)
                         if (phaseError > beatMs / 2f) phaseError -= beatMs
@@ -1562,16 +1481,15 @@ class MainActivity : Activity() {
                         scheduleUpdate()
                         captureDiag("SYNC correzione fase: errore=" + phaseError.toInt() + "ms correzione=" + correctionMs.toInt() + "ms")
                     } else {
-                        captureDiag("SYNC mantenuto: nessun nuovo riferimento AUTO affidabile")
+                        captureDiag("SYNC mantenuto: nessun nuovo riferimento AUTO")
                     }
                     return@setOnClickListener
                 }
-                // First lock: AUTO uses the latest detected bass onset; manual mode
-                // uses the exact SYNC press. BPM stays fixed after this point.
-                bpmSyncAnchorMs = if (autoBeatFresh) lastBeat else now
-                bpmSyncLastCorrectionBeatMs = if (autoBeatFresh) lastBeat else 0L
+                // First SYNC: use the beat found by AUTO, exactly as in the
+                // Build 493 behavior. Manual mode anchors to the button press.
+                bpmSyncAnchorMs = if (autoBpmEnabled && lastBeat > 0L) lastBeat else now
+                bpmSyncLastCorrectionBeatMs = lastBeat
                 bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
-                bpmSyncManualTempoPending = false
                 bpmSyncLocked = true
                 updateDelaySyncOffsetForDivision()
                 scheduleUpdate()
@@ -1605,7 +1523,6 @@ class MainActivity : Activity() {
                 delayBpmCorrection = (delayBpmCorrection + amount).coerceIn(-10f,10f)
                 delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
                 if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
-                bpmSyncManualTempoPending = true
                 bpmFineSeek?.progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
@@ -1688,7 +1605,6 @@ class MainActivity : Activity() {
                         delayBpmCorrection = (progress - 100) * 0.1f
                         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
                         if (bpmSyncLocked) bpmSyncLockedValue = delayBpm
-                        bpmSyncManualTempoPending = true
                         bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                         scheduleUpdate()
                     }
