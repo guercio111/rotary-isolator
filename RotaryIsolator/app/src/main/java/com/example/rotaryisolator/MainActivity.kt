@@ -1097,6 +1097,7 @@ class MainActivity : Activity() {
     // It does not estimate BPM: tempo remains entirely under manual fader control.
     private fun analyzeAutoBpm(samples: ShortArray, count: Int, nowMs: Long, sampleRate: Int) {
         if (!cueListening || count <= 0) return
+        if (cueFrameCount == 0) cueStartedAtMs = nowMs - (count * 1000L / sampleRate)
         val frameSamples = (sampleRate / 200).coerceAtLeast(1)
         val bassAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 150.0 / sampleRate)).toFloat()
         val midAlpha = (1.0 - kotlin.math.exp(-2.0 * Math.PI * 3200.0 / sampleRate)).toFloat()
@@ -1359,6 +1360,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 cueListening = false
                 paintCueButton()
+                cueAnchorMs = 0L
                 bpmSyncLocked = false
                 bpmSyncAnchorMs = 0L
                 delaySyncOffsetMs = 0f
@@ -1383,7 +1385,7 @@ class MainActivity : Activity() {
             }
             setOnClickListener {
                 cueListening = true
-                cueStartedAtMs = android.os.SystemClock.elapsedRealtime()
+                cueStartedAtMs = 0L
                 cueFrameCount = 0
                 autoBpmHistory.clear()
                 autoBpmPreviousBass = 0f
