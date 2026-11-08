@@ -14,8 +14,7 @@ import kotlin.math.roundToInt
  * Input and output all-pass diffusion soften the onset and merge the late tail.
  */
 internal class SchroederReverb(private val sampleRate: Int) {
-    // Fourth-order Linkwitz-Riley crossover sections for clean, phase-aligned
-    // FX band isolation. Two cascaded Butterworth biquads create each LR4 slope.
+    // Fourth-order high-pass for the optional V10-style FX HIGH band switch.
     private class Biquad(sampleRate: Int, frequency: Float, highPass: Boolean) {
         private val b0: Float
         private val b1: Float
@@ -54,12 +53,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         fun clear() { z1 = 0f; z2 = 0f }
     }
 
-    private val fxLow1 = Biquad(sampleRate, 250f, false)
-    private val fxLow2 = Biquad(sampleRate, 250f, false)
-    private val fxMidHighPass1 = Biquad(sampleRate, 250f, true)
-    private val fxMidHighPass2 = Biquad(sampleRate, 250f, true)
-    private val fxMidLowPass1 = Biquad(sampleRate, 2500f, false)
-    private val fxMidLowPass2 = Biquad(sampleRate, 2500f, false)
     private val fxHigh1 = Biquad(sampleRate, 2500f, true)
     private val fxHigh2 = Biquad(sampleRate, 2500f, true)
     private class AllPass(delay: Int, private val coefficient: Float) {
@@ -197,9 +190,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTransitionPosition = 0
         activeDelayDivision = -1
         delayToneState = 0f
-        fxLow1.clear(); fxLow2.clear()
-        fxMidHighPass1.clear(); fxMidHighPass2.clear()
-        fxMidLowPass1.clear(); fxMidLowPass2.clear()
         fxHigh1.clear(); fxHigh2.clear()
     }
 
@@ -243,7 +233,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTimePercent: Int = 100,
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
-        fxFrequency: Int = 1,
+        fxHighEnabled: Boolean = false,
         reverbFeedbackPercent: Int = 50,
         reverbDecayPercent: Int = 50,
         reverbColorPercent: Int = 50,
@@ -369,19 +359,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
-            // Split the FX return into three genuinely isolated bands:
-            // LOW <250 Hz, MID 250-2500 Hz, HIGH >2500 Hz.
-            // LR4 crossover pairs provide steep 24 dB/oct slopes without the
-            // broad overlap and phasey subtraction of the previous one-pole filters.
-            val lowBand = fxLow2.tick(fxLow1.tick(raw))
-            val midHighPassed = fxMidHighPass2.tick(fxMidHighPass1.tick(raw))
-            val midBand = fxMidLowPass2.tick(fxMidLowPass1.tick(midHighPassed))
-            val highBand = fxHigh2.tick(fxHigh1.tick(raw))
-            val bandLimited = when (fxFrequency.coerceIn(0,2)) {
-                0 -> lowBand
-                1 -> midBand
-                else -> highBand
-            }
+            // V10-style FX frequency switch: OFF leaves the complete FX return
+            // untouched; ON sends only the high-frequency band to the effect return.
+            val bandLimited = if (fxHighEnabled) fxHigh2.tick(fxHigh1.tick(raw)) else raw
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
