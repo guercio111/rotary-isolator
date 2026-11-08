@@ -1490,6 +1490,7 @@ class MainActivity : Activity() {
             }
         }
         val compactFxPhone = phonePortrait && wideLayout
+        val wrapCueControls = phonePortrait && !wideLayout
         val cueRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -1499,14 +1500,18 @@ class MainActivity : Activity() {
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(if(compactFxPhone)34 else 50), dp(if(compactFxPhone)34 else 50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
         delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(if(compactFxPhone)30 else 34), dp(if(compactFxPhone)32 else 42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(if(compactFxPhone)34 else 46), 1f))
-        if (!compactFxPhone) {
+        if (!compactFxPhone && !wrapCueControls) {
             delayTop.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
             delayTop.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
             delayTop.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3) })
-        } else {
+        } else if (compactFxPhone) {
             cueRow.addView(cueButtonView, LinearLayout.LayoutParams(dp(34), dp(30)).apply { leftMargin = dp(3); rightMargin = dp(3) })
             cueRow.addView(lockButton, LinearLayout.LayoutParams(dp(42), dp(30)).apply { leftMargin = dp(3); rightMargin = dp(3) })
             cueRow.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(48), dp(30)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        } else if (wrapCueControls) {
+            cueRow.addView(cueButtonView, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+            cueRow.addView(lockButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+            cueRow.addView(shiftBeatButton, LinearLayout.LayoutParams(dp(55), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         }
         val resetBpmButton = TextView(this).apply {
             text = "RST"
@@ -1556,11 +1561,14 @@ class MainActivity : Activity() {
         }
         if (compactFxPhone) {
             cueRow.addView(resetBpmButton, LinearLayout.LayoutParams(dp(32), dp(30)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        } else if (wrapCueControls) {
+            cueRow.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3); rightMargin = dp(3) })
         } else {
             delayTop.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3) })
         }
         delayControls.addView(delayTop, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(36)) else LinearLayout.LayoutParams(-1, 0, 1.6f))
         if (compactFxPhone) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(32)))
+        else if (wrapCueControls) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, 0, 0.8f))
         val bpmFineCaption = label("PITCH TEMPO   −10       0       +10 BPM", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
