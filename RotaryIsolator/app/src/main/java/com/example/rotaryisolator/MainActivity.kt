@@ -577,11 +577,11 @@ class MainActivity : Activity() {
             // EQ + Isolator share the upper band; FILTER + MASTER form a compact
             // middle strip; REVERB + DELAY get the full width in the lower band.
             // S25 portrait: reclaim vertical room for FX; tablet proportions remain unchanged.
-            val upperWeight = if (phonePortrait) 0.36f else 0.34f
-            // S25 portrait: keep HPF inside its own bounds and give the FX deck
-            // enough real height for readable controls and larger delay dials.
-            val middleWeight = if (phonePortrait) 0.24f else 0.36f
-            val effectsWeight = if (phonePortrait) 0.40f else 0.30f
+            val upperWeight = if (phonePortrait) 0.27f else 0.34f
+            // S25 portrait: dedicate a larger band to FILTER so HPF and RESONANCE
+            // can use wide, horizontal dial cells without clipping.
+            val middleWeight = if (phonePortrait) 0.37f else 0.36f
+            val effectsWeight = if (phonePortrait) 0.36f else 0.30f
             content.addView(upper, LinearLayout.LayoutParams(-1, 0, upperWeight))
             content.addView(middle, LinearLayout.LayoutParams(-1, 0, middleWeight))
             content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, effectsWeight))
@@ -764,7 +764,7 @@ class MainActivity : Activity() {
         val stackedTabletLandscape = !phonePortrait && wideLayout
         // On the S25, place HPF and RESONANCE side by side in the compact
         // control strip; this gives both dials a useful face without scrolling.
-        val useVerticalRows = if (compactFilter) false else (!wideLayout || stackedTabletLandscape)
+        val useVerticalRows = if (compactFilter || (phonePortrait && !wideLayout)) false else (!wideLayout || stackedTabletLandscape)
         val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         }
@@ -784,7 +784,7 @@ class MainActivity : Activity() {
         }
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()*0.36f-76f)/2f).roundToInt().coerceIn(50,140)
-        val verticalDialHeight = if(compactFilter) dp(66) else if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else dialHeight()
+        val verticalDialHeight = if(compactFilter) dp(66) else if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else if(phonePortrait && !wideLayout) dp(160) else dialHeight()
         // Enlarge only the two FILTER dials on tablet landscape; leave every other control unchanged.
         val filterLandscapeDialHeight = if(wideLayout) dp(210) else dialHeight()
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
@@ -825,11 +825,12 @@ class MainActivity : Activity() {
                 if(stackedTabletLandscape && i==1){knob.scaleX=0.78f;knob.scaleY=0.78f}
                 // Make the HPF dial more prominent on tablet portrait;
                 // resonance keeps its original size.
-                if (useVerticalRows && phonePortrait && !wideLayout) {
-                    // Keep both S25 filter dials within their measured view bounds:
-                    // scaling the HPF view beyond its cell clips the outer dial ring.
-                    knob.scaleX = 1.00f
-                    knob.scaleY = 1.00f
+                if (phonePortrait && !wideLayout) {
+                    // S25 portrait: HPF is deliberately prominent; RESONANCE is
+                    // twice its previous visible diameter. Their cells are now side by side.
+                    val dialScale = if (i == 0) 1.08f else 0.48f
+                    knob.scaleX = dialScale
+                    knob.scaleY = dialScale
                 } else {
                     if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
                     if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
@@ -1308,13 +1309,13 @@ class MainActivity : Activity() {
         val depthDial = RotaryControl(
             this, "DEPTH", reverbMix.toFloat(), 0f, 100f, reverbDepthAccent,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
+            { "$reverbMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
         )
         val timeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, reverbMainAccent,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
-            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
+            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
         )
         val reverbRow = LinearLayout(this).apply {
@@ -1801,8 +1802,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.29f else if (!wideLayout) 0.37f else 0.43f))
-        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.67f else if (!wideLayout) 0.63f else 0.57f))
+        effectsBody.addView(reverbColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.25f else if (!wideLayout) 0.37f else 0.43f))
+        effectsBody.addView(delayColumn, LinearLayout.LayoutParams(0, -1, if (phonePortrait && !wideLayout) 0.71f else if (!wideLayout) 0.63f else 0.57f))
         panel.addView(effectsBody, LinearLayout.LayoutParams(-1, 0, 1f))
 
         return panel
