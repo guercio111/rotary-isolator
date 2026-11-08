@@ -577,10 +577,10 @@ class MainActivity : Activity() {
             // EQ + Isolator share the upper band; FILTER + MASTER form a compact
             // middle strip; REVERB + DELAY get the full width in the lower band.
             // S25 portrait: reclaim vertical room for FX; tablet proportions remain unchanged.
-            val upperWeight = if (phonePortrait) 0.38f else 0.34f
-            // Keep FILTER/MASTER compact and give the whole effects band more height.
-            val middleWeight = if (phonePortrait) 0.32f else 0.36f
-            val effectsWeight = if (phonePortrait) 0.30f else 0.30f
+            val upperWeight = if (phonePortrait) 0.39f else 0.34f
+            // S25 portrait: keep room for the EQ rows and enlarge the lower FX band.
+            val middleWeight = if (phonePortrait) 0.26f else 0.36f
+            val effectsWeight = if (phonePortrait) 0.35f else 0.30f
             content.addView(upper, LinearLayout.LayoutParams(-1, 0, upperWeight))
             content.addView(middle, LinearLayout.LayoutParams(-1, 0, middleWeight))
             content.addView(fxHost, LinearLayout.LayoutParams(-1, 0, effectsWeight))
@@ -821,8 +821,9 @@ class MainActivity : Activity() {
                 // Make the HPF dial more prominent on tablet portrait;
                 // resonance keeps its original size.
                 if (useVerticalRows && phonePortrait && !wideLayout) {
-                    knob.scaleX = 1f
-                    knob.scaleY = 1f
+                    // Give HPF a little more visual diameter in the S25 middle band.
+                    knob.scaleX = if (i == 0) 1.14f else 1f
+                    knob.scaleY = if (i == 0) 1.14f else 1f
                 } else {
                     if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
                     if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
@@ -963,6 +964,8 @@ class MainActivity : Activity() {
             topRow.addView(masterCell(compDial,listOf(compToggle)), LinearLayout.LayoutParams(0, -1, 1f))
             bottomRow.addView(masterCell(bassDial,listOf(bassToggle,bassReturn)), LinearLayout.LayoutParams(0, -1, 1f))
             bottomRow.addView(masterCell(loudDial,listOf(loudToggle,loudReturn)), LinearLayout.LayoutParams(0, -1, 1f))
+            // S25 only: move the lower pair upward without resizing MASTER dials.
+            if (phonePortrait && !wideLayout) bottomRow.translationY = -dp(5)
             grid.addView(topRow, LinearLayout.LayoutParams(-1, 0, 1f))
             grid.addView(bottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
             box.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -1316,16 +1319,20 @@ class MainActivity : Activity() {
         // than the four Delay dials. Scale only their drawing, not their
         // touch/layout bounds, to match the Delay rotary size.
         // Keep the three main Reverb dials at full size; DECAY and COLOR stay in the narrow side lane.
-        reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1.15f))
-        reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1.15f))
+        reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1f))
         val reverbFeedbackDial = RotaryControl(
             this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, reverbMainAccent,
             { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        // FEEDBACK is deliberately smaller than the two main controls.
-        reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 0.70f))
+        // All three main Reverb dials share the same layout size.
+        reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        if (phonePortrait && !wideLayout) {
+            depthDial.scaleX = 1.08f
+            depthDial.scaleY = 1.08f
+        }
         val reverbDecayDial = RotaryControl(
             this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
@@ -1580,13 +1587,13 @@ class MainActivity : Activity() {
         } else {
             delayTop.addView(resetBpmButton, LinearLayout.LayoutParams(dp(38), dp(38)).apply { leftMargin = dp(3) })
         }
-        delayControls.addView(delayTop, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(36)) else LinearLayout.LayoutParams(-1, 0, 1.6f))
+        delayControls.addView(delayTop, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(36)) else if(wrapCueControls) LinearLayout.LayoutParams(-1, dp(32)) else LinearLayout.LayoutParams(-1, 0, 1.6f))
         if (compactFxPhone) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(32)))
-        else if (wrapCueControls) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(36)))
+        else if (wrapCueControls) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(32)))
         val bpmFineCaption = label("PITCH TEMPO   −10       0       +10 BPM", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
-        delayControls.addView(bpmFineCaption, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(13)) else LinearLayout.LayoutParams(-1, 0, 0.65f).apply { topMargin = dp(2) })
+        delayControls.addView(bpmFineCaption, if(compactFxPhone || wrapCueControls) LinearLayout.LayoutParams(-1, dp(12)) else LinearLayout.LayoutParams(-1, 0, 0.65f).apply { topMargin = dp(2) })
         val fineSeek = SeekBar(this).apply {
             max = 200
             progress = 100 // fader always opens at its physical centre / zero
@@ -1607,7 +1614,7 @@ class MainActivity : Activity() {
             })
         }
         bpmFineSeek = fineSeek
-        delayControls.addView(fineSeek, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(16)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 0.9f).apply { topMargin = dp(2); bottomMargin = dp(2) })
+        delayControls.addView(fineSeek, if(compactFxPhone || wrapCueControls) LinearLayout.LayoutParams(-1, dp(14)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 0.9f).apply { topMargin = dp(2); bottomMargin = dp(2) })
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1649,7 +1656,7 @@ class MainActivity : Activity() {
             })
         }
         paintModeButtons()
-        delayControls.addView(modeRow, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(22)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 1.1f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+        delayControls.addView(modeRow, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(22)).apply { topMargin = dp(1); bottomMargin = dp(1) } else if(wrapCueControls) LinearLayout.LayoutParams(-1, dp(27)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 1.1f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         val divisions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1687,7 +1694,7 @@ class MainActivity : Activity() {
             })
         }
         paintDivisionButtons()
-        delayControls.addView(divisions, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(22)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+        delayControls.addView(divisions, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(22)).apply { topMargin = dp(1); bottomMargin = dp(1) } else if(wrapCueControls) LinearLayout.LayoutParams(-1, dp(27)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         val frequencyRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1724,7 +1731,7 @@ class MainActivity : Activity() {
             })
         }
         paintFrequencyButtons()
-        delayControls.addView(frequencyRow, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(20)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+        delayControls.addView(frequencyRow, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(20)).apply { topMargin = dp(1); bottomMargin = dp(1) } else if(wrapCueControls) LinearLayout.LayoutParams(-1, dp(25)).apply { topMargin = dp(1); bottomMargin = dp(1) } else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
 
 
@@ -1762,6 +1769,11 @@ class MainActivity : Activity() {
         }
         reverbSideColumn.addView(reverbDecayDial, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
+        // Match the narrow side dials to the main Reverb dial diameter.
+        if (phonePortrait && !wideLayout) {
+            reverbDecayDial.scaleX = 0.72f; reverbDecayDial.scaleY = 0.72f
+            reverbColorDial.scaleX = 0.72f; reverbColorDial.scaleY = 0.72f
+        }
         // DECAY/COLOR stay small on the LEFT; the three main REVERB dials sit on the RIGHT.
         val reverbSideWidth = dp(if (phonePortrait && !wideLayout) 44 else if (!wideLayout) 58 else 74)
         reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(reverbSideWidth, -1).apply {
@@ -1776,8 +1788,8 @@ class MainActivity : Activity() {
         }
         // On S25 portrait, reserve most of DELAY's vertical height for the
         // BPM/CUE/LOCK and beat-selection controls so none of those rows are clipped.
-        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.30f else 0.36f))
-        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.70f else 0.64f))
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.34f else 0.36f))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.66f else 0.64f))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
