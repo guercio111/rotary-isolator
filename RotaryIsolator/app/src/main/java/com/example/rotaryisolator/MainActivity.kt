@@ -1792,8 +1792,8 @@ class MainActivity : Activity() {
         }
         // On S25 portrait, reserve most of DELAY's vertical height for the
         // BPM/CUE/LOCK and beat-selection controls so none of those rows are clipped.
-        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.36f else 0.36f))
-        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.64f else 0.64f))
+        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.32f else 0.36f))
+        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait && !wideLayout) 0.68f else 0.64f))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
