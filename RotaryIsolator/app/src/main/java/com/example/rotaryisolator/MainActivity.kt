@@ -49,7 +49,7 @@ class MainActivity : Activity() {
     @Volatile private var delayTimePercent = 100
     @Volatile private var delayFeedbackPercent = 52
     @Volatile private var delayTonePercent = 50
-    @Volatile private var fxFrequency = 1 // LOW, MID, HIGH
+    @Volatile private var fxHighEnabled = false // V10 FX frequency switch: HIGH band only, OFF = full spectrum
     @Volatile private var delayBpm = 120f
     @Volatile private var delayTapBpm = 120f
     @Volatile private var delayBpmCorrection = 0f
@@ -187,7 +187,7 @@ class MainActivity : Activity() {
         delayTimePercent = 100
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
         delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
-        fxFrequency = prefs.getInt("beat_fx_frequency", 1).coerceIn(0,2)
+        fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", false)
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,6)
@@ -522,7 +522,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",100).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putInt("beat_fx_frequency",fxFrequency).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_time",100).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1756,11 +1756,11 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val frequencyLabels = arrayOf("FX LOW", "FX MID", "FX HIGH")
+        val frequencyLabels = arrayOf("FX HIGH")
         val frequencyViews = ArrayList<TextView>()
         fun paintFrequencyButtons() {
             frequencyViews.forEachIndexed { index, button ->
-                val active = fxFrequency == index
+                val active = fxHighEnabled
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
                     setColor(if (active) colorMaster else Color.rgb(55,62,72))
@@ -1776,7 +1776,7 @@ class MainActivity : Activity() {
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
                 setOnClickListener {
-                    fxFrequency = index
+                    fxHighEnabled = !fxHighEnabled
                     paintFrequencyButtons()
                     save(); scheduleUpdate()
                 }
@@ -2065,7 +2065,7 @@ class MainActivity : Activity() {
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision, delayMode, 100, delayFeedbackPercent, delayTonePercent, fxFrequency,
+                                delayOn, delayFadeMs, delayDivision, delayMode, 100, delayFeedbackPercent, delayTonePercent, fxHighEnabled,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
                                 delaySyncOffsetMs, bpmSyncLocked
                             )
