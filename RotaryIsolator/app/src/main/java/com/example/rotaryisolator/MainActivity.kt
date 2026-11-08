@@ -1215,16 +1215,36 @@ class MainActivity : Activity() {
                 // autocorrelation lag that may represent half/double time.
                 val expectedLag = (12000f / delayTapBpm.coerceIn(60f, 180f)).roundToInt()
                     .coerceIn(minLag, maxLag)
+                // Use the most recent credible onset, not simply the loudest
+                // onset in the last two beats. A louder kick from the previous
+                // beat must not pull the phase reference backwards.
+                val searchStart = (values.size - expectedLag * 2).coerceAtLeast(1)
+                var strongest = 0f
                 var strongestIndex = values.lastIndex
-                var strongest = Float.NEGATIVE_INFINITY
-                val searchStart = (values.size - expectedLag * 2).coerceAtLeast(0)
                 for (i in searchStart..values.lastIndex) {
                     if (values[i] > strongest) {
                         strongest = values[i]
                         strongestIndex = i
                     }
                 }
-                val ageMs = ((values.lastIndex - strongestIndex) * 5L)
+                val onsetThreshold = strongest * 0.30f
+                var latestOnsetIndex = -1
+                if (values.lastIndex > searchStart &&
+                    values.last() >= values[values.lastIndex - 1] &&
+                    values.last() >= onsetThreshold) {
+                    latestOnsetIndex = values.lastIndex
+                } else {
+                    for (i in values.lastIndex - 1 downTo searchStart) {
+                        if (values[i] >= onsetThreshold &&
+                            values[i] >= values[i - 1] &&
+                            values[i] > values[i + 1]) {
+                            latestOnsetIndex = i
+                            break
+                        }
+                    }
+                }
+                val phaseIndex = if (latestOnsetIndex >= 0) latestOnsetIndex else strongestIndex
+                val ageMs = ((values.lastIndex - phaseIndex) * 5L)
                 autoBpmNextBeatMs = nowMs - ageMs
 
                 handler.post {
@@ -1494,6 +1514,10 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
                 val lastBeat = autoBpmNextBeatMs
+                val beatDurationForFreshness = (60000f / delayBpm.coerceIn(60f,180f)).toLong()
+                val autoBeatFresh = autoBpmEnabled && lastBeat > 0L &&
+                    lastBeat <= now + 100L &&
+                    now - lastBeat <= maxOf(1200L, (beatDurationForFreshness * 1.5f).toLong())
                 if (bpmSyncLocked && bpmSyncManualTempoPending) {
                     // A manual BPM adjustment explicitly asks for a fresh phase lock.
                     // Re-anchor at this SYNC press using the manually selected tempo.
@@ -1522,12 +1546,12 @@ class MainActivity : Activity() {
                     // A repeated SYNC is a gentle phase trim, never a new clock/tempo lock.
                     // Use each newly detected onset only once; limit each correction so
                     // an imperfect BPM/onset estimate cannot throw the delay off beat.
-                    if (autoBpmEnabled && lastBeat > 0L && lastBeat != bpmSyncLastCorrectionBeatMs) {
+                    if (autoBeatFresh && lastBeat != bpmSyncLastCorrectionBeatMs) {
                         val beatMs = 60000f / bpmSyncLockedValue.coerceIn(60f, 180f)
                         var phaseError = ((lastBeat - bpmSyncAnchorMs).toFloat() % beatMs)
                         if (phaseError > beatMs / 2f) phaseError -= beatMs
                         if (phaseError < -beatMs / 2f) phaseError += beatMs
-                        val correctionMs = (phaseError * 0.20f).coerceIn(-25f, 25f)
+                        val correctionMs = (phaseError * 0.12f).coerceIn(-8f, 8f)
                         bpmSyncAnchorMs += correctionMs.toLong()
                         bpmSyncLastCorrectionBeatMs = lastBeat
                         updateDelaySyncOffsetForDivision()
@@ -1540,8 +1564,8 @@ class MainActivity : Activity() {
                 }
                 // First lock: AUTO uses the latest detected bass onset; manual mode
                 // uses the exact SYNC press. BPM stays fixed after this point.
-                bpmSyncAnchorMs = if (autoBpmEnabled && lastBeat > 0L) lastBeat else now
-                bpmSyncLastCorrectionBeatMs = lastBeat
+                bpmSyncAnchorMs = if (autoBeatFresh) lastBeat else now
+                bpmSyncLastCorrectionBeatMs = if (autoBeatFresh) lastBeat else 0L
                 bpmSyncLockedValue = delayBpm.coerceIn(60f, 180f)
                 bpmSyncManualTempoPending = false
                 bpmSyncLocked = true
