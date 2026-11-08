@@ -1568,7 +1568,7 @@ class MainActivity : Activity() {
         }
         delayControls.addView(delayTop, if(compactFxPhone) LinearLayout.LayoutParams(-1, dp(36)) else LinearLayout.LayoutParams(-1, 0, 1.6f))
         if (compactFxPhone) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(32)))
-        else if (wrapCueControls) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, 0, 0.8f))
+        else if (wrapCueControls) delayControls.addView(cueRow, LinearLayout.LayoutParams(-1, dp(42)))
         val bpmFineCaption = label("PITCH TEMPO   −10       0       +10 BPM", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
