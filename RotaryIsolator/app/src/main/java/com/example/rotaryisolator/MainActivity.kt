@@ -698,6 +698,10 @@ class MainActivity : Activity() {
             } else {
                 val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
                 knob.isEnabled=active[i]
+                if (phonePortrait && !wideLayout) {
+                    knob.scaleX = 1.08f
+                    knob.scaleY = 1.08f
+                }
                 // In portrait each dial occupies the same flexible column; the
                 // control measures itself from its row, never from a guessed width.
                 val knobParams = if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(-1,verticalDialHeight)
@@ -766,10 +770,10 @@ class MainActivity : Activity() {
         if(useVerticalRows) {
             // Tablet portrait: center the section title and reserve the same
             // 44dp control lane used by EQ and ISOLATOR.
-            box.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
+            box.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(if(phonePortrait && !wideLayout)24 else 32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
             val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterTitle.addView(filterPower)
-            box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
+            box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(if(phonePortrait && !wideLayout)28 else 44)))
         } else {
             // Preserve the established phone and landscape presentation.
             box.addView(sectionLabel("HPF",if(compactFilter)10f else 13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactFilter)18 else 32)))
