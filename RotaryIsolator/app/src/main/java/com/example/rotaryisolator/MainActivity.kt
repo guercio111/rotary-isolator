@@ -671,6 +671,7 @@ class MainActivity : Activity() {
                         override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
                 }
+                bandDials.add(seek)
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
                 val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
@@ -687,16 +688,28 @@ class MainActivity : Activity() {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old
-                vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
-                bandDials.getOrNull(pos)?.invalidate()
-                save(); scheduleUpdate()
+                if(parent===content) { save(); refreshUi(); scheduleUpdate() }
+                else {
+                    vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
+                    bandDials.getOrNull(pos)?.let { control ->
+                        if(control is SeekBar) control.progress=((values[i]-range.start)*10).roundToInt().coerceIn(0,control.max)
+                        else control.invalidate()
+                    }
+                    save(); scheduleUpdate()
+                }
             },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
             bandActions.addView(circleAction("F",actionFlatSize) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f
-                vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
-                bandDials.getOrNull(pos)?.invalidate()
-                save(); scheduleUpdate()
+                if(parent===content) { save(); scheduleUpdate(); refreshUi() }
+                else {
+                    vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
+                    bandDials.getOrNull(pos)?.let { control ->
+                        if(control is SeekBar) control.progress=((values[i]-range.start)*10).roundToInt().coerceIn(0,control.max)
+                        else control.invalidate()
+                    }
+                    save(); scheduleUpdate()
+                }
             },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
@@ -732,7 +745,12 @@ class MainActivity : Activity() {
             bandValueLabels.forEachIndexed { pos, valueLabel ->
                 valueLabel.text="${names[pos]}  ${fmt(values[indices[pos]])} dB"
             }
-            bandDials.forEach { it.invalidate() }
+            bandDials.forEachIndexed { pos, control ->
+                val value=values[indices[pos]]
+                if(control is SeekBar) control.progress=((value-range.start)*10).roundToInt().coerceIn(0,control.max)
+                else control.invalidate()
+            }
+            if(parent===content) refreshUi()
             save(); scheduleUpdate()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
@@ -787,6 +805,7 @@ class MainActivity : Activity() {
             if(modes["FILTERS"]==true){
                 val seek=SeekBar(this).apply{
                     max=100;progress=(current*100).roundToInt();isEnabled=controlEnabled
+                    filterDials.add(this)
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
                         override fun onProgressChanged(b:SeekBar?,p:Int,user:Boolean){if(user){if(i==1)resonance=p/100f else filters[0]=p/100f;scheduleUpdate()}}
                         override fun onStartTrackingTouch(b:SeekBar?){previousFilters[i]=if(i==1)resonance else filters[0]}
@@ -809,14 +828,27 @@ class MainActivity : Activity() {
             filterActions.addView(circleAction("↶",filterReturnSize){
                 val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
                 if(i==1)resonance=old else filters[0]=old
-                filterDials.getOrNull(i)?.invalidate()
-                save();scheduleUpdate()
+                if(parent===content) { save(); refreshUi(); scheduleUpdate() }
+                else {
+                    filterDials.getOrNull(i)?.let { control ->
+                        val value=if(i==1)resonance else filters[0]
+                        if(control is SeekBar) control.progress=(value*100).roundToInt().coerceIn(0,100)
+                        else control.invalidate()
+                    }
+                    save();scheduleUpdate()
+                }
             },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
             filterActions.addView(circleAction("0",filterFlatSize){
                 previousFilters[i]=if(i==1)resonance else filters[0]
                 if(i==1)resonance=0f else filters[0]=0f
-                filterDials.getOrNull(i)?.invalidate()
-                save();scheduleUpdate()
+                if(parent===content) { save(); scheduleUpdate(); refreshUi() }
+                else {
+                    filterDials.getOrNull(i)?.let { control ->
+                        if(control is SeekBar) control.progress=0
+                        else control.invalidate()
+                    }
+                    save();scheduleUpdate()
+                }
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
             col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
