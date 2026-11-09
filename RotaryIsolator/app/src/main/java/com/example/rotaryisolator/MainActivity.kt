@@ -688,14 +688,14 @@ class MainActivity : Activity() {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old
                 vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
-                bandDials.getOrNull(pos)?.invalidate()
+                (bandDials.getOrNull(pos) as? RotaryControl)?.setValue(values[i])
                 save(); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
             bandActions.addView(circleAction("F",actionFlatSize) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f
                 vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
-                bandDials.getOrNull(pos)?.invalidate()
+                (bandDials.getOrNull(pos) as? RotaryControl)?.setValue(values[i])
                 save(); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
@@ -732,7 +732,7 @@ class MainActivity : Activity() {
             bandValueLabels.forEachIndexed { pos, valueLabel ->
                 valueLabel.text="${names[pos]}  ${fmt(values[indices[pos]])} dB"
             }
-            bandDials.forEach { it.invalidate() }
+            bandDials.forEachIndexed { pos, dial -> (dial as? RotaryControl)?.setValue(values[indices[pos]]) }
             save(); scheduleUpdate()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
@@ -809,13 +809,13 @@ class MainActivity : Activity() {
             filterActions.addView(circleAction("↶",filterReturnSize){
                 val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
                 if(i==1)resonance=old else filters[0]=old
-                filterDials.getOrNull(i)?.invalidate()
+                (filterDials.getOrNull(i) as? RotaryControl)?.setValue(if(i==1) resonance else filters[0])
                 save();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
             filterActions.addView(circleAction("0",filterFlatSize){
                 previousFilters[i]=if(i==1)resonance else filters[0]
                 if(i==1)resonance=0f else filters[0]=0f
-                filterDials.getOrNull(i)?.invalidate()
+                (filterDials.getOrNull(i) as? RotaryControl)?.setValue(if(i==1) resonance else filters[0])
                 save();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
             col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
@@ -2434,6 +2434,12 @@ private class RotaryControl(
     private fun quantize(value:Float):Float {
         if (step <= 0f) return value.coerceIn(minV,maxV)
         return (minV + ((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
+    }
+    // Update the dial's own displayed value when FLAT/RETURN changes its model.
+    // This does not invoke the audio callback or alter the view's geometry.
+    fun setValue(value:Float) {
+        v = quantize(value)
+        invalidate()
     }
     private fun updateFromPoint(x:Float,y:Float){
         val r=rect;val cx=r.centerX();val cy=r.centerY()
