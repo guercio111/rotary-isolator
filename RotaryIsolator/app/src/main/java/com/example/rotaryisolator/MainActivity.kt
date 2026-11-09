@@ -643,6 +643,8 @@ class MainActivity : Activity() {
         // double-mid mode, while the Isolator has three. This prevents the last
         // strip from being clipped by the quadrant boundary.
         val indices = if(key=="EQ" && eqDoubleMid) listOf(2,3,1,0) else listOf(2,1,0)
+        val bandDials = mutableListOf<View>()
+        val bandValueLabels = mutableListOf<TextView>()
         // Tablet portrait uses measured, weighted rows instead of guessed dp heights.
         // Every band receives exactly the same share of the real section height.
         val verticalRowHeight = ((windowHeightDp()/2f-96f)/indices.size).roundToInt().coerceIn(52,140)
@@ -653,6 +655,7 @@ class MainActivity : Activity() {
             val i=indices[pos]
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
+            bandValueLabels.add(vLabel)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             if(useVerticalRows) vLabel.gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
             controlHeader.addView(vLabel,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(0,dp(if(compactHeader)19 else 28),1f))
@@ -672,6 +675,7 @@ class MainActivity : Activity() {
             } else {
                 val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
                 knob.isEnabled=active[i]
+                bandDials.add(knob)
                 // In portrait each dial occupies the same flexible column; the
                 // control measures itself from its row, never from a guessed width.
                 val knobParams = if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(-1,verticalDialHeight)
@@ -682,11 +686,17 @@ class MainActivity : Activity() {
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
-                values[i]=old; save(); refreshUi(); scheduleUpdate()
+                values[i]=old
+                vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
+                bandDials.getOrNull(pos)?.invalidate()
+                save(); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
             bandActions.addView(circleAction("F",actionFlatSize) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
-                values[i]=0f; scheduleUpdate(); refreshUi()
+                values[i]=0f
+                vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
+                bandDials.getOrNull(pos)?.invalidate()
+                save(); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
@@ -719,7 +729,11 @@ class MainActivity : Activity() {
         headerControls.addView(circleAction("F",if(compactHeader)30 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
-            scheduleUpdate();refreshUi()
+            bandValueLabels.forEachIndexed { pos, valueLabel ->
+                valueLabel.text="${names[pos]}  ${fmt(values[indices[pos]])} dB"
+            }
+            bandDials.forEach { it.invalidate() }
+            save(); scheduleUpdate()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
@@ -754,6 +768,7 @@ class MainActivity : Activity() {
         val filterLandscapeDialHeight = if(wideLayout) dp(210) else dialHeight()
         val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else 2f}
         val names=listOf("HPF","RESONANCE")
+        val filterDials = mutableListOf<View>()
         for(i in 0..1){
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==1)resonance else filters[0]
@@ -786,6 +801,7 @@ class MainActivity : Activity() {
                     scheduleUpdate()
                 },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,bottomTextLift=if(useVerticalRows)8f else 0f)
                 knob.isEnabled=controlEnabled
+                filterDials.add(knob)
                 controlRow.addView(knob,if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout) filterLandscapeDialHeight else verticalDialHeight,1f))
             }
             col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
@@ -793,12 +809,14 @@ class MainActivity : Activity() {
             filterActions.addView(circleAction("↶",filterReturnSize){
                 val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
                 if(i==1)resonance=old else filters[0]=old
-                save();refreshUi();scheduleUpdate()
+                filterDials.getOrNull(i)?.invalidate()
+                save();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
             filterActions.addView(circleAction("0",filterFlatSize){
                 previousFilters[i]=if(i==1)resonance else filters[0]
                 if(i==1)resonance=0f else filters[0]=0f
-                scheduleUpdate();refreshUi()
+                filterDials.getOrNull(i)?.invalidate()
+                save();scheduleUpdate()
             },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
             col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
@@ -1325,18 +1343,6 @@ class MainActivity : Activity() {
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
-        val reverbDecayDial = RotaryControl(
-            this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
-            { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
-        )
-        val reverbColorDial = RotaryControl(
-            this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
-            { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbColorPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
-        )
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
@@ -1735,17 +1741,6 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(2), dp(2), dp(2), dp(2))
         }
-        val reverbControlsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        val reverbSideColumn = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-        }
-        // DECAY and COLOR are attached only once, directly to reverbRow.
-        reverbRow.addView(reverbDecayDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbRow.addView(reverbColorDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, 0, 1f))
         val delayColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
