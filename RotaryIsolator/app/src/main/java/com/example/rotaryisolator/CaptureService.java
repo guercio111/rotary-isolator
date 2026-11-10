@@ -8,7 +8,7 @@ import android.os.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class CaptureService extends Service {
-    public static final String START="clock.START", STOP="clock.STOP", SYNC="clock.SYNC", OFFSET="clock.OFFSET";
+    public static final String START="clock.START", STOP="clock.STOP", SYNC="clock.SYNC", OFFSET="clock.OFFSET", STATE="clock.STATE";
     public static final String BPM="clock.BPM", BEAT="clock.BEAT", STATUS="clock.STATUS";
     public static final String EXTRA_CODE="code", EXTRA_DATA="data", EXTRA_OFFSET="offset";
     private static final String CHANNEL="bpm_clock_capture";
@@ -30,6 +30,7 @@ public final class CaptureService extends Service {
         if(STOP.equals(a)){stopEngine();stopSelf();return START_NOT_STICKY;}
         if(SYNC.equals(a)){syncRequested=true;return START_NOT_STICKY;}
         if(OFFSET.equals(a)){offset=Math.max(-10f,Math.min(10f,i.getFloatExtra(EXTRA_OFFSET,0f)));engine.setManualOffset(offset);return START_NOT_STICKY;}
+        if(STATE.equals(a)){broadcastStatus(running.get()?"Analisi BPM attiva: audio originale non modificato":"Cattura arrestata");if(!running.get())stopSelf();return START_NOT_STICKY;}
         if(START.equals(a)&&!running.get()){
             startForeground(21,new Notification.Builder(this,CHANNEL).setContentTitle("BPM Clock Engine").setContentText("Analisi audio in corso").setSmallIcon(android.R.drawable.ic_media_play).build());
             try{
