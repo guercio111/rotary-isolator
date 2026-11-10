@@ -63,6 +63,37 @@ jobs:
         run: |
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
 
+      - name: Add validated BPM engine and MediaProjection capture
+        run: |
+          DEST="extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator"
+          mkdir -p "$DEST"
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java "$DEST/BeatEngine.java"
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/CaptureService.java "$DEST/CaptureService.java"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("extracted/RotaryIsolator/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          permissions = [
+              "android.permission.RECORD_AUDIO",
+              "android.permission.FOREGROUND_SERVICE",
+              "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
+          ]
+          for permission in permissions:
+              entry = f'<uses-permission android:name="{permission}" />'
+              if permission not in s:
+                  s = s.replace("<application", entry + "\\n    <application", 1)
+          service = '''
+              <service
+                  android:name=".CaptureService"
+                  android:exported="false"
+                  android:foregroundServiceType="mediaProjection" />
+          '''
+          if 'android:name=".CaptureService"' not in s:
+              s = s.replace("</application>", service + "\\n</application>", 1)
+          p.write_text(s)
+          print("MediaProjection permissions and BPM capture service registered")
+          PY
+
       - name: Set Java compatibility to 17
         run: |
           python3 - <<'PY'
