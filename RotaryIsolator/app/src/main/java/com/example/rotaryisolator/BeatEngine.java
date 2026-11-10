@@ -27,6 +27,7 @@ public final class BeatEngine {
     private int candidateStreak;
     private float lockedBpm;
     private double lockedPeriodMs;
+    private boolean clockFrozen;
 
     public synchronized void reset() {
         ringWrite = ringCount = sampleWrite = samplesFilled = hopCounter = 0;
@@ -34,6 +35,7 @@ public final class BeatEngine {
         candidateStreak = 0;
         lockedBpm = 0f;
         lockedPeriodMs = 0.0;
+        clockFrozen = false;
         lastAnalysisMs = phaseMs = 0L;
         periodMs = 0.0;
         locked = false;
@@ -48,11 +50,11 @@ public final class BeatEngine {
     public synchronized float getDetectedBpm() { return detectedBpm; }
     public synchronized float getConfidence() { return confidence; }
     public synchronized float getClockBpm() {
-        if (locked && lockedBpm > 0f) return lockedBpm;
+        if (clockFrozen && lockedBpm > 0f) return lockedBpm;
         if (detectedBpm <= 0f) return 0f;
         return Math.max(50f, Math.min(250f, detectedBpm + manualOffset));
     }
-    public synchronized boolean isLocked() { return locked; }
+    public synchronized boolean isLocked() { return clockFrozen; }
     public synchronized long getPhaseMs() { return phaseMs; }
     public synchronized double getPeriodMs() { return periodMs; }
 
@@ -71,11 +73,12 @@ public final class BeatEngine {
             }
         }
         phaseMs = nowMs - Math.round(strongestAge * HOP_MS);
+        locked = true;
     }
 
     /** Freeze/unfreeze the tempo clock. Detection continues in the background. */
     public synchronized void setClockLocked(boolean value) {
-        if (value && !locked && periodMs > 0.0) {
+        if (value && !clockFrozen && periodMs > 0.0) {
             lockedBpm = Math.max(50f, Math.min(250f, detectedBpm + manualOffset));
             lockedPeriodMs = 60000.0 / lockedBpm;
             periodMs = lockedPeriodMs;
@@ -83,7 +86,7 @@ public final class BeatEngine {
             lockedBpm = 0f;
             lockedPeriodMs = 0.0;
         }
-        locked = value;
+        clockFrozen = value;
     }
 
     /** Fine phase nudge; positive moves the clock later, negative earlier. */
@@ -94,6 +97,7 @@ public final class BeatEngine {
     public synchronized void resetPhase() {
         phaseMs = 0L;
         locked = false;
+        clockFrozen = false;
         lockedBpm = 0f;
         lockedPeriodMs = 0.0;
     }
@@ -222,7 +226,7 @@ public final class BeatEngine {
 
         if (chosenLag == 0) {
             confidence *= 0.92f;
-            if (confidence < 0.12f) locked = false;
+            if (confidence < 0.12f && !clockFrozen) locked = false;
             candidateStreak = 0;
             return;
         }
@@ -261,16 +265,18 @@ public final class BeatEngine {
         float measuredConfidence = quality * stability;
         confidence = confidence * 0.82f + measuredConfidence * 0.18f;
 
-        double newPeriod = 60000.0 / getClockBpm();
-        if (periodMs <= 0.0) {
-            periodMs = newPeriod;
-            phaseMs = nowMs;
-            locked = confidence > 0.25f;
-        } else {
-            periodMs += (newPeriod - periodMs) * 0.02;
-            if (!locked && confidence > 0.35f) {
+        if (!clockFrozen) {
+            double newPeriod = 60000.0 / getClockBpm();
+            if (periodMs <= 0.0) {
+                periodMs = newPeriod;
                 phaseMs = nowMs;
-                locked = true;
+                locked = confidence > 0.25f;
+            } else {
+                periodMs += (newPeriod - periodMs) * 0.02;
+                if (!locked && confidence > 0.35f) {
+                    phaseMs = nowMs;
+                    locked = true;
+                }
             }
         }
     }
