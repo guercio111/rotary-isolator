@@ -85,6 +85,7 @@ public final class BeatEngine {
         } else if (!value) {
             lockedBpm = 0f;
             lockedPeriodMs = 0.0;
+            locked = false;
         }
         clockFrozen = value;
     }
