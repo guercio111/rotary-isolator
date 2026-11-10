@@ -29,6 +29,15 @@ import kotlin.math.*
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
+    // Validated RMX-1000 tempo engine, fed from the same capture stream as the FX return.
+    private val validatedBeatEngine = BeatEngine()
+    @Volatile private var bpmAnalyzerOn = false
+    private var bpmButton: Button? = null
+    private var bpmReadout: TextView? = null
+    private var bpmBeat: TextView? = null
+    private var bpmStereoBuffer = ShortArray(4096)
+    @Volatile private var bpmLastBeatIndex = Long.MIN_VALUE
+    @Volatile private var bpmUiLastUpdate = 0L
     // TEST252 diffuse parallel reverb engine.
     @Volatile private var reverbOn = false
     @Volatile private var reverbMix = 0
@@ -520,6 +529,26 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(compactPhone)72 else 82),dp(if(compactPhone)30 else 36)).apply{rightMargin=dp(5)})
+        val bpmPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(2), 0, dp(2), 0)
+        }
+        bpmButton = Button(this).apply {
+            text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
+            textSize = if (compactPhone) 8f else 10f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            backgroundTintList = ColorStateList.valueOf(if (bpmAnalyzerOn) Color.rgb(155,45,48) else Color.rgb(38,105,70))
+            setPadding(dp(4), 0, dp(4), 0)
+            setOnClickListener { if (bpmAnalyzerOn) stopBpmAnalyzer() else startBpmAnalyzer() }
+        }
+        bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
+        bpmReadout = label("— BPM", if (compactPhone) 8f else 10f, Color.WHITE)
+        bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
+        bpmBeat = label("●", if (compactPhone) 15f else 19f, Color.rgb(75,85,95))
+        bpmPanel.addView(bpmBeat, LinearLayout.LayoutParams(dp(24), -1))
+        titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
         titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
@@ -1054,7 +1083,79 @@ class MainActivity : Activity() {
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
     private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
     // AUTO BPM also needs the system-audio capture, even when no FX is audible.
-    private fun captureNeeded() = effectsActive() || autoBpmEnabled
+    private fun captureNeeded() = effectsActive() || autoBpmEnabled || bpmAnalyzerOn
+
+    private fun startBpmAnalyzer() {
+        if (bpmAnalyzerOn) return
+        bpmAnalyzerOn = true
+        bpmLastBeatIndex = Long.MIN_VALUE
+        bpmUiLastUpdate = 0L
+        validatedBeatEngine.reset()
+        bpmReadout?.text = "RICERCA BPM…"
+        bpmButton?.text = "BPM STOP"
+        bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(155,45,48))
+        updateEffectsCapture(true)
+    }
+
+    private fun stopBpmAnalyzer() {
+        bpmAnalyzerOn = false
+        bpmButton?.text = "BPM START"
+        bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+        bpmReadout?.text = "— BPM"
+        bpmBeat?.setTextColor(Color.rgb(75,85,95))
+        if (!captureNeeded()) stopAudioCaptureTest()
+    }
+
+    private fun processValidatedBpm(samples: ShortArray, count: Int, nowMs: Long) {
+        if (!bpmAnalyzerOn && !autoBpmEnabled) return
+        if (count <= 0) return
+        val required = count * 2
+        if (bpmStereoBuffer.size < required) bpmStereoBuffer = ShortArray(required)
+        // The effects capture is mono. Duplicate each sample into L/R so the
+        // validated stereo engine receives the same 48 kHz timeline and tempo.
+        var out = 0
+        for (i in 0 until count) {
+            val sample = samples[i]
+            bpmStereoBuffer[out++] = sample
+            bpmStereoBuffer[out++] = sample
+        }
+        validatedBeatEngine.setManualOffset(delayBpmCorrection)
+        validatedBeatEngine.process(bpmStereoBuffer, required, nowMs)
+        val detected = validatedBeatEngine.getDetectedBpm()
+        val confidence = validatedBeatEngine.getConfidence()
+        val period = validatedBeatEngine.getPeriodMs()
+        val phase = validatedBeatEngine.getPhaseMs()
+        if (detected > 0f && period > 0.0 && phase > 0L) {
+            val beatIndex = kotlin.math.floor((nowMs - phase).toDouble() / period).toLong()
+            if (bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex) {
+                handler.post {
+                    bpmBeat?.setTextColor(Color.rgb(45,235,105))
+                    bpmBeat?.removeCallbacksAndMessages(null)
+                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                }
+            }
+            bpmLastBeatIndex = beatIndex
+            autoBpmNextBeatMs = phase + ((beatIndex + 1).coerceAtLeast(0) * period).toLong()
+            if (autoBpmEnabled) {
+                val clock = validatedBeatEngine.getClockBpm()
+                if (clock > 0f) {
+                    delayBpm = clock.coerceIn(60f,180f)
+                    delayTapBpm = detected.coerceIn(60f,180f)
+                }
+            }
+        }
+        if (nowMs - bpmUiLastUpdate >= 250L) {
+            bpmUiLastUpdate = nowMs
+            handler.post {
+                if (bpmAnalyzerOn || autoBpmEnabled) {
+                    bpmReadout?.text = if (detected > 0f)
+                        String.format(java.util.Locale.US, "%.1f BPM  %d%%", detected, (confidence * 100f).roundToInt().coerceIn(0,100))
+                    else "RICERCA BPM…"
+                    bpmButton?.text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
+                }
+            }
+        }
+    }
 
     private fun paintAutoBpmButton() {
         autoBpmButton?.let { button ->
@@ -1716,7 +1817,13 @@ class MainActivity : Activity() {
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
             captureConsentLocked = true
-            Toast.makeText(this, "Cattura non autorizzata • attiva AUTO BPM oppure ON su Reverb/Delay per riprovare", Toast.LENGTH_LONG).show()
+            if (bpmAnalyzerOn) {
+                bpmAnalyzerOn = false
+                bpmButton?.text = "BPM START"
+                bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+                bpmReadout?.text = "— BPM"
+            }
+            Toast.makeText(this, "Cattura non autorizzata • attiva BPM START oppure ON su Reverb/Delay per riprovare", Toast.LENGTH_LONG).show()
             return
         }
         if (!captureNeeded()) return
@@ -1759,6 +1866,10 @@ class MainActivity : Activity() {
                                 // or FX switches latched ON with no controllable audio stream.
                                 reverbOn = false
                                 delayOn = false
+                                bpmAnalyzerOn = false
+                                bpmButton?.text = "BPM START"
+                                bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+                                bpmReadout?.text = "— BPM"
                                 releaseCaptureIoOnly() // stop + flush + release AudioTrack immediately
                                 save()                  // preserve all knob values, persist safe OFF state
                                 refreshUi()
@@ -1886,7 +1997,7 @@ class MainActivity : Activity() {
                                 written += n
                             }
                             val rms = kotlin.math.sqrt(sum / count)
-                            analyzeAutoBpm(buffer, count, readCompleted, sampleRate)
+                            processValidatedBpm(buffer, count, readCompleted)
                             val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
                             val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
                             val now = android.os.SystemClock.elapsedRealtime()
