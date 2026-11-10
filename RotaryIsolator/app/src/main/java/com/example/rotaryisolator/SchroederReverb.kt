@@ -36,7 +36,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
      * Butterworth biquad used twice in series for a Linkwitz-Riley 4th-order split.
      * Matched low/high branches have a smooth -6 dB crossover and sum coherently.
      */
-    private class Biquad(sampleRate: Int, cutoffHz: Float, highPass: Boolean) {
+    private class Biquad(sampleRate: Int, cutoffHz: Float, highPass: Boolean, q: Float = 0.70710678f) {
         private val b0: Float
         private val b1: Float
         private val b2: Float
@@ -49,7 +49,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val omega = 2.0 * PI * cutoffHz.coerceIn(20f, sampleRate * 0.45f) / sampleRate
             val cosine = kotlin.math.cos(omega).toFloat()
             val sine = kotlin.math.sin(omega).toFloat()
-            val alpha = sine / (2f * 0.70710678f)
+            val alpha = sine / (2f * q.coerceIn(0.45f, 1.2f))
             val invA0 = 1f / (1f + alpha)
             if (highPass) {
                 b0 = ((1f + cosine) * 0.5f) * invA0
@@ -170,11 +170,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
-    // Phase-coherent three-band crossover: LOW <250 Hz, MID 250-2500 Hz, HIGH >2500 Hz.
-    private val fxLowPass250 = Lr4(sampleRate, 250f, false)
-    private val fxHighPass250 = Lr4(sampleRate, 250f, true)
-    private val fxMidPass2500 = Lr4(sampleRate, 2500f, false)
-    private val fxHighPass2500 = Lr4(sampleRate, 2500f, true)
+    // Soft, damped three-band FX split. A single second-order stage per edge
+    // avoids the long ringing of the previous cascaded LR4 (4th-order) filters.
+    // Q=0.55 is deliberately overdamped: no resonant bump at the crossover.
+    private val fxLowPass250 = Biquad(sampleRate, 250f, false, 0.55f)
+    private val fxHighPass250 = Biquad(sampleRate, 250f, true, 0.55f)
+    private val fxMidPass2500 = Biquad(sampleRate, 2500f, false, 0.55f)
+    private val fxHighPass2500 = Biquad(sampleRate, 2500f, true, 0.55f)
     private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
     private var smoothedFxLow = 1f
     private var smoothedFxMid = 1f
@@ -372,9 +374,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
             // Split at 250 Hz, then split the upper branch at 2.5 kHz.
-            // Complementary LR4 crossover: LOW <250 Hz, MID 250-2500 Hz,
-            // HIGH >2500 Hz. Butterworth sections use Q=0.7071, so no resonant
-            // peak is introduced at either crossover.
+                // Damped second-order split: gentler slopes reduce ringing and
+            // keep the LOW/MID FX returns from exaggerating narrow resonances.
             val lowBand = fxLowPass250.process(raw)
             val upperBand = fxHighPass250.process(raw)
             val midBand = fxMidPass2500.process(upperBand)
@@ -387,8 +388,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // The RMX/V10 default (all three switches OFF) is full-band FX,
             // not an FX mute. Selected bands are summed; no selected band = raw.
             val anyFxBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
-            val bandLimited = if (!anyFxBandSelected) raw else
-                lowBand * smoothedFxLow + midBand * smoothedFxMid + highBand * smoothedFxHigh
+            val allFxBandsSelected = fxLowEnabled && fxMidEnabled && fxHighEnabled
+            // All three bands selected (or all deselected) means true full-band FX.
+            // When isolating bands, gently trim LOW and MID: this controls bass build-up
+            // and dense midrange ringing without dulling the clean HIGH return.
+            val bandLimited = if (!anyFxBandSelected || allFxBandsSelected) raw else
+                lowBand * smoothedFxLow * 0.72f +
+                midBand * smoothedFxMid * 0.82f +
+                highBand * smoothedFxHigh
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
