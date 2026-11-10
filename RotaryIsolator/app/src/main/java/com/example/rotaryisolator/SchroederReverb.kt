@@ -269,7 +269,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val toneControlHz = 700f + delayTonePercent.coerceIn(0,100) * 130f
         val delayToneHz = when (mode) { 0 -> toneControlHz.coerceAtLeast(5000f); 1 -> toneControlHz; else -> toneControlHz.coerceAtMost(9000f) }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        // Phase trim from the clock arrows is applied to the audible delay
+        // read head as well as the beat lamps; the transition below crossfades it.
+        val targetDelaySamples = (sampleRate *
+            (60f / delayBpm.coerceIn(60f, 180f) * beatFraction + delaySyncOffsetMs.coerceIn(-250f,250f) / 1000f)
+        ).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val requestedDivision = delayDivision.coerceIn(0, 6)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
@@ -374,7 +378,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val lowBand = fxLowPass250.process(raw)
             val upperBand = fxHighPass250.process(raw)
             val midBand = fxMidPass2500.process(upperBand)
-            val highBand = fxHighPass2500.process(raw)
+            // Split the upper branch a second time. Using raw here bypassed
+            // the 250 Hz high-pass and made the three bands non-complementary.
+            val highBand = fxHighPass2500.process(upperBand)
             smoothedFxLow += ((if (fxLowEnabled) 1f else 0f) - smoothedFxLow) * fxBandSmoothing
             smoothedFxMid += ((if (fxMidEnabled) 1f else 0f) - smoothedFxMid) * fxBandSmoothing
             smoothedFxHigh += ((if (fxHighEnabled) 1f else 0f) - smoothedFxHigh) * fxBandSmoothing

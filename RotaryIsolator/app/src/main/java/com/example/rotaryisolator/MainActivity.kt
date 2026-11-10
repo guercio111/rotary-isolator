@@ -68,6 +68,7 @@ class MainActivity : Activity() {
     @Volatile private var delaySyncOffsetMs = 0f
     @Volatile private var autoBpmNextBeatMs = 0L
     private var autoBpmHasEstimate = false
+    @Volatile private var autoPhaseSynced = false
     private var autoBpmHistory = ArrayDeque<Float>() // 10 ms bass-onset frames
     private var autoBpmPreviousBass = 0f
     private var autoBpmLowpassState = 0f
@@ -1108,6 +1109,8 @@ class MainActivity : Activity() {
         bpmLastBeatIndex = Long.MIN_VALUE
         bpmUiLastUpdate = 0L
         validatedBeatEngine.reset()
+        autoPhaseSynced = false
+        delaySyncOffsetMs = 0f
         delayClockLocked = false
         lockBpmButton?.let { button ->
             button.text = "LOCK"
@@ -1149,8 +1152,18 @@ class MainActivity : Activity() {
         validatedBeatEngine.process(bpmStereoBuffer, required, nowMs)
         val detected = validatedBeatEngine.getDetectedBpm()
         val confidence = validatedBeatEngine.getConfidence()
-        val period = validatedBeatEngine.getPeriodMs()
-        val phase = validatedBeatEngine.getPhaseMs()
+        var period = validatedBeatEngine.getPeriodMs()
+        var phase = validatedBeatEngine.getPhaseMs()
+        // AUTO is a phase-acquisition mode, not just a BPM display switch.
+        // Wait for a stable tempo estimate, then align once to the same onset
+        // engine used by the main clock. Never run a second independent detector.
+        if (autoBpmEnabled && !autoPhaseSynced && detected > 0f &&
+            period > 0.0 && confidence >= 0.30f) {
+            validatedBeatEngine.sync(nowMs)
+            phase = validatedBeatEngine.getPhaseMs()
+            period = validatedBeatEngine.getPeriodMs()
+            autoPhaseSynced = phase > 0L
+        }
         if (detected > 0f && period > 0.0 && phase > 0L) {
             val beatIndex = kotlin.math.floor((nowMs - phase).toDouble() / period).toLong()
             if (bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex) {
@@ -1169,6 +1182,10 @@ class MainActivity : Activity() {
                     delayBpm = clock.coerceIn(60f,180f)
                     delayTapBpm = detected.coerceIn(60f,180f)
                 }
+            }
+            // The lower FX BPM readout is fed by this exact same detector.
+            handler.post {
+                bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", detected)
             }
         }
         if (nowMs - bpmUiLastUpdate >= 250L) {
@@ -1501,6 +1518,9 @@ class MainActivity : Activity() {
                     autoBpmLowpassState = 0f
                     autoBpmLastAnalysisMs = 0L
                     autoBpmNextBeatMs = 0L
+                    autoPhaseSynced = false
+                } else {
+                    autoPhaseSynced = false
                 }
                 text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
                 paintClockButton(this, autoBpmEnabled)
@@ -1538,11 +1558,17 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
                 // Re-anchor the shared phase only; keep the detector and clock running.
+                val beforePhase = validatedBeatEngine.getPhaseMs()
                 validatedBeatEngine.sync(now)
-                autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() +
-                    validatedBeatEngine.getPeriodMs().toLong()
-                bpmLastBeatIndex = Long.MIN_VALUE
-                delaySyncOffsetMs = 0f
+                val afterPhase = validatedBeatEngine.getPhaseMs()
+                if (afterPhase <= 0L || validatedBeatEngine.getPeriodMs() <= 0.0) {
+                    bpmReadout?.text = "ATTENDI BPM STABILE"
+                } else {
+                    autoBpmNextBeatMs = afterPhase + validatedBeatEngine.getPeriodMs().toLong()
+                    bpmLastBeatIndex = Long.MIN_VALUE
+                    delaySyncOffsetMs = 0f
+                    autoPhaseSynced = true
+                }
                 paintClockButton(this, true)
                 postDelayed({ paintClockButton(this, false) }, 500L)
                 scheduleUpdate()
@@ -1551,7 +1577,11 @@ class MainActivity : Activity() {
         fun phaseNudge(direction: Float) {
             val period = validatedBeatEngine.getPeriodMs()
             if (period <= 0.0) return
-            validatedBeatEngine.nudgePhase((period * direction / 16.0).toFloat())
+            // A visible 1/8-beat phase step. Apply it to the shared clock AND
+            // the delay tap, otherwise the lamps move but the audible FX do not.
+            val stepMs = (period * direction / 8.0).toFloat()
+            validatedBeatEngine.nudgePhase(stepMs)
+            delaySyncOffsetMs = (delaySyncOffsetMs + stepMs).coerceIn(-250f, 250f)
             autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
             scheduleUpdate()
         }
@@ -1580,7 +1610,9 @@ class MainActivity : Activity() {
             setOnClickListener {
                 val period = validatedBeatEngine.getPeriodMs()
                 if (period > 0.0) {
-                    validatedBeatEngine.nudgePhase((period * 0.5).toFloat())
+                    val skipMs = (period * 0.5).toFloat()
+                    validatedBeatEngine.nudgePhase(skipMs)
+                    delaySyncOffsetMs = (delaySyncOffsetMs + skipMs).coerceIn(-250f, 250f)
                     autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
                     scheduleUpdate()
                     paintClockButton(this, true)
@@ -1601,6 +1633,7 @@ class MainActivity : Activity() {
                 validatedBeatEngine.setClockLocked(false)
                 validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime())
                 delaySyncOffsetMs = 0f
+                autoPhaseSynced = false
                 bpmFineSeek?.progress = 100
                 delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
                 lockButton.text = "LOCK"
