@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private var bpmButton: TextView? = null
     private var bpmReadout: TextView? = null
     private var bpmBeat: TextView? = null
+    private var fxBpmBeat: TextView? = null
     private var bpmStereoBuffer = ShortArray(4096)
     @Volatile private var bpmLastBeatIndex = Long.MIN_VALUE
     @Volatile private var bpmUiLastUpdate = 0L
@@ -1156,6 +1157,8 @@ class MainActivity : Activity() {
                 handler.post {
                     bpmBeat?.setTextColor(Color.rgb(45,235,105))
                     bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                    fxBpmBeat?.setTextColor(Color.rgb(45,235,105))
+                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
                 }
             }
             bpmLastBeatIndex = beatIndex
@@ -1534,9 +1537,11 @@ class MainActivity : Activity() {
             paintClockButton(this, false)
             setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
+                // Re-anchor the shared phase only; keep the detector and clock running.
                 validatedBeatEngine.sync(now)
                 autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() +
                     validatedBeatEngine.getPeriodMs().toLong()
+                bpmLastBeatIndex = Long.MIN_VALUE
                 delaySyncOffsetMs = 0f
                 paintClockButton(this, true)
                 postDelayed({ paintClockButton(this, false) }, 500L)
@@ -1612,9 +1617,18 @@ class MainActivity : Activity() {
                 if (delayOn) updateEffectsCapture(true)
             }
         }
+        val fxBeatLamp = TextView(this).apply {
+            text = "●"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(75,85,95))
+            contentDescription = "FX beat indicator, shared with main BPM clock"
+        }
+        fxBpmBeat = fxBeatLamp
         delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(46), dp(40)))
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(4) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
+        delayTop.addView(fxBeatLamp, LinearLayout.LayoutParams(dp(22), dp(40)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.25f))
         val clockControlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

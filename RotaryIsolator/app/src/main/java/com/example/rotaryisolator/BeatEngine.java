@@ -58,18 +58,28 @@ public final class BeatEngine {
     public synchronized long getPhaseMs() { return phaseMs; }
     public synchronized double getPeriodMs() { return periodMs; }
 
-    /** Re-align phase to the strongest recent detected attack without restarting capture. */
+    /** Re-align phase to the strongest recent onset peak without restarting capture or changing tempo. */
     public synchronized void sync(long nowMs) {
-        if (periodMs <= 0.0 || ringCount == 0) return;
-        int searchFrames = Math.max(1, Math.min(ringCount - 1,
-                (int)Math.ceil((periodMs * 2.0) / HOP_MS)));
-        int strongestAge = 0;
+        if (periodMs <= 0.0 || ringCount < 3) return;
+        // Limit the search to just over one beat to avoid latching onto an
+        // unrelated fill from the previous bar.
+        int searchFrames = Math.max(2, Math.min(ringCount - 2,
+                (int)Math.ceil((periodMs * 1.15) / HOP_MS)));
+        int strongestAge = -1;
         float strongest = Float.NEGATIVE_INFINITY;
-        for (int age = 0; age < searchFrames; age++) {
+        for (int age = 1; age < searchFrames; age++) {
             float value = atFromNewest(age);
-            if (value > strongest) {
+            if (value >= atFromNewest(age - 1) && value >= atFromNewest(age + 1)
+                    && value > strongest) {
                 strongest = value;
                 strongestAge = age;
+            }
+        }
+        if (strongestAge < 0) {
+            strongestAge = 0;
+            for (int age = 1; age < searchFrames; age++) {
+                float value = atFromNewest(age);
+                if (value > strongest) { strongest = value; strongestAge = age; }
             }
         }
         phaseMs = nowMs - Math.round(strongestAge * HOP_MS);
@@ -92,7 +102,12 @@ public final class BeatEngine {
 
     /** Fine phase nudge; positive moves the clock later, negative earlier. */
     public synchronized void nudgePhase(float milliseconds) {
-        if (phaseMs > 0L) phaseMs += Math.round(milliseconds);
+        // Phase arrows stay active in AUTO and LOCK; tempo estimation/freeze
+        // is untouched and only the shared clock anchor is moved.
+        if (phaseMs > 0L && periodMs > 0.0) {
+            phaseMs += Math.round(milliseconds);
+            locked = true;
+        }
     }
 
     public synchronized void resetPhase() {
