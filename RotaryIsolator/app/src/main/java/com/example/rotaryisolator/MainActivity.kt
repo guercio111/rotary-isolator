@@ -301,6 +301,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(bpmReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         else registerReceiver(bpmReceiver, filter)
         bpmReceiverRegistered = true
+        startService(Intent(this, CaptureService::class.java).setAction(CaptureService.STATE))
     }
 
     override fun onStop() {
