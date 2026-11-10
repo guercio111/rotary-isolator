@@ -1808,6 +1808,10 @@ class MainActivity : Activity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startAudioCaptureTest()
             } else {
+                bpmAnalyzerOn = false
+                bpmButton?.text = "BPM START"
+                bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
+                bpmReadout?.text = "— BPM"
                 AlertDialog.Builder(this).setTitle("PERMESSO NEGATO")
                     .setMessage("Senza il permesso microfono Android non consente di avviare il test di cattura audio.")
                     .setPositiveButton("OK", null).show()
