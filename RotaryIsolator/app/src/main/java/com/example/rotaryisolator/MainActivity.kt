@@ -212,7 +212,7 @@ class MainActivity : Activity() {
         autoBpmEnabled = prefs.getBoolean("auto_bpm_enabled", false)
         delayBpm = (prefs.all["reverb_delay_bpm"] as? Number)?.toFloat()?.coerceIn(60f,180f) ?: 120f
         delayTapBpm = prefs.getFloat("reverb_delay_tap_bpm", (delayBpm / (1f + delayBpmCorrection / 100f)).coerceIn(60f,180f)).coerceIn(60f,180f)
-        delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+        delayBpm = (delayTapBpm * (1f + delayBpmCorrection / 100f)).coerceIn(60f,180f)
         selectedBeatFx = prefs.getInt("beat_fx_selected", delayMode).coerceIn(0,2)
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
         reverbFadeMs = (prefs.getInt("reverb_fade_ms", 1400) + if (fadePlusThreeSecondsApplied) 0 else 3000).coerceIn(300, 4000)
@@ -1148,7 +1148,7 @@ class MainActivity : Activity() {
             bpmStereoBuffer[out++] = sample
             bpmStereoBuffer[out++] = sample
         }
-        validatedBeatEngine.setManualOffset(delayBpmCorrection)
+        validatedBeatEngine.setPitchPercent(delayBpmCorrection)
         validatedBeatEngine.process(bpmStereoBuffer, required, nowMs)
         val detected = validatedBeatEngine.getDetectedBpm()
         val confidence = validatedBeatEngine.getConfidence()
@@ -1288,7 +1288,7 @@ class MainActivity : Activity() {
             delayTapBpm = if (autoBpmHasEstimate)
                 delayTapBpm * 0.78f + detected * 0.22f else detected
             autoBpmHasEstimate = true
-            delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f, 180f)
+            delayBpm = (delayTapBpm * (1f + delayBpmCorrection / 100f)).coerceIn(60f, 180f)
 
             // Anchor the phase to the strongest onset in the most recent beat window.
             var strongestIndex = values.lastIndex
@@ -1321,7 +1321,7 @@ class MainActivity : Activity() {
                     (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2L
                 else sorted[sorted.size / 2]
                 delayTapBpm = (60000.0 / median.toDouble()).toFloat().coerceIn(60f,180f)
-                delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                delayBpm = (delayTapBpm * (1f + delayBpmCorrection / 100f)).coerceIn(60f,180f)
                 prefs.edit().putFloat("reverb_delay_tap_bpm", delayTapBpm).putFloat("reverb_delay_bpm", delayBpm).apply()
             } else delayTapIntervals.clear()
         } else delayTapIntervals.clear()
@@ -1628,7 +1628,7 @@ class MainActivity : Activity() {
             paintClockButton(this, false)
             setOnClickListener {
                 delayBpmCorrection = 0f
-                validatedBeatEngine.setManualOffset(0f)
+                validatedBeatEngine.setPitchPercent(0f)
                 delayClockLocked = false
                 validatedBeatEngine.setClockLocked(false)
                 validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime())
@@ -1686,8 +1686,8 @@ class MainActivity : Activity() {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
                         delayBpmCorrection = (progress - 100) * 0.1f
-                        validatedBeatEngine.setManualOffset(delayBpmCorrection)
-                        delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
+                        validatedBeatEngine.setPitchPercent(delayBpmCorrection)
+                        delayBpm = (delayTapBpm * (1f + delayBpmCorrection / 100f)).coerceIn(60f,180f)
                         bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                         scheduleUpdate()
                     }

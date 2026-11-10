@@ -58,7 +58,7 @@ public final class BeatEngine {
     public synchronized float getClockBpm() {
         if (clockFrozen && lockedBpm > 0f) return lockedBpm;
         if (detectedBpm <= 0f) return 0f;
-        return Math.max(50f, Math.min(250f, detectedBpm + manualOffset));
+        return Math.max(50f, Math.min(250f, detectedBpm * (1f + pitchPercent / 100f)));
     }
     public synchronized boolean isLocked() { return clockFrozen; }
     public synchronized long getPhaseMs() { return phaseMs; }
@@ -95,8 +95,8 @@ public final class BeatEngine {
     /** Freeze/unfreeze the tempo clock. Detection continues in the background. */
     public synchronized void setClockLocked(boolean value) {
         if (value && !clockFrozen && periodMs > 0.0) {
-            lockedBpm = Math.max(50f, Math.min(250f, detectedBpm + manualOffset));
-            lockedPeriodMs = 60000.0 / lockedBpm;
+            lockedBpm = Math.max(50f, Math.min(250f, detectedBpm));
+            lockedPeriodMs = 60000.0 / (lockedBpm * (1.0 + pitchPercent / 100.0));
             periodMs = lockedPeriodMs;
         } else if (!value) {
             lockedBpm = 0f;
