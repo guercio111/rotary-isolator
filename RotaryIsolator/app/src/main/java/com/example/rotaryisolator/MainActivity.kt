@@ -211,7 +211,7 @@ class MainActivity : Activity() {
         delayBpmCorrection = prefs.getFloat("reverb_delay_bpm_correction", 0f).coerceIn(-10f,10f)
         autoBpmEnabled = prefs.getBoolean("auto_bpm_enabled", false)
         delayBpm = (prefs.all["reverb_delay_bpm"] as? Number)?.toFloat()?.coerceIn(60f,180f) ?: 120f
-        delayTapBpm = prefs.getFloat("reverb_delay_tap_bpm", (delayBpm - delayBpmCorrection).coerceIn(60f,180f)).coerceIn(60f,180f)
+        delayTapBpm = prefs.getFloat("reverb_delay_tap_bpm", (delayBpm / (1f + delayBpmCorrection / 100f)).coerceIn(60f,180f)).coerceIn(60f,180f)
         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
         selectedBeatFx = prefs.getInt("beat_fx_selected", delayMode).coerceIn(0,2)
         val fadePlusThreeSecondsApplied = prefs.getBoolean("reverb_fade_plus3sec_v1", false)
@@ -1577,9 +1577,9 @@ class MainActivity : Activity() {
         fun phaseNudge(direction: Float) {
             val period = validatedBeatEngine.getPeriodMs()
             if (period <= 0.0) return
-            // A visible 1/8-beat phase step. Apply it to the shared clock AND
+            // A fine 1/64-beat jog: right advances and left retards. Apply it to the shared clock AND
             // the delay tap, otherwise the lamps move but the audible FX do not.
-            val stepMs = (period * direction / 8.0).toFloat()
+            val stepMs = (-period * direction / 64.0).toFloat()
             validatedBeatEngine.nudgePhase(stepMs)
             delaySyncOffsetMs = (delaySyncOffsetMs + stepMs).coerceIn(-250f, 250f)
             autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
@@ -1673,7 +1673,7 @@ class MainActivity : Activity() {
             })
         }
         delayControls.addView(clockControlRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
-        val bpmFineCaption = label("BPM TRIM  −10 / +10", 8f, colorMaster).apply {
+        val bpmFineCaption = label("PITCH  −10%  |  0  |  +10%", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
         delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.55f).apply { topMargin = dp(2) })

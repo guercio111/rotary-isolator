@@ -21,7 +21,7 @@ public final class BeatEngine {
     private float detectedBpm, confidence;
     private long lastAnalysisMs, phaseMs;
     private double periodMs;
-    private float manualOffset;
+    private float pitchPercent;
     private boolean locked;
     private float candidateBpm;
     private int candidateStreak;
@@ -43,10 +43,16 @@ public final class BeatEngine {
         for (int i = 0; i < previousMagnitude.length; i++) previousMagnitude[i] = 0f;
     }
 
-    public synchronized void setManualOffset(float bpm) {
-        manualOffset = Math.max(-10f, Math.min(10f, bpm));
+    /** Symmetric turntable pitch control: -10% to +10%, zero at center. */
+    public synchronized void setPitchPercent(float percent) {
+        pitchPercent = Math.max(-10f, Math.min(10f, percent));
+        if (clockFrozen && lockedBpm > 0f) {
+            lockedPeriodMs = 60000.0 / (lockedBpm * (1.0 + pitchPercent / 100.0));
+            periodMs = lockedPeriodMs;
+        } else if (detectedBpm > 0f) {
+            periodMs = 60000.0 / (detectedBpm * (1.0 + pitchPercent / 100.0));
+        }
     }
-    public synchronized float getManualOffset() { return manualOffset; }
     public synchronized float getDetectedBpm() { return detectedBpm; }
     public synchronized float getConfidence() { return confidence; }
     public synchronized float getClockBpm() {
