@@ -64,6 +64,7 @@ jobs:
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java
 
       - name: Configure internal audio capture and preserve popup through rotation
         run: |
