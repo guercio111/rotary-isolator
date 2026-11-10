@@ -2,6 +2,12 @@ package com.example.rotaryisolator
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.projection.MediaProjectionManager
+import java.util.Locale
 import android.content.pm.ActivityInfo
 import android.graphics.Canvas
 import android.graphics.Color
@@ -28,6 +34,28 @@ class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
     private var dpEffect: DynamicsProcessing? = null
     private var audioReady = false
+    private val bpmProjectionManager by lazy { getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager }
+    private var bpmCaptureActive = false
+    private var bpmButton: Button? = null
+    private var bpmReadout: TextView? = null
+    private var bpmBeat: TextView? = null
+    private var bpmReceiverRegistered = false
+    private val bpmReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                CaptureService.BPM -> {
+                    val detected = intent.getFloatExtra("detected", 0f)
+                    val confidence = (intent.getFloatExtra("confidence", 0f) * 100f).roundToInt().coerceIn(0,100)
+                    bpmReadout?.text = if (detected > 0f) String.format(Locale.US, "%.1f BPM  %d%%", detected, confidence) else "RICERCA BPM…"
+                }
+                CaptureService.BEAT -> {
+                    bpmBeat?.setTextColor(Color.rgb(45,235,105))
+                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                }
+                CaptureService.STATUS -> statusMessage(intent.getStringExtra("message") ?: "")
+            }
+        }
+    }
     private var appEnabled = true
     private var defaultSettingsOnStart = true
     private var compact = false
@@ -205,6 +233,65 @@ class MainActivity : Activity() {
         prefs.edit().putBoolean("session_in_background", false).apply()
         buildUi()
         connectAudio()
+    }
+
+    private fun statusMessage(message: String) {
+        if (message.contains("attiva", ignoreCase = true)) {
+            bpmCaptureActive = true
+            bpmButton?.text = "BPM STOP"
+            bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(155,45,48))
+        } else if (message.contains("arrestata", ignoreCase = true) || message.contains("fallito", ignoreCase = true)) {
+            bpmCaptureActive = false
+            bpmButton?.text = "BPM START"
+            bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+        }
+        if (::status.isInitialized) status.text = message
+    }
+
+    private fun requestBpmCapture() {
+        try { startActivityForResult(bpmProjectionManager.createScreenCaptureIntent(), 7001) }
+        catch (t: Throwable) { statusMessage("Impossibile avviare la cattura BPM") }
+    }
+
+    private fun stopBpmCapture() {
+        startService(Intent(this, CaptureService::class.java).setAction(CaptureService.STOP))
+        bpmCaptureActive = false
+        bpmButton?.text = "BPM START"
+        bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+        bpmReadout?.text = "— BPM"
+    }
+
+    @Deprecated("Deprecated in Android, retained for MediaProjection consent compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 7001) return
+        if (resultCode != Activity.RESULT_OK || data == null) {
+            statusMessage("Cattura BPM non autorizzata")
+            return
+        }
+        val service = Intent(this, CaptureService::class.java)
+            .setAction(CaptureService.START)
+            .putExtra(CaptureService.EXTRA_CODE, resultCode)
+            .putExtra(CaptureService.EXTRA_DATA, data)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(service) else startService(service)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter().apply {
+            addAction(CaptureService.BPM); addAction(CaptureService.BEAT); addAction(CaptureService.STATUS)
+        }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(bpmReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        else registerReceiver(bpmReceiver, filter)
+        bpmReceiverRegistered = true
+    }
+
+    override fun onStop() {
+        if (bpmReceiverRegistered) {
+            try { unregisterReceiver(bpmReceiver) } catch (_: Throwable) {}
+            bpmReceiverRegistered = false
+        }
+        super.onStop()
     }
 
     override fun onPause() {
@@ -393,6 +480,20 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4),dp(if(phonePortrait)3 else 8),dp(if(phonePortrait)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(phonePortrait)72 else 82),dp(if(phonePortrait)30 else 36)).apply{rightMargin=dp(5)})
+        val bpmPanel = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(dp(2),0,dp(2),0) }
+        bpmButton = Button(this).apply {
+            text = "BPM START"; textSize = if(phonePortrait) 8f else 10f; isAllCaps = false
+            setTextColor(Color.WHITE)
+            backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+            setPadding(dp(5),0,dp(5),0)
+            setOnClickListener { if (bpmCaptureActive) stopBpmCapture() else requestBpmCapture() }
+        }
+        bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(phonePortrait)76 else 94),dp(if(phonePortrait)30 else 36)))
+        bpmReadout = label("— BPM", if(phonePortrait)8f else 10f, Color.WHITE)
+        bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(dp(if(phonePortrait)88 else 112),-1))
+        bpmBeat = label("●", if(phonePortrait)15f else 19f, Color.rgb(75,85,95))
+        bpmPanel.addView(bpmBeat, LinearLayout.LayoutParams(dp(24),-1))
+        titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0,dp(if(phonePortrait)34 else 40),1f))
         titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(phonePortrait)36 else 42)).apply{leftMargin=dp(5)})
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
@@ -976,7 +1077,10 @@ class MainActivity : Activity() {
     override fun onDestroy(){
         // Clear the background marker only for an intentional Activity finish.
         // Do not clear it when Android destroys a background process or rotates the device.
-        if (isFinishing) prefs.edit().putBoolean("session_in_background", false).apply()
+        if (isFinishing) {
+            prefs.edit().putBoolean("session_in_background", false).apply()
+            try { stopService(Intent(this, CaptureService::class.java)) } catch (_: Throwable) {}
+        }
         try{dspHandler.removeCallbacksAndMessages(null);dspThread.quitSafely();dpEffect?.enabled=false;dpEffect?.release()}catch(_:Throwable){}
         super.onDestroy()
     }
