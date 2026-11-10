@@ -56,7 +56,7 @@ public final class BeatEngine {
     public synchronized float getDetectedBpm() { return detectedBpm; }
     public synchronized float getConfidence() { return confidence; }
     public synchronized float getClockBpm() {
-        if (clockFrozen && lockedBpm > 0f) return lockedBpm;
+        if (clockFrozen && lockedBpm > 0f) return lockedBpm * (1f + pitchPercent / 100f);
         if (detectedBpm <= 0f) return 0f;
         return Math.max(50f, Math.min(250f, detectedBpm * (1f + pitchPercent / 100f)));
     }
