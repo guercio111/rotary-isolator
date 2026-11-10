@@ -32,6 +32,55 @@ internal class SchroederReverb(private val sampleRate: Int) {
         }
     }
 
+    /**
+     * Butterworth biquad used twice in series for a Linkwitz-Riley 4th-order split.
+     * Matched low/high branches have a smooth -6 dB crossover and sum coherently.
+     */
+    private class Biquad(sampleRate: Int, cutoffHz: Float, highPass: Boolean) {
+        private val b0: Float
+        private val b1: Float
+        private val b2: Float
+        private val a1: Float
+        private val a2: Float
+        private var z1 = 0f
+        private var z2 = 0f
+
+        init {
+            val omega = 2.0 * PI * cutoffHz.coerceIn(20f, sampleRate * 0.45f) / sampleRate
+            val cosine = kotlin.math.cos(omega).toFloat()
+            val sine = kotlin.math.sin(omega).toFloat()
+            val alpha = sine / (2f * 0.70710678f)
+            val invA0 = 1f / (1f + alpha)
+            if (highPass) {
+                b0 = ((1f + cosine) * 0.5f) * invA0
+                b1 = (-(1f + cosine)) * invA0
+                b2 = b0
+            } else {
+                b0 = ((1f - cosine) * 0.5f) * invA0
+                b1 = (1f - cosine) * invA0
+                b2 = b0
+            }
+            a1 = (-2f * cosine) * invA0
+            a2 = (1f - alpha) * invA0
+        }
+
+        fun process(input: Float): Float {
+            val output = b0 * input + z1
+            z1 = b1 * input - a1 * output + z2
+            z2 = b2 * input - a2 * output
+            return output
+        }
+
+        fun clear() { z1 = 0f; z2 = 0f }
+    }
+
+    private class Lr4(sampleRate: Int, cutoffHz: Float, highPass: Boolean) {
+        private val first = Biquad(sampleRate, cutoffHz, highPass)
+        private val second = Biquad(sampleRate, cutoffHz, highPass)
+        fun process(input: Float): Float = second.process(first.process(input))
+        fun clear() { first.clear(); second.clear() }
+    }
+
     private class DelayLine(delay: Int) {
         private val data = FloatArray(delay.coerceAtLeast(1))
         private var index = 0
@@ -121,8 +170,17 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
-    private var fxLowState = 0f
-    private var fxMidState = 0f
+    // Phase-coherent three-band crossover: LOW <250 Hz, MID 250-2500 Hz, HIGH >2500 Hz.
+    private val fxLowPass250 = Lr4(sampleRate, 250f, false)
+    private val fxHighPass250 = Lr4(sampleRate, 250f, true)
+    private val fxLowBranchPass2500 = Lr4(sampleRate, 2500f, false)
+    private val fxLowBranchHigh2500 = Lr4(sampleRate, 2500f, true)
+    private val fxMidPass2500 = Lr4(sampleRate, 2500f, false)
+    private val fxHighPass2500 = Lr4(sampleRate, 2500f, true)
+    private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
+    private var smoothedFxLow = 1f
+    private var smoothedFxMid = 1f
+    private var smoothedFxHigh = 1f
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -144,8 +202,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTransitionPosition = 0
         activeDelayDivision = -1
         delayToneState = 0f
-        fxLowState = 0f
-        fxMidState = 0f
+        fxLowPass250.clear()
+        fxHighPass250.clear()
+        fxLowBranchPass2500.clear()
+        fxLowBranchHigh2500.clear()
+        fxMidPass2500.clear()
+        fxHighPass2500.clear()
+        smoothedFxLow = 1f
+        smoothedFxMid = 1f
+        smoothedFxHigh = 1f
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -185,10 +250,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayFadeMs: Int = 1400,
         delayDivision: Int = 3,
         delayMode: Int = 2,
-        delayTimePercent: Int = 100,
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
-        fxFrequency: Int = 1,
+        fxLowEnabled: Boolean = true,
+        fxMidEnabled: Boolean = true,
+        fxHighEnabled: Boolean = true,
         reverbFeedbackPercent: Int = 50,
         reverbDecayPercent: Int = 50,
         reverbColorPercent: Int = 50,
@@ -202,13 +268,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // SHORT = compact, lightly repeating; LONG = longer, more open repeats;
         // DUB = progressively attenuated, darker echo repeats.
         val mode = delayMode.coerceIn(0, 2)
-        val modeTime = 1f // The selected beat division is the exact musical delay interval.
         val modeFeedbackBase = when (mode) { 0 -> 0.20f; 1 -> 0.36f; else -> 0.58f }
         val modeFeedback = (modeFeedbackBase * (0.5f + delayFeedbackPercent.coerceIn(0,90) / 100f)).coerceIn(0.05f,0.82f)
         val toneControlHz = 700f + delayTonePercent.coerceIn(0,100) * 130f
         val delayToneHz = when (mode) { 0 -> toneControlHz.coerceAtLeast(5000f); 1 -> toneControlHz; else -> toneControlHz.coerceAtMost(9000f) }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction * modeTime * (delayTimePercent.coerceIn(50,200) / 100f) + sampleRate * (delaySyncOffsetMs.coerceIn(0f,1000f) / 1000f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction + sampleRate * (delaySyncOffsetMs.coerceIn(0f,1000f) / 1000f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val requestedDivision = delayDivision.coerceIn(0, 6)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
@@ -236,8 +301,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val lp = (lpHz.coerceIn(1000, 20000) * (0.55f + color * 0.90f)).coerceIn(1000f, 20000f)
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val fxLowAlpha = (1f - exp((-2.0 * PI * 250f / sampleRate).toFloat())).coerceIn(0.001f,1f)
-        val fxMidAlpha = (1f - exp((-2.0 * PI * 2500f / sampleRate).toFloat())).coerceIn(0.001f,1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
         // Dedicated Reverb FEEDBACK control: 50% preserves approximately the
@@ -308,13 +371,21 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
-            fxLowState += fxLowAlpha * (raw - fxLowState)
-            fxMidState += fxMidAlpha * (raw - fxMidState)
-            val bandLimited = when (fxFrequency.coerceIn(0,2)) {
-                0 -> fxLowState
-                1 -> fxMidState - fxLowState
-                else -> raw - fxMidState
-            }
+            // Split at 250 Hz, then split the upper branch at 2.5 kHz.
+            // LOW also passes through the upper crossover all-pass sum, so all
+            // three selected bands reconstruct the full FX return without a hole.
+            val lowSplit = fxLowPass250.process(raw)
+            val upperSplit = fxHighPass250.process(raw)
+            val lowBand = fxLowBranchPass2500.process(lowSplit) +
+                fxLowBranchHigh2500.process(lowSplit)
+            val midBand = fxMidPass2500.process(upperSplit)
+            val highBand = fxHighPass2500.process(upperSplit)
+            smoothedFxLow += ((if (fxLowEnabled) 1f else 0f) - smoothedFxLow) * fxBandSmoothing
+            smoothedFxMid += ((if (fxMidEnabled) 1f else 0f) - smoothedFxMid) * fxBandSmoothing
+            smoothedFxHigh += ((if (fxHighEnabled) 1f else 0f) - smoothedFxHigh) * fxBandSmoothing
+            val bandLimited = lowBand * smoothedFxLow +
+                midBand * smoothedFxMid +
+                highBand * smoothedFxHigh
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
