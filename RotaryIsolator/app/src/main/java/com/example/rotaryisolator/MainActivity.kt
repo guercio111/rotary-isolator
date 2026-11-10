@@ -1466,6 +1466,7 @@ class MainActivity : Activity() {
                 save(); scheduleUpdate()
             }
         }
+        var bpmFineSeek: SeekBar? = null
         fun paintClockButton(button: TextView, active: Boolean) {
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
@@ -1475,7 +1476,7 @@ class MainActivity : Activity() {
             button.setTextColor(if (active) Color.BLACK else Color.WHITE)
         }
         val autoButton = TextView(this).apply {
-            text = "AUTO"
+            text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
             textSize = 8f
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
@@ -1593,7 +1594,6 @@ class MainActivity : Activity() {
                 save(); scheduleUpdate()
             }
         }
-        var bpmFineSeek: SeekBar? = null
         val delayPower = TextView(this).apply {
             styleToggle(this, delayOn)
             setOnClickListener {
