@@ -1130,7 +1130,6 @@ class MainActivity : Activity() {
             if (bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex) {
                 handler.post {
                     bpmBeat?.setTextColor(Color.rgb(45,235,105))
-                    bpmBeat?.removeCallbacksAndMessages(null)
                     bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
                 }
             }
