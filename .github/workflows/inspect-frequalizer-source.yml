@@ -1,0 +1,20 @@
+name: Inspect FREQUALIZER source package
+on:
+  push:
+    branches:
+      - frequalizer-bpm-port
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source package
+        run: unzip RotaryIsolator-build-package.zip -d extracted
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frequalizer-source-inspection
+          path: extracted/RotaryIsolator
+          if-no-files-found: error
