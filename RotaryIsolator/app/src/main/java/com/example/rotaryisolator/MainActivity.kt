@@ -32,7 +32,7 @@ class MainActivity : Activity() {
     // Validated RMX-1000 tempo engine, fed from the same capture stream as the FX return.
     private val validatedBeatEngine = BeatEngine()
     @Volatile private var bpmAnalyzerOn = false
-    private var bpmButton: Button? = null
+    private var bpmButton: TextView? = null
     private var bpmReadout: TextView? = null
     private var bpmBeat: TextView? = null
     private var bpmStereoBuffer = ShortArray(4096)
@@ -534,12 +534,17 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(2), 0, dp(2), 0)
         }
-        bpmButton = Button(this).apply {
+        bpmButton = TextView(this).apply {
             text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
             textSize = if (compactPhone) 8f else 10f
-            isAllCaps = false
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
             setTextColor(Color.WHITE)
-            backgroundTintList = ColorStateList.valueOf(if (bpmAnalyzerOn) Color.rgb(155,45,48) else Color.rgb(38,105,70))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(if (bpmAnalyzerOn) Color.rgb(155,45,48) else Color.rgb(38,105,70))
+                setStroke(dp(1), if (bpmAnalyzerOn) Color.rgb(245,115,120) else Color.rgb(125,245,155))
+            }
             setPadding(dp(4), 0, dp(4), 0)
             setOnClickListener { if (bpmAnalyzerOn) stopBpmAnalyzer() else startBpmAnalyzer() }
         }
@@ -1093,14 +1098,14 @@ class MainActivity : Activity() {
         validatedBeatEngine.reset()
         bpmReadout?.text = "RICERCA BPM…"
         bpmButton?.text = "BPM STOP"
-        bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(155,45,48))
+        bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
         updateEffectsCapture(true)
     }
 
     private fun stopBpmAnalyzer() {
         bpmAnalyzerOn = false
         bpmButton?.text = "BPM START"
-        bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+        bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
         bpmReadout?.text = "— BPM"
         bpmBeat?.setTextColor(Color.rgb(75,85,95))
         if (!captureNeeded()) stopAudioCaptureTest()
@@ -1819,7 +1824,7 @@ class MainActivity : Activity() {
             if (bpmAnalyzerOn) {
                 bpmAnalyzerOn = false
                 bpmButton?.text = "BPM START"
-                bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+                bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
                 bpmReadout?.text = "— BPM"
             }
             Toast.makeText(this, "Cattura non autorizzata • attiva BPM START oppure ON su Reverb/Delay per riprovare", Toast.LENGTH_LONG).show()
@@ -1867,7 +1872,7 @@ class MainActivity : Activity() {
                                 delayOn = false
                                 bpmAnalyzerOn = false
                                 bpmButton?.text = "BPM START"
-                                bpmButton?.backgroundTintList = ColorStateList.valueOf(Color.rgb(38,105,70))
+                                bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
                                 bpmReadout?.text = "— BPM"
                                 releaseCaptureIoOnly() // stop + flush + release AudioTrack immediately
                                 save()                  // preserve all knob values, persist safe OFF state
