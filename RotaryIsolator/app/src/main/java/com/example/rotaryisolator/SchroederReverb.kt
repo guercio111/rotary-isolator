@@ -33,52 +33,20 @@ internal class SchroederReverb(private val sampleRate: Int) {
     }
 
     /**
-     * Butterworth biquad used twice in series for a Linkwitz-Riley 4th-order split.
-     * Matched low/high branches have a smooth -6 dB crossover and sum coherently.
+     * First-order low-pass for complementary crossover bands.
+     * Its matching high branch is input - low-pass output, so the pair
+     * reconstructs the original signal exactly without resonant peaks.
      */
-    private class Biquad(sampleRate: Int, cutoffHz: Float, highPass: Boolean, q: Float = 0.70710678f) {
-        private val b0: Float
-        private val b1: Float
-        private val b2: Float
-        private val a1: Float
-        private val a2: Float
-        private var z1 = 0f
-        private var z2 = 0f
-
-        init {
-            val omega = 2.0 * PI * cutoffHz.coerceIn(20f, sampleRate * 0.45f) / sampleRate
-            val cosine = kotlin.math.cos(omega).toFloat()
-            val sine = kotlin.math.sin(omega).toFloat()
-            val alpha = sine / (2f * q.coerceIn(0.45f, 1.2f))
-            val invA0 = 1f / (1f + alpha)
-            if (highPass) {
-                b0 = ((1f + cosine) * 0.5f) * invA0
-                b1 = (-(1f + cosine)) * invA0
-                b2 = b0
-            } else {
-                b0 = ((1f - cosine) * 0.5f) * invA0
-                b1 = (1f - cosine) * invA0
-                b2 = b0
-            }
-            a1 = (-2f * cosine) * invA0
-            a2 = (1f - alpha) * invA0
-        }
+    private class OnePoleLowPass(sampleRate: Int, cutoffHz: Float) {
+        private val alpha = (1.0 - exp(-2.0 * PI * cutoffHz / sampleRate)).toFloat()
+        private var state = 0f
 
         fun process(input: Float): Float {
-            val output = b0 * input + z1
-            z1 = b1 * input - a1 * output + z2
-            z2 = b2 * input - a2 * output
-            return output
+            state += alpha * (input - state)
+            return state
         }
 
-        fun clear() { z1 = 0f; z2 = 0f }
-    }
-
-    private class Lr4(sampleRate: Int, cutoffHz: Float, highPass: Boolean) {
-        private val first = Biquad(sampleRate, cutoffHz, highPass)
-        private val second = Biquad(sampleRate, cutoffHz, highPass)
-        fun process(input: Float): Float = second.process(first.process(input))
-        fun clear() { first.clear(); second.clear() }
+        fun clear() { state = 0f }
     }
 
     private class DelayLine(delay: Int) {
@@ -170,13 +138,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
-    // Soft, damped three-band FX split. A single second-order stage per edge
-    // avoids the long ringing of the previous cascaded LR4 (4th-order) filters.
-    // Q=0.55 is deliberately overdamped: no resonant bump at the crossover.
-    private val fxLowPass250 = Biquad(sampleRate, 250f, false, 0.55f)
-    private val fxHighPass250 = Biquad(sampleRate, 250f, true, 0.55f)
-    private val fxMidPass2500 = Biquad(sampleRate, 2500f, false, 0.55f)
-    private val fxHighPass2500 = Biquad(sampleRate, 2500f, true, 0.55f)
+    // Resonance-free complementary three-band split.
+    // LOW = LP250; MID = (input - LP250) filtered by LP2500;
+    // HIGH = upper - MID. All three bands reconstruct the input exactly.
+    private val fxLowPass250 = OnePoleLowPass(sampleRate, 250f)
+    private val fxMidPass2500 = OnePoleLowPass(sampleRate, 2500f)
     private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
     private var smoothedFxLow = 1f
     private var smoothedFxMid = 1f
@@ -203,9 +169,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         activeDelayDivision = -1
         delayToneState = 0f
         fxLowPass250.clear()
-        fxHighPass250.clear()
         fxMidPass2500.clear()
-        fxHighPass2500.clear()
         smoothedFxLow = 1f
         smoothedFxMid = 1f
         smoothedFxHigh = 1f
@@ -373,15 +337,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
-            // Split at 250 Hz, then split the upper branch at 2.5 kHz.
-                // Damped second-order split: gentler slopes reduce ringing and
-            // keep the LOW/MID FX returns from exaggerating narrow resonances.
+            // Exact complementary crossover: no resonant peaks or crossover gain bump.
             val lowBand = fxLowPass250.process(raw)
-            val upperBand = fxHighPass250.process(raw)
+            val upperBand = raw - lowBand
             val midBand = fxMidPass2500.process(upperBand)
-            // Split the upper branch a second time. Using raw here bypassed
-            // the 250 Hz high-pass and made the three bands non-complementary.
-            val highBand = fxHighPass2500.process(upperBand)
+            val highBand = upperBand - midBand
             smoothedFxLow += ((if (fxLowEnabled) 1f else 0f) - smoothedFxLow) * fxBandSmoothing
             smoothedFxMid += ((if (fxMidEnabled) 1f else 0f) - smoothedFxMid) * fxBandSmoothing
             smoothedFxHigh += ((if (fxHighEnabled) 1f else 0f) - smoothedFxHigh) * fxBandSmoothing
@@ -393,8 +353,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // When isolating bands, gently trim LOW and MID: this controls bass build-up
             // and dense midrange ringing without dulling the clean HIGH return.
             val bandLimited = if (!anyFxBandSelected || allFxBandsSelected) raw else
-                lowBand * smoothedFxLow * 0.72f +
-                midBand * smoothedFxMid * 0.82f +
+                lowBand * smoothedFxLow * 0.78f +
+                midBand * smoothedFxMid * 0.88f +
                 highBand * smoothedFxHigh
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
