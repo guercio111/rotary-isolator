@@ -1176,11 +1176,16 @@ class MainActivity : Activity() {
             }
             bpmLastBeatIndex = beatIndex
             autoBpmNextBeatMs = phase + ((beatIndex + 1).coerceAtLeast(0) * period).toLong()
-            if (autoBpmEnabled) {
+            // LOCK owns the tempo supplied to every beat effect. The analyser
+            // may keep observing the track, but it must never retune the locked
+            // delay clock or move its phase while effects/divisions are changed.
+            if (delayClockLocked || autoBpmEnabled) {
                 val clock = validatedBeatEngine.getClockBpm()
                 if (clock > 0f) {
                     delayBpm = clock.coerceIn(60f,180f)
-                    delayTapBpm = detected.coerceIn(60f,180f)
+                    if (autoBpmEnabled && !delayClockLocked) {
+                        delayTapBpm = detected.coerceIn(60f,180f)
+                    }
                 }
             }
             // The lower FX BPM readout is fed by this exact same detector.
@@ -1541,9 +1546,14 @@ class MainActivity : Activity() {
                 } else {
                     delayClockLocked = !delayClockLocked
                     validatedBeatEngine.setClockLocked(delayClockLocked)
+                    if (delayClockLocked) {
+                        // Preserve the phase already aligned by ear/jog and stop
+                        // AUTO's pending acquisition from re-syncing it.
+                        autoPhaseSynced = true
+                        delayBpm = validatedBeatEngine.getClockBpm().coerceIn(60f,180f)
+                    }
                     text = if (delayClockLocked) "LOCK ON" else "LOCK"
                     paintClockButton(this, delayClockLocked)
-                    if (delayClockLocked) delayBpm = validatedBeatEngine.getClockBpm().coerceIn(60f,180f)
                     save(); scheduleUpdate()
                 }
             }
@@ -1687,7 +1697,11 @@ class MainActivity : Activity() {
                     if (fromUser) {
                         delayBpmCorrection = (progress - 100) * 0.1f
                         validatedBeatEngine.setPitchPercent(delayBpmCorrection)
-                        delayBpm = (delayTapBpm * (1f + delayBpmCorrection / 100f)).coerceIn(60f,180f)
+                        delayBpm = if (delayClockLocked) {
+                            validatedBeatEngine.getClockBpm().coerceIn(60f,180f)
+                        } else {
+                            (delayTapBpm * (1f + delayBpmCorrection / 100f)).coerceIn(60f,180f)
+                        }
                         bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                         scheduleUpdate()
                     }
