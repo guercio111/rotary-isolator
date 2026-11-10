@@ -1107,6 +1107,15 @@ class MainActivity : Activity() {
         bpmLastBeatIndex = Long.MIN_VALUE
         bpmUiLastUpdate = 0L
         validatedBeatEngine.reset()
+        delayClockLocked = false
+        lockBpmButton?.let { button ->
+            button.text = "LOCK"
+            button.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), colorMaster)
+            }
+        }
         bpmReadout?.text = "RICERCA BPM…"
         bpmButton?.text = "BPM STOP"
         bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
