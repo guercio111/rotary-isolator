@@ -173,8 +173,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // Phase-coherent three-band crossover: LOW <250 Hz, MID 250-2500 Hz, HIGH >2500 Hz.
     private val fxLowPass250 = Lr4(sampleRate, 250f, false)
     private val fxHighPass250 = Lr4(sampleRate, 250f, true)
-    private val fxLowBranchPass2500 = Lr4(sampleRate, 2500f, false)
-    private val fxLowBranchHigh2500 = Lr4(sampleRate, 2500f, true)
     private val fxMidPass2500 = Lr4(sampleRate, 2500f, false)
     private val fxHighPass2500 = Lr4(sampleRate, 2500f, true)
     private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
@@ -204,8 +202,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayToneState = 0f
         fxLowPass250.clear()
         fxHighPass250.clear()
-        fxLowBranchPass2500.clear()
-        fxLowBranchHigh2500.clear()
         fxMidPass2500.clear()
         fxHighPass2500.clear()
         smoothedFxLow = 1f
@@ -273,7 +269,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val toneControlHz = 700f + delayTonePercent.coerceIn(0,100) * 130f
         val delayToneHz = when (mode) { 0 -> toneControlHz.coerceAtLeast(5000f); 1 -> toneControlHz; else -> toneControlHz.coerceAtMost(9000f) }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction + sampleRate * (delaySyncOffsetMs.coerceIn(0f,1000f) / 1000f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction).coerceIn(1f, (delayBuffer.size - 2).toFloat())
         val requestedDivision = delayDivision.coerceIn(0, 6)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
@@ -372,20 +368,21 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
             // Split at 250 Hz, then split the upper branch at 2.5 kHz.
-            // LOW also passes through the upper crossover all-pass sum, so all
-            // three selected bands reconstruct the full FX return without a hole.
-            val lowSplit = fxLowPass250.process(raw)
-            val upperSplit = fxHighPass250.process(raw)
-            val lowBand = fxLowBranchPass2500.process(lowSplit) +
-                fxLowBranchHigh2500.process(lowSplit)
-            val midBand = fxMidPass2500.process(upperSplit)
-            val highBand = fxHighPass2500.process(upperSplit)
+            // Complementary LR4 crossover: LOW <250 Hz, MID 250-2500 Hz,
+            // HIGH >2500 Hz. Butterworth sections use Q=0.7071, so no resonant
+            // peak is introduced at either crossover.
+            val lowBand = fxLowPass250.process(raw)
+            val upperBand = fxHighPass250.process(raw)
+            val midBand = fxMidPass2500.process(upperBand)
+            val highBand = fxHighPass2500.process(raw)
             smoothedFxLow += ((if (fxLowEnabled) 1f else 0f) - smoothedFxLow) * fxBandSmoothing
             smoothedFxMid += ((if (fxMidEnabled) 1f else 0f) - smoothedFxMid) * fxBandSmoothing
             smoothedFxHigh += ((if (fxHighEnabled) 1f else 0f) - smoothedFxHigh) * fxBandSmoothing
-            val bandLimited = lowBand * smoothedFxLow +
-                midBand * smoothedFxMid +
-                highBand * smoothedFxHigh
+            // The RMX/V10 default (all three switches OFF) is full-band FX,
+            // not an FX mute. Selected bands are summed; no selected band = raw.
+            val anyFxBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
+            val bandLimited = if (!anyFxBandSelected) raw else
+                lowBand * smoothedFxLow + midBand * smoothedFxMid + highBand * smoothedFxHigh
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f

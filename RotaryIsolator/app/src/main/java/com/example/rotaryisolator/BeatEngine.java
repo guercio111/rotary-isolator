@@ -25,11 +25,15 @@ public final class BeatEngine {
     private boolean locked;
     private float candidateBpm;
     private int candidateStreak;
+    private float lockedBpm;
+    private double lockedPeriodMs;
 
     public synchronized void reset() {
         ringWrite = ringCount = sampleWrite = samplesFilled = hopCounter = 0;
         detectedBpm = confidence = candidateBpm = 0f;
         candidateStreak = 0;
+        lockedBpm = 0f;
+        lockedPeriodMs = 0.0;
         lastAnalysisMs = phaseMs = 0L;
         periodMs = 0.0;
         locked = false;
@@ -44,6 +48,7 @@ public final class BeatEngine {
     public synchronized float getDetectedBpm() { return detectedBpm; }
     public synchronized float getConfidence() { return confidence; }
     public synchronized float getClockBpm() {
+        if (locked && lockedBpm > 0f) return lockedBpm;
         if (detectedBpm <= 0f) return 0f;
         return Math.max(50f, Math.min(250f, detectedBpm + manualOffset));
     }
@@ -51,10 +56,46 @@ public final class BeatEngine {
     public synchronized long getPhaseMs() { return phaseMs; }
     public synchronized double getPeriodMs() { return periodMs; }
 
+    /** Re-align phase to the strongest recent detected attack without restarting capture. */
     public synchronized void sync(long nowMs) {
-        if (periodMs <= 0.0) return;
-        phaseMs = nowMs;
-        locked = true;
+        if (periodMs <= 0.0 || ringCount == 0) return;
+        int searchFrames = Math.max(1, Math.min(ringCount - 1,
+                (int)Math.ceil((periodMs * 2.0) / HOP_MS)));
+        int strongestAge = 0;
+        float strongest = Float.NEGATIVE_INFINITY;
+        for (int age = 0; age < searchFrames; age++) {
+            float value = atFromNewest(age);
+            if (value > strongest) {
+                strongest = value;
+                strongestAge = age;
+            }
+        }
+        phaseMs = nowMs - Math.round(strongestAge * HOP_MS);
+    }
+
+    /** Freeze/unfreeze the tempo clock. Detection continues in the background. */
+    public synchronized void setClockLocked(boolean value) {
+        if (value && !locked && periodMs > 0.0) {
+            lockedBpm = Math.max(50f, Math.min(250f, detectedBpm + manualOffset));
+            lockedPeriodMs = 60000.0 / lockedBpm;
+            periodMs = lockedPeriodMs;
+        } else if (!value) {
+            lockedBpm = 0f;
+            lockedPeriodMs = 0.0;
+        }
+        locked = value;
+    }
+
+    /** Fine phase nudge; positive moves the clock later, negative earlier. */
+    public synchronized void nudgePhase(float milliseconds) {
+        if (phaseMs > 0L) phaseMs += Math.round(milliseconds);
+    }
+
+    public synchronized void resetPhase() {
+        phaseMs = 0L;
+        locked = false;
+        lockedBpm = 0f;
+        lockedPeriodMs = 0.0;
     }
 
     public synchronized void process(short[] pcm, int length, long nowMs) {

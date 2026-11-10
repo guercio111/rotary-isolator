@@ -73,6 +73,8 @@ class MainActivity : Activity() {
     private var autoBpmLastAnalysisMs = 0L
     private var bpmUiLabel: TextView? = null
     private var autoBpmButton: TextView? = null
+    private var lockBpmButton: TextView? = null
+    @Volatile private var delayClockLocked = false
     private var lastDelayTapMs = 0L
     private val delayTapIntervals = ArrayDeque<Long>()
     private var captureProjection: android.media.projection.MediaProjection? = null
@@ -1464,17 +1466,20 @@ class MainActivity : Activity() {
                 save(); scheduleUpdate()
             }
         }
-        val autoButton = TextView(this).apply {
-            text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
-            textSize = 8f
-            setTextColor(Color.WHITE)
-            setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            background = android.graphics.drawable.GradientDrawable().apply {
+        fun paintClockButton(button: TextView, active: Boolean) {
+            button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
-                setColor(if (autoBpmEnabled) colorMaster else Color.rgb(55,62,72))
+                setColor(if (active) colorMaster else Color.rgb(55,62,72))
                 setStroke(dp(1), colorMaster)
             }
+            button.setTextColor(if (active) Color.BLACK else Color.WHITE)
+        }
+        val autoButton = TextView(this).apply {
+            text = "AUTO"
+            textSize = 8f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            paintClockButton(this, autoBpmEnabled)
             setOnClickListener {
                 autoBpmEnabled = !autoBpmEnabled
                 if (autoBpmEnabled) {
@@ -1483,71 +1488,112 @@ class MainActivity : Activity() {
                     autoBpmLowpassState = 0f
                     autoBpmLastAnalysisMs = 0L
                     autoBpmNextBeatMs = 0L
-                    autoBpmHasEstimate = false
                 }
-                paintAutoBpmButton()
+                text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
+                paintClockButton(this, autoBpmEnabled)
                 save()
                 if (autoBpmEnabled) updateEffectsCapture(true)
             }
         }
         autoBpmButton = autoButton
+        val lockButton = TextView(this).apply {
+            text = "LOCK"
+            textSize = 8f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            paintClockButton(this, delayClockLocked)
+            setOnClickListener {
+                if (!delayClockLocked && validatedBeatEngine.getPeriodMs() <= 0.0) {
+                    bpmReadout?.text = "ATTENDI BPM"
+                } else {
+                    delayClockLocked = !delayClockLocked
+                    validatedBeatEngine.setClockLocked(delayClockLocked)
+                    text = if (delayClockLocked) "LOCK ON" else "LOCK"
+                    paintClockButton(this, delayClockLocked)
+                    if (delayClockLocked) delayBpm = validatedBeatEngine.getClockBpm().coerceIn(60f,180f)
+                    save(); scheduleUpdate()
+                }
+            }
+        }
+        lockBpmButton = lockButton
         val syncButton = TextView(this).apply {
             text = "SYNC"
             textSize = 8f
-            setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(6).toFloat()
-                setColor(Color.rgb(55,62,72))
-                setStroke(dp(1), colorMaster)
-            }
+            paintClockButton(this, false)
             setOnClickListener {
                 val now = android.os.SystemClock.elapsedRealtime()
-                val beatMs = 60000f / delayBpm.coerceIn(60f,180f)
-                val lastBeat = autoBpmNextBeatMs
-                delaySyncOffsetMs = if (autoBpmEnabled && lastBeat > 0L) {
-                    val elapsed = ((now - lastBeat).toFloat() % beatMs + beatMs) % beatMs
-                    (beatMs - elapsed) % beatMs
-                } else {
-                    // In manual mode, press SYNC exactly on the beat to establish phase.
-                    0f
-                }
+                validatedBeatEngine.sync(now)
+                autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() +
+                    validatedBeatEngine.getPeriodMs().toLong()
+                delaySyncOffsetMs = 0f
+                paintClockButton(this, true)
+                postDelayed({ paintClockButton(this, false) }, 500L)
                 scheduleUpdate()
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = dp(6).toFloat()
-                    setColor(colorMaster)
-                    setStroke(dp(1), colorMaster)
-                }
-                postDelayed({
-                    background = android.graphics.drawable.GradientDrawable().apply {
-                        cornerRadius = dp(6).toFloat()
-                        setColor(Color.rgb(55,62,72))
-                        setStroke(dp(1), colorMaster)
-                    }
-                }, 350L)
             }
         }
-        var bpmFineSeek: SeekBar? = null
-        fun bpmNudgeButton(symbol: String, amount: Float): TextView = TextView(this).apply {
-            text = symbol
-            textSize = 17f
-            setTextColor(Color.WHITE)
+        fun phaseNudge(direction: Float) {
+            val period = validatedBeatEngine.getPeriodMs()
+            if (period <= 0.0) return
+            validatedBeatEngine.nudgePhase((period * direction / 16.0).toFloat())
+            autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
+            scheduleUpdate()
+        }
+        val phaseBackButton = TextView(this).apply {
+            text = "◀"
+            textSize = 13f
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(6).toFloat()
-                setColor(Color.rgb(55,62,72))
-                setStroke(dp(1), colorMaster)
-            }
+            paintClockButton(this, false)
+            setOnClickListener { phaseNudge(-1f) }
+        }
+        val phaseForwardButton = TextView(this).apply {
+            text = "▶"
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            paintClockButton(this, false)
+            setOnClickListener { phaseNudge(1f) }
+        }
+        val skipBeatButton = TextView(this).apply {
+            text = "SKIP"
+            textSize = 8f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            paintClockButton(this, false)
             setOnClickListener {
-                delayBpmCorrection = (delayBpmCorrection + amount).coerceIn(-10f,10f)
-                delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
-                bpmFineSeek?.progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
-                bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
+                val period = validatedBeatEngine.getPeriodMs()
+                if (period > 0.0) {
+                    validatedBeatEngine.nudgePhase((period * 0.5).toFloat())
+                    autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
+                    scheduleUpdate()
+                    paintClockButton(this, true)
+                    postDelayed({ paintClockButton(this, false) }, 250L)
+                }
+            }
+        }
+        val resetButton = TextView(this).apply {
+            text = "RST"
+            textSize = 8f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            paintClockButton(this, false)
+            setOnClickListener {
+                delayBpmCorrection = 0f
+                validatedBeatEngine.setManualOffset(0f)
+                delayClockLocked = false
+                validatedBeatEngine.setClockLocked(false)
+                validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime())
+                delaySyncOffsetMs = 0f
+                bpmFineSeek?.progress = 100
+                delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
+                lockButton.text = "LOCK"
+                paintClockButton(lockButton, false)
                 save(); scheduleUpdate()
             }
         }
+        var bpmFineSeek: SeekBar? = null
         val delayPower = TextView(this).apply {
             styleToggle(this, delayOn)
             setOnClickListener {
@@ -1557,18 +1603,24 @@ class MainActivity : Activity() {
                 if (delayOn) updateEffectsCapture(true)
             }
         }
-        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(50), dp(42)))
-        delayTop.addView(bpmNudgeButton("−", -0.1f), LinearLayout.LayoutParams(dp(34), dp(42)))
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(50), dp(50)).apply { leftMargin = dp(4); rightMargin = dp(4) })
-        delayTop.addView(bpmNudgeButton("+", 0.1f), LinearLayout.LayoutParams(dp(34), dp(42)).apply { leftMargin = dp(3); rightMargin = dp(3) })
+        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(46), dp(40)))
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(4) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayTop.addView(autoButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
-        delayTop.addView(syncButton, LinearLayout.LayoutParams(dp(48), dp(38)).apply { leftMargin = dp(3) })
-        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.6f))
-        val bpmFineCaption = label("FINE BPM  ±10", 8f, colorMaster).apply {
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.25f))
+        val clockControlRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        listOf(autoButton, lockButton, syncButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
+            clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
+                if (index > 0) leftMargin = dp(3)
+            })
+        }
+        delayControls.addView(clockControlRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
+        val bpmFineCaption = label("BPM TRIM  −10 / +10", 8f, colorMaster).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
-        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.65f).apply { topMargin = dp(2) })
+        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.55f).apply { topMargin = dp(2) })
         val fineSeek = SeekBar(this).apply {
             max = 200
             progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
@@ -1578,6 +1630,7 @@ class MainActivity : Activity() {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
                         delayBpmCorrection = (progress - 100) * 0.1f
+                        validatedBeatEngine.setManualOffset(delayBpmCorrection)
                         delayBpm = (delayTapBpm + delayBpmCorrection).coerceIn(60f,180f)
                         bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                         scheduleUpdate()
