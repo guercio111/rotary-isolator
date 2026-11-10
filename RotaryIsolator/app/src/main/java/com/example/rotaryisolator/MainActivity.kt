@@ -2,6 +2,7 @@ package com.example.rotaryisolator
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -249,8 +250,24 @@ class MainActivity : Activity() {
     }
 
     private fun requestBpmCapture() {
-        try { startActivityForResult(bpmProjectionManager.createScreenCaptureIntent(), 7001) }
-        catch (t: Throwable) { statusMessage("Impossibile avviare la cattura BPM") }
+        try {
+            if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 7002)
+                return
+            }
+            startActivityForResult(bpmProjectionManager.createScreenCaptureIntent(), 7001)
+        } catch (t: Throwable) { statusMessage("Impossibile avviare la cattura BPM") }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 7002) {
+            if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestBpmCapture()
+            } else {
+                statusMessage("Permesso audio negato: impossibile analizzare il BPM")
+            }
+        }
     }
 
     private fun stopBpmCapture() {
