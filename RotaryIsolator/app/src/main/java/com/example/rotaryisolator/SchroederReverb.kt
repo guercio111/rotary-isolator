@@ -326,7 +326,33 @@ internal class SchroederReverb(private val sampleRate: Int) {
             (0.09f + (1f - size.coerceIn(0f, 1f)) * 0.16f + (0.5f - color) * 0.12f).coerceIn(0.015f, 0.32f)
 
         for (i in 0 until count) {
-            val x = input[i] / 32768f
+            val source = input[i] / 32768f
+
+            // V10-style FX FREQUENCY is a SEND selector: it determines which
+            // parts of the source enter the Beat FX. It must not EQ the wet
+            // return, and it is completely separate from BPM/clock analysis.
+            val lowBand = fxLowSplit250.processLow(source)
+            val upperBand = fxLowSplit250.processHigh(source)
+            val midBand = fxHighSplit2500.processLow(upperBand)
+            val highBand = fxHighSplit2500.processHigh(upperBand)
+
+            val anyFxBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
+            val allFxBandsSelected = fxLowEnabled && fxMidEnabled && fxHighEnabled
+            // With no band selected, or all three selected, send the full band.
+            // With one/two selected, send only those bands. Gain smoothing avoids
+            // clicks when a frequency button is switched during playback.
+            val fullBand = !anyFxBandSelected || allFxBandsSelected
+            val lowTarget = if (fullBand || fxLowEnabled) 1f else 0f
+            val midTarget = if (fullBand || fxMidEnabled) 1f else 0f
+            val highTarget = if (fullBand || fxHighEnabled) 1f else 0f
+            smoothedFxLow += (lowTarget - smoothedFxLow) * fxBandSmoothing
+            smoothedFxMid += (midTarget - smoothedFxMid) * fxBandSmoothing
+            smoothedFxHigh += (highTarget - smoothedFxHigh) * fxBandSmoothing
+            val fxSend = lowBand * smoothedFxLow +
+                midBand * smoothedFxMid +
+                highBand * smoothedFxHigh
+            val x = fxSend
+
             // Two gentle high-pass stages keep kick/sub energy out of the
             // reverb excitation while retaining a natural mid/high body.
             val hpOut1 = hpA * (hpY + x - hpX)
@@ -383,32 +409,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // signal at all. This isolates lingering DSP tails from stale AudioTrack output.
             val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
+            // Frequency selection is upstream on the FX send. The wet return
+            // remains untouched so reverb tails and delay feedback are natural.
             val raw = reverbReturn + delayReturn
-            // LR4 complementary split. Both crossovers are phase-aligned and
-            // flat when summed; LOW/MID/HIGH never receive resonant emphasis.
-            val lowBand = fxLowSplit250.processLow(raw)
-            val upperBand = fxLowSplit250.processHigh(raw)
-            val midBand = fxHighSplit2500.processLow(upperBand)
-            val highBand = fxHighSplit2500.processHigh(upperBand)
-            smoothedFxLow += ((if (fxLowEnabled) 1f else 0f) - smoothedFxLow) * fxBandSmoothing
-            smoothedFxMid += ((if (fxMidEnabled) 1f else 0f) - smoothedFxMid) * fxBandSmoothing
-            smoothedFxHigh += ((if (fxHighEnabled) 1f else 0f) - smoothedFxHigh) * fxBandSmoothing
-            // The RMX/V10 default (all three switches OFF) is full-band FX,
-            // not an FX mute. Selected bands are summed; no selected band = raw.
-            val anyFxBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
-            val allFxBandsSelected = fxLowEnabled && fxMidEnabled && fxHighEnabled
-            // V10 neutral state: all switches OFF is a hard, uncoloured
-            // full-band path. All ON is also unity full-band. With one/two
-            // bands selected, sum only those LR4 bands at unity gain; no
-            // arbitrary LOW/MID attenuation and no resonant EQ compensation.
-            val bandLimited = if (!anyFxBandSelected || allFxBandsSelected) raw else
-                lowBand * smoothedFxLow +
-                midBand * smoothedFxMid +
-                highBand * smoothedFxHigh
-            val magnitude = abs(bandLimited)
+            val magnitude = abs(raw)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
-            val safe = (bandLimited * limiter).coerceIn(-0.84f, 0.84f)
+            val safe = (raw * limiter).coerceIn(-0.84f, 0.84f)
             output[i] = (safe * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
     }
