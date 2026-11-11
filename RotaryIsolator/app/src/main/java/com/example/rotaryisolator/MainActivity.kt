@@ -1176,9 +1176,9 @@ class MainActivity : Activity() {
             // period remain untouched; only this visual FX phase includes the
             // independent manual trim.
             val fxBeatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
-            val fxDelayBeatPhaseMs = 60000f / delayBpm.coerceIn(60f,180f) * fxBeatFraction
-            val fxPhase = phase + (fxDelayBeatPhaseMs + fxPhaseOffsetMs).roundToLong()
-            val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / period).toLong()
+            val fxPeriodMs = (60000f / delayBpm.coerceIn(60f,180f) * fxBeatFraction).coerceAtLeast(1f)
+            val fxPhase = phase + fxPhaseOffsetMs.roundToLong()
+            val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
             if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
                 handler.post {
                     fxBpmBeat?.setTextColor(Color.rgb(45,235,105))
@@ -1752,11 +1752,13 @@ class MainActivity : Activity() {
                     if (period > 0.0 && delta != 0) {
                         // Right advances the FX phase; left retards it.
                         // One full fader travel corresponds to half a beat.
-                        val stepMs = -delta * period.toFloat() / 400f
+                        val beatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
+                        val fxPeriodMs = (period.toFloat() * beatFraction).coerceAtLeast(1f)
+                        val stepMs = -delta * fxPeriodMs / 400f
                         fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs)
-                            .coerceIn(-period.toFloat() * 0.5f, period.toFloat() * 0.5f)
+                            .coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
                         fxPhaseTitle.text = String.format(
-                            java.util.Locale.US, "FX PHASE JOG  •  %+0.0f ms", fxPhaseOffsetMs
+                            java.util.Locale.US, "FX PHASE JOG  •  %+.0f ms", fxPhaseOffsetMs
                         )
                         fxBpmLastBeatIndex = Long.MIN_VALUE
                         scheduleUpdate()
