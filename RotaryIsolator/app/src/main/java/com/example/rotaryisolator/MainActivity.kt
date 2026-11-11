@@ -83,6 +83,8 @@ class MainActivity : Activity() {
     private var bpmStereoBuffer = ShortArray(4096)
     @Volatile private var bpmLastBeatIndex = Long.MIN_VALUE
     @Volatile private var fxBpmLastBeatIndex = Long.MIN_VALUE
+    private var fxPhaseSeek: SeekBar? = null
+    private var fxPhaseCaption: TextView? = null
     @Volatile private var bpmUiLastUpdate = 0L
     // TEST252 diffuse parallel reverb engine.
     @Volatile private var reverbOn = false
@@ -1587,8 +1589,6 @@ class MainActivity : Activity() {
             }
         }
         var bpmFineSeek: SeekBar? = null
-        var fxPhaseSeek: SeekBar? = null
-        var fxPhaseCaption: TextView? = null
         var phaseJogLastProgress = 100
         fun paintClockButton(button: TextView, active: Boolean) {
             button.background = android.graphics.drawable.GradientDrawable().apply {
@@ -2300,9 +2300,9 @@ class MainActivity : Activity() {
                             try {
                                 val inputTs = android.media.AudioTimestamp()
                                 val outputTs = android.media.AudioTimestamp()
-                                val inputStatus = record.getTimestamp(inputTs, android.media.AudioTimestamp.TIMEBASE_MONOTONIC)
-                                val outputStatus = track.getTimestamp(outputTs, android.media.AudioTimestamp.TIMEBASE_MONOTONIC)
-                                if (inputStatus == 0 && outputStatus == 0 &&
+                                val inputValid = record.getTimestamp(inputTs)
+                                val outputValid = track.getTimestamp(outputTs)
+                                if (inputValid && outputValid &&
                                     inputTs.framePosition > 0L && outputTs.framePosition > 0L &&
                                     outputTs.framePosition <= outputFramesWritten) {
                                     val frameDelta = outputTs.framePosition - inputFramesRead
