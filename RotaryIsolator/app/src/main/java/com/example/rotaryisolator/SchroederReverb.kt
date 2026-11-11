@@ -170,6 +170,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayTransitionPosition = 0
     private var activeDelayDivision = -1
     private val delayTransitionLength = (sampleRate * 0.12f).toInt().coerceAtLeast(1)
+    // Division changes use a zero-crossfade handoff: fade the old tap down,
+    // switch read heads at silence, then fade the new tap up. This avoids the
+    // metallic/comb sweep caused by mixing two unrelated beat taps together.
+    private var delayDivisionSwitch = false
     private var delayToneState = 0f
 
     private fun readDelayTap(delaySamples: Float): Float {
@@ -315,14 +319,19 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val requestedDivision = delayDivision.coerceIn(0, 9)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
-            val eased = progress * progress * (3f - 2f * progress)
-            val currentTap = delayTransitionFromSamples +
-                (delayTransitionToSamples - delayTransitionFromSamples) * eased
+            val currentTap = if (delayDivisionSwitch) {
+                if (progress < 0.5f) delayTransitionFromSamples else delayTransitionToSamples
+            } else {
+                val eased = progress * progress * (3f - 2f * progress)
+                delayTransitionFromSamples +
+                    (delayTransitionToSamples - delayTransitionFromSamples) * eased
+            }
             delayTransitionFromSamples = currentTap
             delayTransitionToSamples = targetDelaySamples
             delayTransitionPosition = 0
+            delayDivisionSwitch = true
             activeDelayDivision = requestedDivision
-        } else if (delayTransitionPosition >= delayTransitionLength &&
+        } else if (!delayDivisionSwitch && delayTransitionPosition >= delayTransitionLength &&
             kotlin.math.abs(targetDelaySamples - delayTransitionToSamples) > 1f) {
             // BPM/TIME changes also move to the new tap without a hard discontinuity.
             delayTransitionFromSamples = delayTransitionToSamples
@@ -397,11 +406,26 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val transitionBlend = transitionProgress * transitionProgress * (3f - 2f * transitionProgress)
             val oldTap = readDelayTap(delayTransitionFromSamples)
             val newTap = readDelayTap(delayTransitionToSamples)
-            val delayed = oldTap + (newTap - oldTap) * transitionBlend
+            val delayed = if (delayDivisionSwitch) {
+                val halfLength = (delayTransitionLength / 2).coerceAtLeast(1)
+                if (delayTransitionPosition < halfLength) {
+                    val fade = (delayTransitionPosition.toFloat() / halfLength).coerceIn(0f, 1f)
+                    val smoothFade = fade * fade * (3f - 2f * fade)
+                    oldTap * (1f - smoothFade)
+                } else {
+                    val fade = ((delayTransitionPosition - halfLength).toFloat() /
+                        (delayTransitionLength - halfLength).coerceAtLeast(1)).coerceIn(0f, 1f)
+                    val smoothFade = fade * fade * (3f - 2f * fade)
+                    newTap * smoothFade
+                }
+            } else {
+                oldTap + (newTap - oldTap) * transitionBlend
+            }
             if (delayTransitionPosition < delayTransitionLength) {
                 delayTransitionPosition++
             } else {
                 delayTransitionFromSamples = delayTransitionToSamples
+                delayDivisionSwitch = false
             }
             // Tone is fixed per voicing for now; the V10 TONE control is not
             // exposed in this simplified interface. Darker repeats in DUB mode
