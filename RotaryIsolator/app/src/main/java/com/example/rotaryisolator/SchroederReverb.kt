@@ -115,7 +115,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var smoothedMix = 0f
     // A separate, low-feedback quarter-note echo return. The reverb network
     // above is left unchanged so a zero delay setting is bit-for-bit equivalent.
-    private val delayBuffer = FloatArray(sampleRate * 9)
+    private val delayBuffer = FloatArray(sampleRate * 34)
     private var delayWriteIndex = 0
     private var smoothedDelayMix = 0f
     // Beat-division changes use a short dual-tap crossfade. This avoids
@@ -210,7 +210,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayBpm: Float = 120f,
         delayEnabled: Boolean = false,
         delayFadeMs: Int = 1400,
-        delayDivision: Int = 3,
+        delayDivision: Int = 2,
         delayMode: Int = 2,
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
@@ -224,23 +224,34 @@ internal class SchroederReverb(private val sampleRate: Int) {
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
-        val beatFraction = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 2f, 4f, 8f)[delayDivision.coerceIn(0, 6)]
+        val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
         // coefficients; these fixed voicings reproduce the documented behavior:
         // SHORT = compact, lightly repeating; LONG = longer, more open repeats;
         // DUB = progressively attenuated, darker echo repeats.
         val mode = delayMode.coerceIn(0, 2)
-        val modeFeedbackBase = when (mode) { 0 -> 0.20f; 1 -> 0.36f; else -> 0.58f }
-        val modeFeedback = (modeFeedbackBase * (0.5f + delayFeedbackPercent.coerceIn(0,90) / 100f)).coerceIn(0.05f,0.82f)
-        val toneControlHz = 700f + delayTonePercent.coerceIn(0,100) * 130f
-        val delayToneHz = when (mode) { 0 -> toneControlHz.coerceAtLeast(5000f); 1 -> toneControlHz; else -> toneControlHz.coerceAtMost(9000f) }
+        // Three distinct send voicings:
+        // SHORT = one clean repeat; LONG = restrained open repeats;
+        // DUB = stronger, progressively darker feedback repeats.
+        val feedbackControl = delayFeedbackPercent.coerceIn(0, 90) / 90f
+        val modeFeedback = when (mode) {
+            0 -> 0f
+            1 -> (0.08f + feedbackControl * 0.40f).coerceIn(0.08f, 0.48f)
+            else -> (0.28f + feedbackControl * 0.48f).coerceIn(0.28f, 0.76f)
+        }
+        val tone = delayTonePercent.coerceIn(0, 100) / 100f
+        val delayToneHz = when (mode) {
+            0 -> 8000f + tone * 8000f
+            1 -> 2500f + tone * 9500f
+            else -> 700f + tone * 6000f
+        }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
         // Phase trim from the clock arrows is applied to the audible delay
         // read head as well as the beat lamps; the transition below crossfades it.
         val targetDelaySamples = (sampleRate *
             (60f / delayBpm.coerceIn(60f, 180f) * beatFraction + delaySyncOffsetMs.coerceIn(-250f,250f) / 1000f)
         ).coerceIn(1f, (delayBuffer.size - 2).toFloat())
-        val requestedDivision = delayDivision.coerceIn(0, 6)
+        val requestedDivision = delayDivision.coerceIn(0, 9)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
             val eased = progress * progress * (3f - 2f * progress)
