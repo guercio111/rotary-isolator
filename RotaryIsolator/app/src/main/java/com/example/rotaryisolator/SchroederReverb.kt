@@ -158,8 +158,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // feedback loop. The feedback tap itself keeps its exact beat period.
     private val phaseDelayBuffer = FloatArray(sampleRate * 18)
     private var phaseDelayWriteIndex = 0
-    private var smoothedFxPhaseDelaySamples = 0f
+    @Volatile private var smoothedFxPhaseDelaySamples = 0f
     private var smoothedDelayMix = 0f
+
+    /** Actual smoothed FX send delay, in milliseconds, as applied by the audio thread. */
+    fun getFxPhaseDelayMs(): Float = smoothedFxPhaseDelaySamples * 1000f / sampleRate
     // Beat-division changes use a short dual-tap crossfade. This avoids
     // abruptly moving the read head through the circular buffer (zipper/click noise).
     private var delayTransitionFromSamples = sampleRate * 0.5f
