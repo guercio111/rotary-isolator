@@ -121,8 +121,64 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
-    private var fxLowState = 0f
-    private var fxMidState = 0f
+    // Matched Linkwitz-Riley 4th-order crossover sections. Each LR4 branch is
+    // two cascaded Butterworth biquads (Q=0.7071), so LOW + MID + HIGH
+    // reconstructs the full-band signal without the peaking of the old
+    // first-order subtractive filters.
+    private class Biquad(sampleRate: Int, cutoffHz: Float, highPass: Boolean) {
+        private val b0: Float
+        private val b1: Float
+        private val b2: Float
+        private val a1: Float
+        private val a2: Float
+        private var z1 = 0f
+        private var z2 = 0f
+
+        init {
+            val frequency = cutoffHz.coerceIn(20f, sampleRate * 0.45f)
+            val omega = (2.0 * PI * frequency / sampleRate).toFloat()
+            val cosine = kotlin.math.cos(omega)
+            val sine = kotlin.math.sin(omega)
+            val alpha = sine / (2f * 0.70710678f)
+            val a0 = 1f + alpha
+            if (highPass) {
+                b0 = ((1f + cosine) * 0.5f) / a0
+                b1 = (-(1f + cosine)) / a0
+                b2 = ((1f + cosine) * 0.5f) / a0
+            } else {
+                b0 = ((1f - cosine) * 0.5f) / a0
+                b1 = (1f - cosine) / a0
+                b2 = ((1f - cosine) * 0.5f) / a0
+            }
+            a1 = (-2f * cosine) / a0
+            a2 = (1f - alpha) / a0
+        }
+
+        fun tick(input: Float): Float {
+            val output = b0 * input + z1
+            z1 = b1 * input - a1 * output + z2
+            z2 = b2 * input - a2 * output
+            return output
+        }
+
+        fun clear() { z1 = 0f; z2 = 0f }
+    }
+
+    private val low250A = Biquad(sampleRate, 250f, false)
+    private val low250B = Biquad(sampleRate, 250f, false)
+    private val high250A = Biquad(sampleRate, 250f, true)
+    private val high250B = Biquad(sampleRate, 250f, true)
+    private val low2500A = Biquad(sampleRate, 2500f, false)
+    private val low2500B = Biquad(sampleRate, 2500f, false)
+    private val high2500A = Biquad(sampleRate, 2500f, true)
+    private val high2500B = Biquad(sampleRate, 2500f, true)
+
+    private fun clearFxCrossovers() {
+        low250A.clear(); low250B.clear()
+        high250A.clear(); high250B.clear()
+        low2500A.clear(); low2500B.clear()
+        high2500A.clear(); high2500B.clear()
+    }
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -144,8 +200,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTransitionPosition = 0
         activeDelayDivision = -1
         delayToneState = 0f
-        fxLowState = 0f
-        fxMidState = 0f
+        clearFxCrossovers()
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -183,7 +238,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayBpm: Float = 120f,
         delayEnabled: Boolean = false,
         delayFadeMs: Int = 1400,
-        delayDivision: Int = 3,
+        delayDivision: Int = 5,
         delayMode: Int = 2,
         delayTimePercent: Int = 100,
         delayFeedbackPercent: Int = 52,
@@ -196,20 +251,32 @@ internal class SchroederReverb(private val sampleRate: Int) {
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
-        val beatFraction = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 2f, 4f, 8f)[delayDivision.coerceIn(0, 6)]
+        val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
         // coefficients; these fixed voicings reproduce the documented behavior:
         // SHORT = compact, lightly repeating; LONG = longer, more open repeats;
         // DUB = progressively attenuated, darker echo repeats.
         val mode = delayMode.coerceIn(0, 2)
         val modeTime = 1f // The selected beat division is the exact musical delay interval.
-        val modeFeedbackBase = when (mode) { 0 -> 0.20f; 1 -> 0.36f; else -> 0.58f }
-        val modeFeedback = (modeFeedbackBase * (0.5f + delayFeedbackPercent.coerceIn(0,90) / 100f)).coerceIn(0.05f,0.82f)
-        val toneControlHz = 700f + delayTonePercent.coerceIn(0,100) * 130f
-        val delayToneHz = when (mode) { 0 -> toneControlHz.coerceAtLeast(5000f); 1 -> toneControlHz; else -> toneControlHz.coerceAtMost(9000f) }
+        val feedbackControl = delayFeedbackPercent.coerceIn(0, 90) / 90f
+        // Three genuinely different send voicings:
+        // SHORT = one clean repeat (no recirculation);
+        // LONG = a restrained series of open repeats;
+        // DUB = stronger, progressively darker feedback repeats.
+        val modeFeedback = when (mode) {
+            0 -> 0f
+            1 -> (0.08f + feedbackControl * 0.40f).coerceIn(0.08f, 0.48f)
+            else -> (0.28f + feedbackControl * 0.48f).coerceIn(0.28f, 0.76f)
+        }
+        val tone = delayTonePercent.coerceIn(0, 100) / 100f
+        val delayToneHz = when (mode) {
+            0 -> 8000f + tone * 8000f
+            1 -> 2500f + tone * 9500f
+            else -> 700f + tone * 6000f
+        }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
         val targetDelaySamples = (sampleRate * (60f / delayBpm.coerceIn(60f, 180f)) * beatFraction * modeTime * (delayTimePercent.coerceIn(50,200) / 100f) + sampleRate * (delaySyncOffsetMs.coerceIn(0f,1000f) / 1000f)).coerceIn(1f, (delayBuffer.size - 2).toFloat())
-        val requestedDivision = delayDivision.coerceIn(0, 6)
+        val requestedDivision = delayDivision.coerceIn(0, 9)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
             val eased = progress * progress * (3f - 2f * progress)
@@ -293,9 +360,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             } else {
                 delayTransitionFromSamples = delayTransitionToSamples
             }
-            // Tone is fixed per voicing for now; the V10 TONE control is not
-            // exposed in this simplified interface. Darker repeats in DUB mode
-            // progressively lose top end, while SHORT stays crisp.
+            // The tone cutoff is intentionally voiced per mode: SHORT remains
+            // crisp, LONG stays open but controlled, and DUB progressively darkens.
             delayToneState += delayToneAlpha * (delayed - delayToneState)
             // Keep the circular-buffer cursor in range even if a previous
             // interrupted processing cycle left it at an unexpected position.
@@ -308,12 +374,20 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
-            fxLowState += fxLowAlpha * (raw - fxLowState)
-            fxMidState += fxMidAlpha * (raw - fxMidState)
-            val bandLimited = when (fxFrequency.coerceIn(0,2)) {
-                0 -> fxLowState
-                1 -> fxMidState - fxLowState
-                else -> raw - fxMidState
+            // Build three phase-aligned, non-resonant bands. LOW/MID/HIGH are
+            // independent V10-style switches; any combination is valid.
+            // With all switches OFF, the complete unfiltered FX return is heard.
+            val lowBand = low250B.tick(low250A.tick(raw))
+            val aboveLow = high250B.tick(high250A.tick(raw))
+            val midBand = low2500B.tick(low2500A.tick(aboveLow))
+            val highBand = high2500B.tick(high2500A.tick(raw))
+            val bandMask = fxFrequency.coerceIn(0, 7)
+            val bandLimited = if (bandMask == 0) {
+                raw
+            } else {
+                (if ((bandMask and 1) != 0) lowBand else 0f) +
+                (if ((bandMask and 2) != 0) midBand else 0f) +
+                (if ((bandMask and 4) != 0) highBand else 0f)
             }
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
