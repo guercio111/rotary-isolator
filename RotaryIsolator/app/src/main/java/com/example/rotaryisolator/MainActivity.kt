@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private var fxBpmBeat: TextView? = null
     private var bpmStereoBuffer = ShortArray(4096)
     @Volatile private var bpmLastBeatIndex = Long.MIN_VALUE
+    @Volatile private var fxBpmLastBeatIndex = Long.MIN_VALUE
     @Volatile private var bpmUiLastUpdate = 0L
     // TEST252 diffuse parallel reverb engine.
     @Volatile private var reverbOn = false
@@ -64,6 +65,8 @@ class MainActivity : Activity() {
     @Volatile private var delayBpmCorrection = 0f
     @Volatile private var autoBpmEnabled = false
     @Volatile private var delaySyncOffsetMs = 0f
+    // Independent FX-only phase trim. It never touches the master BeatEngine or BPM.
+    @Volatile private var fxPhaseOffsetMs = 0f
     @Volatile private var autoBpmNextBeatMs = 0L
     private var autoBpmHasEstimate = false
     @Volatile private var autoPhaseSynced = false
@@ -1166,11 +1169,21 @@ class MainActivity : Activity() {
                 handler.post {
                     bpmBeat?.setTextColor(Color.rgb(45,235,105))
                     bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                }
+            }
+            bpmLastBeatIndex = beatIndex
+            // The FX lamp follows its own phase reference. The master phase and
+            // period remain untouched; only this visual FX phase includes the
+            // independent manual trim.
+            val fxPhase = phase + fxPhaseOffsetMs.toLong()
+            val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / period).toLong()
+            if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
+                handler.post {
                     fxBpmBeat?.setTextColor(Color.rgb(45,235,105))
                     fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
                 }
             }
-            bpmLastBeatIndex = beatIndex
+            fxBpmLastBeatIndex = fxBeatIndex
             autoBpmNextBeatMs = phase + ((beatIndex + 1).coerceAtLeast(0) * period).toLong()
             // LOCK owns the tempo supplied to every beat effect. The analyser
             // may keep observing the track, but it must never retune the locked
@@ -1497,6 +1510,9 @@ class MainActivity : Activity() {
             }
         }
         var bpmFineSeek: SeekBar? = null
+        var fxPhaseSeek: SeekBar? = null
+        var fxPhaseCaption: TextView? = null
+        var phaseJogLastProgress = 100
         fun paintClockButton(button: TextView, active: Boolean) {
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
@@ -1639,6 +1655,10 @@ class MainActivity : Activity() {
                 validatedBeatEngine.setClockLocked(false)
                 validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime())
                 delaySyncOffsetMs = 0f
+                fxPhaseOffsetMs = 0f
+                fxBpmLastBeatIndex = Long.MIN_VALUE
+                fxPhaseCaption?.text = "FX PHASE JOG  •  0 ms"
+                fxPhaseSeek?.progress = 100
                 autoPhaseSynced = false
                 bpmFineSeek?.progress = 100
                 delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
@@ -1708,6 +1728,62 @@ class MainActivity : Activity() {
         }
         bpmFineSeek = fineSeek
         delayControls.addView(fineSeek, LinearLayout.LayoutParams(-1, 0, 0.9f).apply { topMargin = dp(2); bottomMargin = dp(2) })
+
+        // Separate spring-centred FX phase jog. Dragging changes only the FX
+        // phase trim; on release the handle returns to centre while the trim
+        // remains applied. The existing PITCH fader above is left untouched.
+        val fxPhaseTitle = label("FX PHASE JOG  •  0 ms", 8f, colorMaster).apply {
+            gravity = Gravity.CENTER
+        }
+        fxPhaseCaption = fxPhaseTitle
+        val phaseJogSeek = SeekBar(this).apply {
+            max = 200
+            progress = 100
+            setPadding(0, 0, 0, 0)
+            splitTrack = false
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (!fromUser) return
+                    val delta = progress - phaseJogLastProgress
+                    phaseJogLastProgress = progress
+                    val period = validatedBeatEngine.getPeriodMs()
+                    if (period > 0.0 && delta != 0) {
+                        // Right advances the FX phase; left retards it.
+                        // One full fader travel corresponds to half a beat.
+                        val stepMs = -delta * period.toFloat() / 400f
+                        fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs)
+                            .coerceIn(-period.toFloat() * 0.5f, period.toFloat() * 0.5f)
+                        fxPhaseTitle.text = String.format(
+                            java.util.Locale.US, "FX PHASE JOG  •  %+0.0f ms", fxPhaseOffsetMs
+                        )
+                        fxBpmLastBeatIndex = Long.MIN_VALUE
+                        scheduleUpdate()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {
+                    phaseJogLastProgress = bar?.progress ?: 100
+                }
+                override fun onStopTrackingTouch(bar: SeekBar?) {
+                    val seek = bar ?: return
+                    android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
+                        duration = 170L
+                        addUpdateListener { animation ->
+                            seek.progress = animation.animatedValue as Int
+                        }
+                        start()
+                    }
+                    phaseJogLastProgress = 100
+                }
+            })
+        }
+        fxPhaseSeek = phaseJogSeek
+        delayControls.addView(fxPhaseTitle, LinearLayout.LayoutParams(-1, dp(15)).apply {
+            topMargin = dp(1)
+        })
+        delayControls.addView(phaseJogSeek, LinearLayout.LayoutParams(-1, dp(25)).apply {
+            topMargin = dp(1)
+            bottomMargin = dp(2)
+        })
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2113,7 +2189,7 @@ class MainActivity : Activity() {
                                 delayOn, delayFadeMs, delayDivision, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxHighEnabled,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
-                                delaySyncOffsetMs
+                                delaySyncOffsetMs + fxPhaseOffsetMs
                             )
                             var written = 0
                             while (written < count && captureRunning) {
