@@ -4,6 +4,8 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.PI
 import kotlin.math.sqrt
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Dense, diffuse algorithmic reverb return.
@@ -33,20 +35,55 @@ internal class SchroederReverb(private val sampleRate: Int) {
     }
 
     /**
-     * First-order low-pass for complementary crossover bands.
-     * Its matching high branch is input - low-pass output, so the pair
-     * reconstructs the original signal exactly without resonant peaks.
+     * Fourth-order Linkwitz-Riley crossover (two Butterworth sections per
+     * branch). LOW and HIGH are phase-aligned at the crossover and have no
+     * resonant-Q boost. The two branches sum to a flat, unity-gain response.
      */
-    private class OnePoleLowPass(sampleRate: Int, cutoffHz: Float) {
-        private val alpha = (1.0 - exp(-2.0 * PI * cutoffHz / sampleRate)).toFloat()
-        private var state = 0f
+    private class Biquad(sampleRate: Int, cutoffHz: Float, highPass: Boolean) {
+        private val b0: Float
+        private val b1: Float
+        private val b2: Float
+        private val a1: Float
+        private val a2: Float
+        private var z1 = 0f
+        private var z2 = 0f
 
-        fun process(input: Float): Float {
-            state += alpha * (input - state)
-            return state
+        init {
+            val w0 = (2.0 * PI * cutoffHz / sampleRate).coerceIn(0.0001, PI - 0.0001)
+            val c = cos(w0)
+            val alpha = sin(w0) / (2.0 * 0.7071067811865476)
+            val a0 = 1.0 + alpha
+            val bb0 = if (highPass) (1.0 + c) * 0.5 else (1.0 - c) * 0.5
+            val bb1 = if (highPass) -(1.0 + c) else 1.0 - c
+            val bb2 = bb0
+            b0 = (bb0 / a0).toFloat()
+            b1 = (bb1 / a0).toFloat()
+            b2 = (bb2 / a0).toFloat()
+            a1 = (-2.0 * c / a0).toFloat()
+            a2 = ((1.0 - alpha) / a0).toFloat()
         }
 
-        fun clear() { state = 0f }
+        fun process(input: Float): Float {
+            val output = b0 * input + z1
+            z1 = b1 * input - a1 * output + z2
+            z2 = b2 * input - a2 * output
+            return output
+        }
+
+        fun clear() { z1 = 0f; z2 = 0f }
+    }
+
+    private class LinkwitzRileySplit(sampleRate: Int, cutoffHz: Float) {
+        private val low1 = Biquad(sampleRate, cutoffHz, false)
+        private val low2 = Biquad(sampleRate, cutoffHz, false)
+        private val high1 = Biquad(sampleRate, cutoffHz, true)
+        private val high2 = Biquad(sampleRate, cutoffHz, true)
+
+        fun processLow(input: Float): Float = low2.process(low1.process(input))
+        fun processHigh(input: Float): Float = high2.process(high1.process(input))
+        fun clear() {
+            low1.clear(); low2.clear(); high1.clear(); high2.clear()
+        }
     }
 
     private class DelayLine(delay: Int) {
@@ -138,11 +175,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
-    // Resonance-free complementary three-band split.
-    // LOW = LP250; MID = (input - LP250) filtered by LP2500;
-    // HIGH = upper - MID. All three bands reconstruct the input exactly.
-    private val fxLowPass250 = OnePoleLowPass(sampleRate, 250f)
-    private val fxMidPass2500 = OnePoleLowPass(sampleRate, 2500f)
+    // V10-style three-band frequency split: 250 Hz and 2.5 kHz.
+    // Each crossover is LR4; neither branch has a resonant peak or Q boost.
+    private val fxLowSplit250 = LinkwitzRileySplit(sampleRate, 250f)
+    private val fxHighSplit2500 = LinkwitzRileySplit(sampleRate, 2500f)
     private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
     private var smoothedFxLow = 1f
     private var smoothedFxMid = 1f
@@ -168,8 +204,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTransitionPosition = 0
         activeDelayDivision = -1
         delayToneState = 0f
-        fxLowPass250.clear()
-        fxMidPass2500.clear()
+        fxLowSplit250.clear()
+        fxHighSplit2500.clear()
         smoothedFxLow = 1f
         smoothedFxMid = 1f
         smoothedFxHigh = 1f
@@ -348,11 +384,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
             val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
             val raw = reverbReturn + delayReturn
-            // Exact complementary crossover: no resonant peaks or crossover gain bump.
-            val lowBand = fxLowPass250.process(raw)
-            val upperBand = raw - lowBand
-            val midBand = fxMidPass2500.process(upperBand)
-            val highBand = upperBand - midBand
+            // LR4 complementary split. Both crossovers are phase-aligned and
+            // flat when summed; LOW/MID/HIGH never receive resonant emphasis.
+            val lowBand = fxLowSplit250.processLow(raw)
+            val upperBand = fxLowSplit250.processHigh(raw)
+            val midBand = fxHighSplit2500.processLow(upperBand)
+            val highBand = fxHighSplit2500.processHigh(upperBand)
             smoothedFxLow += ((if (fxLowEnabled) 1f else 0f) - smoothedFxLow) * fxBandSmoothing
             smoothedFxMid += ((if (fxMidEnabled) 1f else 0f) - smoothedFxMid) * fxBandSmoothing
             smoothedFxHigh += ((if (fxHighEnabled) 1f else 0f) - smoothedFxHigh) * fxBandSmoothing
@@ -360,12 +397,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // not an FX mute. Selected bands are summed; no selected band = raw.
             val anyFxBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
             val allFxBandsSelected = fxLowEnabled && fxMidEnabled && fxHighEnabled
-            // All three bands selected (or all deselected) means true full-band FX.
-            // When isolating bands, gently trim LOW and MID: this controls bass build-up
-            // and dense midrange ringing without dulling the clean HIGH return.
+            // V10 neutral state: all switches OFF is a hard, uncoloured
+            // full-band path. All ON is also unity full-band. With one/two
+            // bands selected, sum only those LR4 bands at unity gain; no
+            // arbitrary LOW/MID attenuation and no resonant EQ compensation.
             val bandLimited = if (!anyFxBandSelected || allFxBandsSelected) raw else
-                lowBand * smoothedFxLow * 0.78f +
-                midBand * smoothedFxMid * 0.88f +
+                lowBand * smoothedFxLow +
+                midBand * smoothedFxMid +
                 highBand * smoothedFxHigh
             val magnitude = abs(bandLimited)
             val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
