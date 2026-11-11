@@ -56,8 +56,9 @@ class MainActivity : Activity() {
             // AUTO/SYNC and the additional manual jog trim. This prevents the
             // yellow marker from falsely appearing aligned just because the
             // spring-return fader handle is back at its centre position.
-            val effectiveFxOffsetMs = delaySyncOffsetMs + fxPhaseOffsetMs
-            val fxFraction = (effectiveFxOffsetMs / beatPeriodMs.coerceAtLeast(1f)).coerceIn(-0.5f, 0.5f)
+            val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
+            val fxPhasePeriodMs = (beatPeriodMs * beatFraction).coerceAtLeast(1f)
+            val fxFraction = (fxPhaseOffsetMs / fxPhasePeriodMs).coerceIn(-0.5f, 0.5f)
             val fxProgress = (100f - fxFraction * 200f).coerceIn(0f, 200f)
             val fxX = startX + (endX - startX) * (fxProgress / 200f)
             val centerY = height * 0.5f
@@ -1649,12 +1650,17 @@ class MainActivity : Activity() {
         fun phaseNudge(direction: Float) {
             val period = validatedBeatEngine.getPeriodMs()
             if (period <= 0.0) return
-            // A fine 1/64-beat jog: right advances and left retards. Apply it to the shared clock AND
-            // the delay tap, otherwise the lamps move but the audible FX do not.
-            val stepMs = (-period * direction / 64.0).toFloat()
-            validatedBeatEngine.nudgePhase(stepMs)
-            delaySyncOffsetMs = (delaySyncOffsetMs + stepMs).coerceIn(-250f, 250f)
-            autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
+            // Arrows and FX PHASE JOG fader control the same FX-only phase trim.
+            // MASTER/BeatEngine remain untouched; audio DSP and yellow marker use this exact value.
+            val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
+            val fxPeriodMs = (period.toFloat() * beatFraction).coerceAtLeast(1f)
+            val stepMs = -fxPeriodMs * direction / 64f
+            fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
+            fxPhaseCaption?.text = String.format(
+                java.util.Locale.US, "MASTER VERDE  •  FX GIALLO  •  %+.0f ms", fxPhaseOffsetMs
+            )
+            fxPhaseSeek?.invalidate()
+            fxBpmLastBeatIndex = Long.MIN_VALUE
             scheduleUpdate()
         }
         val phaseBackButton = TextView(this).apply {
@@ -1800,14 +1806,14 @@ class MainActivity : Activity() {
                     phaseJogLastProgress = progress
                     val period = validatedBeatEngine.getPeriodMs()
                     if (period > 0.0 && delta != 0) {
-                        // Right advances the FX phase; left retards it.
-                        // One full fader travel corresponds to half a beat.
+                        // Same FX-only phase trim used by the left/right arrows.
+                        // One full fader travel corresponds to half an FX beat.
                         val beatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
                         val fxPeriodMs = (period.toFloat() * beatFraction).coerceAtLeast(1f)
                         val stepMs = -delta * fxPeriodMs / 400f
                         fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs)
                             .coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
-                        fxPhaseTitle.text = String.format(
+                        fxPhaseCaption?.text = String.format(
                             java.util.Locale.US, "MASTER VERDE  •  FX GIALLO  •  %+.0f ms", fxPhaseOffsetMs
                         )
                         bar?.invalidate()
