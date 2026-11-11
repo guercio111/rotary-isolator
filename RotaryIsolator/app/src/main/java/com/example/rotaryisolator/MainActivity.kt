@@ -1175,7 +1175,9 @@ class MainActivity : Activity() {
             // The FX lamp follows its own phase reference. The master phase and
             // period remain untouched; only this visual FX phase includes the
             // independent manual trim.
-            val fxPhase = phase + fxPhaseOffsetMs.toLong()
+            val fxBeatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
+            val fxDelayBeatPhaseMs = 60000f / delayBpm.coerceIn(60f,180f) * fxBeatFraction
+            val fxPhase = phase + (fxDelayBeatPhaseMs + fxPhaseOffsetMs).roundToLong()
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / period).toLong()
             if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
                 handler.post {
@@ -2189,7 +2191,7 @@ class MainActivity : Activity() {
                                 delayOn, delayFadeMs, delayDivision, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxHighEnabled,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
-                                delaySyncOffsetMs + fxPhaseOffsetMs
+                                delaySyncOffsetMs, fxPhaseOffsetMs
                             )
                             var written = 0
                             while (written < count && captureRunning) {
