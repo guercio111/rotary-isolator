@@ -1228,7 +1228,7 @@ class MainActivity : Activity() {
         // AUTO is a phase-acquisition mode, not just a BPM display switch.
         // Wait for a stable tempo estimate, then align once to the same onset
         // engine used by the main clock. Never run a second independent detector.
-        if (autoBpmEnabled && !autoPhaseSynced && detected > 0f &&
+        if (autoBpmEnabled && !delayClockLocked && !autoPhaseSynced && detected > 0f &&
             period > 0.0 && confidence >= 0.30f) {
             validatedBeatEngine.sync(nowMs)
             phase = validatedBeatEngine.getPhaseMs()
