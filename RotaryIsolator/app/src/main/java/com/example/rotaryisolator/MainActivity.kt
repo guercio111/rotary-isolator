@@ -1805,7 +1805,7 @@ class MainActivity : Activity() {
                         fxPhaseTitle.text = String.format(
                             java.util.Locale.US, "MASTER VERDE  •  FX GIALLO  •  %+.0f ms", fxPhaseOffsetMs
                         )
-                        phaseJogSeek?.invalidate()
+                        bar?.invalidate()
                         fxBpmLastBeatIndex = Long.MIN_VALUE
                         scheduleUpdate()
                     }
