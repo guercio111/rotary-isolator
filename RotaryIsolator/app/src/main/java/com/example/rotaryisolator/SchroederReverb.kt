@@ -154,6 +154,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // above is left unchanged so a zero delay setting is bit-for-bit equivalent.
     private val delayBuffer = FloatArray(sampleRate * 34)
     private var delayWriteIndex = 0
+    // FX phase trim is applied to the incoming send before it enters the
+    // feedback loop. The feedback tap itself keeps its exact beat period.
+    private val phaseDelayBuffer = FloatArray(sampleRate * 2)
+    private var phaseDelayWriteIndex = 0
+    private var smoothedFxPhaseDelaySamples = 0f
     private var smoothedDelayMix = 0f
     // Beat-division changes use a short dual-tap crossfade. This avoids
     // abruptly moving the read head through the circular buffer (zipper/click noise).
@@ -175,6 +180,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
+
+    private fun readPhaseDelayTap(delaySamples: Float): Float {
+        var position = phaseDelayWriteIndex.toFloat() - delaySamples
+        position %= phaseDelayBuffer.size.toFloat()
+        if (position < 0f) position += phaseDelayBuffer.size.toFloat()
+        val indexA = position.toInt()
+        val fraction = position - indexA
+        val indexB = if (indexA + 1 == phaseDelayBuffer.size) 0 else indexA + 1
+        val a = phaseDelayBuffer[indexA]
+        val b = phaseDelayBuffer[indexB]
+        return a + (b - a) * fraction
+    }
     // Single retained FX HIGH selector. LOW/MID crossovers are removed entirely.
     private val fxHighSplit2500 = LinkwitzRileySplit(sampleRate, 2500f)
     private val fxHighSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
@@ -194,6 +211,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         smoothedMix = 0f
         delayBuffer.fill(0f)
         delayWriteIndex = 0
+        phaseDelayBuffer.fill(0f)
+        phaseDelayWriteIndex = 0
+        smoothedFxPhaseDelaySamples = 0f
         smoothedDelayMix = 0f
         delayTransitionFromSamples = sampleRate * 0.5f
         delayTransitionToSamples = sampleRate * 0.5f
@@ -247,7 +267,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         reverbFeedbackPercent: Int = 50,
         reverbDecayPercent: Int = 50,
         reverbColorPercent: Int = 50,
-        delaySyncOffsetMs: Float = 0f
+        delaySyncOffsetMs: Float = 0f,
+        fxPhaseOffsetMs: Float = 0f
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
@@ -275,9 +296,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
         // Phase trim from the clock arrows is applied to the audible delay
         // read head as well as the beat lamps; the transition below crossfades it.
+        val beatPeriodMs = 60000f / delayBpm.coerceIn(60f, 180f)
         val targetDelaySamples = (sampleRate *
-            (60f / delayBpm.coerceIn(60f, 180f) * beatFraction + delaySyncOffsetMs.coerceIn(-250f,250f) / 1000f)
+            (beatPeriodMs / 1000f * beatFraction + delaySyncOffsetMs.coerceIn(-250f,250f) / 1000f)
         ).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        // Convert the signed phase trim to its equivalent non-negative offset
+        // within one beat. It shifts the first echo's phase, while the feedback
+        // loop continues to repeat at the unchanged selected beat division.
+        var normalizedFxPhaseMs = fxPhaseOffsetMs % beatPeriodMs
+        if (normalizedFxPhaseMs < 0f) normalizedFxPhaseMs += beatPeriodMs
+        val targetFxPhaseDelaySamples = (normalizedFxPhaseMs * sampleRate / 1000f)
+            .coerceIn(0f, (phaseDelayBuffer.size - 2).toFloat())
+        val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
         val requestedDivision = delayDivision.coerceIn(0, 9)
         if (requestedDivision != activeDelayDivision) {
             val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
@@ -375,8 +405,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
             delayToneState += delayToneAlpha * (delayed - delayToneState)
             // Keep the circular-buffer cursor in range even if a previous
             // interrupted processing cycle left it at an unexpected position.
+            // Phase-shift only the incoming send. The delay feedback loop keeps
+            // reading and writing at the exact selected beat period, so the jog
+            // cannot retune BPM or make the repeats progressively drift.
+            smoothedFxPhaseDelaySamples +=
+                (targetFxPhaseDelaySamples - smoothedFxPhaseDelaySamples) * fxPhaseDelaySmoothing
+            val safePhaseWriteIndex = Math.floorMod(phaseDelayWriteIndex, phaseDelayBuffer.size)
+            phaseDelayBuffer[safePhaseWriteIndex] = x
+            val phaseShiftedInput = readPhaseDelayTap(smoothedFxPhaseDelaySamples)
+            phaseDelayWriteIndex = if (safePhaseWriteIndex + 1 >= phaseDelayBuffer.size) 0 else safePhaseWriteIndex + 1
+
             val safeWriteIndex = Math.floorMod(delayWriteIndex, delayBuffer.size)
-            delayBuffer[safeWriteIndex] = (x * 0.68f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
+            delayBuffer[safeWriteIndex] = (phaseShiftedInput * 0.68f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
             delayWriteIndex = if (safeWriteIndex + 1 >= delayBuffer.size) 0 else safeWriteIndex + 1
             // TEST: OFF is a hard output gate. The fade controls continue to shape
             // the return while enabled, but a disabled switch must produce no wet
