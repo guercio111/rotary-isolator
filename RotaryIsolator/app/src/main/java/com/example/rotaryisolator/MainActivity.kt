@@ -32,13 +32,13 @@ class MainActivity : Activity() {
     private inner class PhaseMarkerSeekBar : SeekBar(this@MainActivity) {
         private val masterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(45, 235, 105)
-            strokeWidth = dp(2).toFloat()
+            strokeWidth = dp(3).toFloat()
             strokeCap = Paint.Cap.ROUND
             style = Paint.Style.STROKE
         }
         private val fxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(255, 190, 45)
-            strokeWidth = dp(2).toFloat()
+            strokeWidth = dp(3).toFloat()
             strokeCap = Paint.Cap.ROUND
             style = Paint.Style.STROKE
         }
@@ -52,22 +52,27 @@ class MainActivity : Activity() {
             val masterX = (startX + endX) * 0.5f
             val beatFraction = floatArrayOf(1f/16f, 1f/8f, 1f/4f, 1f/2f, 3f/4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
             val beatPeriodMs = (validatedBeatEngine.getPeriodMs().toFloat().takeIf { it > 0f } ?: (60000f / delayBpm.coerceIn(60f, 180f))) * beatFraction
-            val fxFraction = (fxPhaseOffsetMs / beatPeriodMs.coerceAtLeast(1f)).coerceIn(-0.5f, 0.5f)
+            // Show the effective FX phase, including the phase acquired by
+            // AUTO/SYNC and the additional manual jog trim. This prevents the
+            // yellow marker from falsely appearing aligned just because the
+            // spring-return fader handle is back at its centre position.
+            val effectiveFxOffsetMs = delaySyncOffsetMs + fxPhaseOffsetMs
+            val fxFraction = (effectiveFxOffsetMs / beatPeriodMs.coerceAtLeast(1f)).coerceIn(-0.5f, 0.5f)
             val fxProgress = (100f - fxFraction * 200f).coerceIn(0f, 200f)
             val fxX = startX + (endX - startX) * (fxProgress / 200f)
             val centerY = height * 0.5f
-            val markerHalfHeight = dp(7).toFloat()
+            val markerHalfHeight = dp(9).toFloat()
 
             // MASTER marker points down from above the track.
             canvas.drawLine(masterX, centerY - markerHalfHeight, masterX, centerY + dp(1), masterPaint)
             dotPaint.color = Color.rgb(45, 235, 105)
-            canvas.drawCircle(masterX, centerY - markerHalfHeight, dp(3).toFloat(), dotPaint)
+            canvas.drawCircle(masterX, centerY - markerHalfHeight, dp(5).toFloat(), dotPaint)
 
             // FX marker points up from below the track. When aligned, the two
             // coloured halves sit on the same vertical axis and remain distinct.
             canvas.drawLine(fxX, centerY - dp(1), fxX, centerY + markerHalfHeight, fxPaint)
             dotPaint.color = Color.rgb(255, 190, 45)
-            canvas.drawCircle(fxX, centerY + markerHalfHeight, dp(3).toFloat(), dotPaint)
+            canvas.drawCircle(fxX, centerY + markerHalfHeight, dp(5).toFloat(), dotPaint)
         }
     }
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
