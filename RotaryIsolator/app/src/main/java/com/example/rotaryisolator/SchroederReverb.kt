@@ -98,7 +98,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var smoothedMix = 0f
     // A separate, low-feedback quarter-note echo return. The reverb network
     // above is left unchanged so a zero delay setting is bit-for-bit equivalent.
-    private val delayBuffer = FloatArray(sampleRate * 9)
+    private val delayBuffer = FloatArray(sampleRate * 34)
     private var delayWriteIndex = 0
     private var smoothedDelayMix = 0f
     // Beat-division changes use a short dual-tap crossfade. This avoids
@@ -243,7 +243,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTimePercent: Int = 100,
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
-        fxFrequency: Int = 1,
+        fxFrequency: Int = 2,
         reverbFeedbackPercent: Int = 50,
         reverbDecayPercent: Int = 50,
         reverbColorPercent: Int = 50,
@@ -303,8 +303,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val lp = (lpHz.coerceIn(1000, 20000) * (0.55f + color * 0.90f)).coerceIn(1000f, 20000f)
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
-        val fxLowAlpha = (1f - exp((-2.0 * PI * 250f / sampleRate).toFloat())).coerceIn(0.001f,1f)
-        val fxMidAlpha = (1f - exp((-2.0 * PI * 2500f / sampleRate).toFloat())).coerceIn(0.001f,1f)
 
         // A long but controlled room tail; freeze is bounded to avoid runaway.
         // Dedicated Reverb FEEDBACK control: 50% preserves approximately the
