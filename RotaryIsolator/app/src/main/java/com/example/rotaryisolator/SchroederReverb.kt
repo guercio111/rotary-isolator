@@ -303,8 +303,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // Convert the signed phase trim to its equivalent non-negative offset
         // within one beat. It shifts the first echo's phase, while the feedback
         // loop continues to repeat at the unchanged selected beat division.
-        var normalizedFxPhaseMs = fxPhaseOffsetMs % beatPeriodMs
-        if (normalizedFxPhaseMs < 0f) normalizedFxPhaseMs += beatPeriodMs
+        val fxPhasePeriodMs = beatPeriodMs * beatFraction
+        var normalizedFxPhaseMs = fxPhaseOffsetMs % fxPhasePeriodMs
+        if (normalizedFxPhaseMs < 0f) normalizedFxPhaseMs += fxPhasePeriodMs
         val targetFxPhaseDelaySamples = (normalizedFxPhaseMs * sampleRate / 1000f)
             .coerceIn(0f, (phaseDelayBuffer.size - 2).toFloat())
         val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
