@@ -2119,6 +2119,11 @@ class MainActivity : Activity() {
                         }
                         lastReadCompleted = readCompleted
                         if (count > 0) {
+                            // Feed the BPM/clock engine immediately from the untouched
+                            // capture PCM. Do this before FX DSP and blocking AudioTrack
+                            // writes so FX-band changes/output backpressure cannot delay
+                            // the detector's streaming timeline.
+                            processValidatedBpm(buffer, count, readCompleted)
                             captureRestartAttempts = 0
                             var peak = 0
                             var sum = 0.0
@@ -2147,7 +2152,6 @@ class MainActivity : Activity() {
                                 written += n
                             }
                             val rms = kotlin.math.sqrt(sum / count)
-                            processValidatedBpm(buffer, count, readCompleted)
                             val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
                             val peakDb = if (peak > 0) 20.0 * kotlin.math.log10(peak / 32768.0) else -120.0
                             val now = android.os.SystemClock.elapsedRealtime()
