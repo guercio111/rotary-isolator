@@ -156,7 +156,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayWriteIndex = 0
     // FX phase trim is applied to the incoming send before it enters the
     // feedback loop. The feedback tap itself keeps its exact beat period.
-    private val phaseDelayBuffer = FloatArray(sampleRate * 2)
+    private val phaseDelayBuffer = FloatArray(sampleRate * 18)
     private var phaseDelayWriteIndex = 0
     private var smoothedFxPhaseDelaySamples = 0f
     private var smoothedDelayMix = 0f
