@@ -175,13 +175,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
-    // V10-style three-band frequency split: 250 Hz and 2.5 kHz.
-    // Each crossover is LR4; neither branch has a resonant peak or Q boost.
-    private val fxLowSplit250 = LinkwitzRileySplit(sampleRate, 250f)
+    // Single retained FX HIGH selector. LOW/MID crossovers are removed entirely.
     private val fxHighSplit2500 = LinkwitzRileySplit(sampleRate, 2500f)
-    private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
-    private var smoothedFxLow = 1f
-    private var smoothedFxMid = 1f
+    private val fxHighSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
     private var smoothedFxHigh = 1f
 
     fun clear() {
@@ -204,10 +200,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTransitionPosition = 0
         activeDelayDivision = -1
         delayToneState = 0f
-        fxLowSplit250.clear()
         fxHighSplit2500.clear()
-        smoothedFxLow = 1f
-        smoothedFxMid = 1f
         smoothedFxHigh = 1f
     }
 
@@ -250,8 +243,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayMode: Int = 2,
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
-        fxLowEnabled: Boolean = true,
-        fxMidEnabled: Boolean = true,
         fxHighEnabled: Boolean = true,
         reverbFeedbackPercent: Int = 50,
         reverbDecayPercent: Int = 50,
@@ -328,30 +319,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
         for (i in 0 until count) {
             val source = input[i] / 32768f
 
-            // V10-style FX FREQUENCY is a SEND selector: it determines which
-            // parts of the source enter the Beat FX. It must not EQ the wet
-            // return, and it is completely separate from BPM/clock analysis.
-            val lowBand = fxLowSplit250.processLow(source)
-            val upperBand = fxLowSplit250.processHigh(source)
-            val midBand = fxHighSplit2500.processLow(upperBand)
-            val highBand = fxHighSplit2500.processHigh(upperBand)
-
-            val anyFxBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
-            val allFxBandsSelected = fxLowEnabled && fxMidEnabled && fxHighEnabled
-            // With no band selected, or all three selected, send the full band.
-            // With one/two selected, send only those bands. Gain smoothing avoids
-            // clicks when a frequency button is switched during playback.
-            val fullBand = !anyFxBandSelected || allFxBandsSelected
-            val lowTarget = if (fullBand || fxLowEnabled) 1f else 0f
-            val midTarget = if (fullBand || fxMidEnabled) 1f else 0f
-            val highTarget = if (fullBand || fxHighEnabled) 1f else 0f
-            smoothedFxLow += (lowTarget - smoothedFxLow) * fxBandSmoothing
-            smoothedFxMid += (midTarget - smoothedFxMid) * fxBandSmoothing
-            smoothedFxHigh += (highTarget - smoothedFxHigh) * fxBandSmoothing
-            val fxSend = lowBand * smoothedFxLow +
-                midBand * smoothedFxMid +
-                highBand * smoothedFxHigh
-            val x = fxSend
+            // Only FX HIGH remains. When OFF, the effect receives the untouched
+            // full-band source: no LOW/MID splitters or hidden crossover states.
+            // When ON, only the high-frequency send enters the Beat FX.
+            val highBand = if (fxHighEnabled) fxHighSplit2500.processHigh(source) else source
+            val highTarget = if (fxHighEnabled) 1f else 0f
+            smoothedFxHigh += (highTarget - smoothedFxHigh) * fxHighSmoothing
+            val x = if (fxHighEnabled) highBand * smoothedFxHigh else source
 
             // Two gentle high-pass stages keep kick/sub energy out of the
             // reverb excitation while retaining a natural mid/high body.
