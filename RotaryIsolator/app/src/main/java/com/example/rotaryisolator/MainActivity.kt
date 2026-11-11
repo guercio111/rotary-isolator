@@ -58,7 +58,7 @@ class MainActivity : Activity() {
     @Volatile private var delayMix = 0
     @Volatile private var delayFeedbackPercent = 52
     @Volatile private var delayTonePercent = 50
-    @Volatile private var fxHighEnabled = true
+    @Volatile private var fxHighEnabled = false
     @Volatile private var delayBpm = 120f
     @Volatile private var delayTapBpm = 120f
     @Volatile private var delayBpmCorrection = 0f
@@ -193,7 +193,7 @@ class MainActivity : Activity() {
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
         delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
         // Only FX HIGH is retained; legacy LOW/MID preferences are ignored.
-        fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", true)
+        fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", false)
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         val storedDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 9)
