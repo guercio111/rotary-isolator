@@ -27,8 +27,8 @@ import android.widget.*
 import kotlin.math.*
 
 class MainActivity : Activity() {
-    // The two phase references are drawn directly over the FX jog track.
-    // MASTER stays fixed at the centre; FX follows the retained DSP phase trim.
+    // MASTER is the detected musical phase. FX is drawn from the measured
+    // capture-to-playback latency plus the phase delay actually applied by the DSP.
     private inner class PhaseMarkerSeekBar : SeekBar(this@MainActivity) {
         private val masterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(45, 235, 105)
@@ -50,30 +50,25 @@ class MainActivity : Activity() {
             val endX = width.toFloat() - paddingRight.toFloat() - thumbOffset
             if (endX <= startX) return
             val masterX = (startX + endX) * 0.5f
-            val beatFraction = floatArrayOf(1f/16f, 1f/8f, 1f/4f, 1f/2f, 3f/4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
-            val beatPeriodMs = (validatedBeatEngine.getPeriodMs().toFloat().takeIf { it > 0f } ?: (60000f / delayBpm.coerceIn(60f, 180f))) * beatFraction
-            // Show the effective FX phase, including the phase acquired by
-            // AUTO/SYNC and the additional manual jog trim. This prevents the
-            // yellow marker from falsely appearing aligned just because the
-            // spring-return fader handle is back at its centre position.
-            val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
-            val fxPhasePeriodMs = (beatPeriodMs * beatFraction).coerceAtLeast(1f)
-            val fxFraction = (fxPhaseOffsetMs / fxPhasePeriodMs).coerceIn(-0.5f, 0.5f)
-            val fxProgress = (100f - fxFraction * 200f).coerceIn(0f, 200f)
-            val fxX = startX + (endX - startX) * (fxProgress / 200f)
             val centerY = height * 0.5f
             val markerHalfHeight = dp(9).toFloat()
 
-            // MASTER marker points down from above the track.
             canvas.drawLine(masterX, centerY - markerHalfHeight, masterX, centerY + dp(1), masterPaint)
             dotPaint.color = Color.rgb(45, 235, 105)
             canvas.drawCircle(masterX, centerY - markerHalfHeight, dp(5).toFloat(), dotPaint)
 
-            // FX marker points up from below the track. When aligned, the two
-            // coloured halves sit on the same vertical axis and remain distinct.
-            canvas.drawLine(fxX, centerY - dp(1), fxX, centerY + markerHalfHeight, fxPaint)
-            dotPaint.color = Color.rgb(255, 190, 45)
-            canvas.drawCircle(fxX, centerY + markerHalfHeight, dp(5).toFloat(), dotPaint)
+            // Do not draw a false "aligned" yellow marker until Android provides
+            // valid monotonic timestamps for both capture and playback streams.
+            val phaseErrorMs = currentFxPhaseErrorMs()
+            if (phaseErrorMs.isFinite()) {
+                val fxPeriodMs = currentFxPeriodMs()
+                val fxFraction = (phaseErrorMs / fxPeriodMs).coerceIn(-0.5f, 0.5f)
+                val fxProgress = (100f - fxFraction * 200f).coerceIn(0f, 200f)
+                val fxX = startX + (endX - startX) * (fxProgress / 200f)
+                canvas.drawLine(fxX, centerY - dp(1), fxX, centerY + markerHalfHeight, fxPaint)
+                dotPaint.color = Color.rgb(255, 190, 45)
+                canvas.drawCircle(fxX, centerY + markerHalfHeight, dp(5).toFloat(), dotPaint)
+            }
         }
     }
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
@@ -116,6 +111,32 @@ class MainActivity : Activity() {
     @Volatile private var delaySyncOffsetMs = 0f
     // Independent FX-only phase trim. It never touches the master BeatEngine or BPM.
     @Volatile private var fxPhaseOffsetMs = 0f
+    // Real capture-to-playback latency, measured from AudioRecord/AudioTrack monotonic timestamps.
+    @Volatile private var fxOutputLatencyMs = Float.NaN
+    // Smoothed phase delay currently applied inside the DSP, not merely requested by the UI.
+    @Volatile private var fxAppliedPhaseDelayMs = 0f
+    private fun currentFxPeriodMs(): Float {
+        val fraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
+        return (60000f / delayBpm.coerceIn(60f, 180f) * fraction).coerceAtLeast(1f)
+    }
+    private fun currentFxPhaseErrorMs(): Float {
+        val latency = fxOutputLatencyMs
+        if (!latency.isFinite()) return Float.NaN
+        val period = currentFxPeriodMs()
+        var error = (latency + fxAppliedPhaseDelayMs + delaySyncOffsetMs) % period
+        if (error > period * 0.5f) error -= period
+        if (error < -period * 0.5f) error += period
+        return error
+    }
+    private fun refreshFxPhaseUi() {
+        val error = currentFxPhaseErrorMs()
+        fxPhaseCaption?.text = if (error.isFinite()) {
+            String.format(java.util.Locale.US, "MASTER VERDE  •  FX GIALLO  •  %+.0f ms", error)
+        } else {
+            "MASTER VERDE  •  FX GIALLO  •  MISURA…"
+        }
+        fxPhaseSeek?.invalidate()
+    }
     @Volatile private var autoBpmNextBeatMs = 0L
     private var autoBpmHasEstimate = false
     @Volatile private var autoPhaseSynced = false
@@ -1226,7 +1247,12 @@ class MainActivity : Activity() {
             // independent manual trim.
             val fxBeatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
             val fxPeriodMs = (60000f / delayBpm.coerceIn(60f,180f) * fxBeatFraction).coerceAtLeast(1f)
-            val fxPhase = phase + fxPhaseOffsetMs.roundToLong()
+            val fxPhaseDelay = if (fxOutputLatencyMs.isFinite()) {
+                fxOutputLatencyMs + fxAppliedPhaseDelayMs + delaySyncOffsetMs
+            } else {
+                fxPhaseOffsetMs
+            }
+            val fxPhase = phase + fxPhaseDelay.roundToLong()
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
             if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
                 handler.post {
@@ -1656,10 +1682,7 @@ class MainActivity : Activity() {
             val fxPeriodMs = (period.toFloat() * beatFraction).coerceAtLeast(1f)
             val stepMs = -fxPeriodMs * direction / 64f
             fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
-            fxPhaseCaption?.text = String.format(
-                java.util.Locale.US, "MASTER VERDE  •  FX GIALLO  •  %+.0f ms", fxPhaseOffsetMs
-            )
-            fxPhaseSeek?.invalidate()
+            refreshFxPhaseUi()
             fxBpmLastBeatIndex = Long.MIN_VALUE
             scheduleUpdate()
         }
@@ -1713,7 +1736,7 @@ class MainActivity : Activity() {
                 delaySyncOffsetMs = 0f
                 fxPhaseOffsetMs = 0f
                 fxBpmLastBeatIndex = Long.MIN_VALUE
-                fxPhaseCaption?.text = "MASTER VERDE  •  FX GIALLO  •  0 ms"
+                refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
                 fxPhaseSeek?.invalidate()
                 autoPhaseSynced = false
@@ -1789,10 +1812,11 @@ class MainActivity : Activity() {
         // Separate spring-centred FX phase jog. Dragging changes only the FX
         // phase trim; on release the handle returns to centre while the trim
         // remains applied. The existing PITCH fader above is left untouched.
-        val fxPhaseTitle = label("FX PHASE JOG  •  0 ms", 8f, colorMaster).apply {
+        val fxPhaseTitle = label("FX PHASE JOG  •  MISURA…", 8f, colorMaster).apply {
             gravity = Gravity.CENTER
         }
         fxPhaseCaption = fxPhaseTitle
+        refreshFxPhaseUi()
         val phaseJogSeek = PhaseMarkerSeekBar().apply {
             max = 200
             contentDescription = "Allineamento fase: riferimento MASTER verde e riferimento FX giallo"
@@ -1813,9 +1837,7 @@ class MainActivity : Activity() {
                         val stepMs = -delta * fxPeriodMs / 400f
                         fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs)
                             .coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
-                        fxPhaseCaption?.text = String.format(
-                            java.util.Locale.US, "MASTER VERDE  •  FX GIALLO  •  %+.0f ms", fxPhaseOffsetMs
-                        )
+                        refreshFxPhaseUi()
                         bar?.invalidate()
                         fxBpmLastBeatIndex = Long.MIN_VALUE
                         scheduleUpdate()
@@ -2209,6 +2231,9 @@ class MainActivity : Activity() {
             }
             captureTrack = track
             parallelReverbProcessor = SchroederReverb(sampleRate)
+            fxOutputLatencyMs = Float.NaN
+            fxAppliedPhaseDelayMs = 0f
+            handler.post { refreshFxPhaseUi() }
             captureRecord = record
             track.play()
             record.startRecording()
@@ -2220,6 +2245,10 @@ class MainActivity : Activity() {
                 val processor = parallelReverbProcessor ?: return@Thread
                 var lastUi = 0L
                 var lastReadCompleted = 0L
+                var inputFramesRead = 0L
+                var outputFramesWritten = 0L
+                var smoothedFxLatencyMs = Float.NaN
+                var lastFxLatencyUi = 0L
                 try {
                     while (captureRunning) {
                         val readStarted = android.os.SystemClock.elapsedRealtime()
@@ -2230,6 +2259,7 @@ class MainActivity : Activity() {
                         }
                         lastReadCompleted = readCompleted
                         if (count > 0) {
+                            inputFramesRead += count.toLong()
                             // Feed the BPM/clock engine immediately from the untouched
                             // capture PCM. Do this before FX DSP and blocking AudioTrack
                             // writes so FX-band changes/output backpressure cannot delay
@@ -2253,6 +2283,7 @@ class MainActivity : Activity() {
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
                                 delaySyncOffsetMs, fxPhaseOffsetMs
                             )
+                            fxAppliedPhaseDelayMs = processor.getFxPhaseDelayMs()
                             var written = 0
                             while (written < count && captureRunning) {
                                 val writeStarted = android.os.SystemClock.elapsedRealtime()
@@ -2261,6 +2292,37 @@ class MainActivity : Activity() {
                                 if (writeDuration > 80L || n <= 0) captureDiag("AudioTrack.write: n=$n duration=${writeDuration}ms written=$written/$count trackState=${track.state} playState=${track.playState}")
                                 if (n <= 0) throw IllegalStateException("AudioTrack write non riuscita: $n")
                                 written += n
+                                outputFramesWritten += n.toLong()
+                            }
+
+                            // Compare timestamps for the same PCM frame on capture and playback.
+                            // This measures the real wet-return path latency, including the selected route.
+                            try {
+                                val inputTs = android.media.AudioTimestamp()
+                                val outputTs = android.media.AudioTimestamp()
+                                val inputStatus = record.getTimestamp(inputTs, android.media.AudioTimestamp.TIMEBASE_MONOTONIC)
+                                val outputStatus = track.getTimestamp(outputTs, android.media.AudioTimestamp.TIMEBASE_MONOTONIC)
+                                if (inputStatus == 0 && outputStatus == 0 &&
+                                    inputTs.framePosition > 0L && outputTs.framePosition > 0L &&
+                                    outputTs.framePosition <= outputFramesWritten) {
+                                    val frameDelta = outputTs.framePosition - inputFramesRead
+                                    val captureTimeForOutputFrameNs = inputTs.nanoTime +
+                                        (frameDelta.toDouble() * 1_000_000_000.0 / sampleRate).toLong()
+                                    val measuredLatencyMs = (outputTs.nanoTime - captureTimeForOutputFrameNs) / 1_000_000.0
+                                    if (measuredLatencyMs in 0.0..2000.0) {
+                                        smoothedFxLatencyMs = if (smoothedFxLatencyMs.isFinite()) {
+                                            smoothedFxLatencyMs * 0.90f + measuredLatencyMs.toFloat() * 0.10f
+                                        } else measuredLatencyMs.toFloat()
+                                        fxOutputLatencyMs = smoothedFxLatencyMs
+                                        val latencyNow = android.os.SystemClock.elapsedRealtime()
+                                        if (latencyNow - lastFxLatencyUi >= 200L) {
+                                            lastFxLatencyUi = latencyNow
+                                            handler.post { refreshFxPhaseUi() }
+                                        }
+                                    }
+                                }
+                            } catch (_: Throwable) {
+                                // Timestamp APIs can be unavailable on some audio routes; never invent a phase value.
                             }
                             val rms = kotlin.math.sqrt(sum / count)
                             val rmsDb = if (rms > 0.0) 20.0 * kotlin.math.log10(rms / 32768.0) else -120.0
@@ -2308,6 +2370,9 @@ class MainActivity : Activity() {
         try { track?.stop() } catch (_: Throwable) {}
         try { track?.release() } catch (_: Throwable) {}
         parallelReverbProcessor = null
+        fxOutputLatencyMs = Float.NaN
+        fxAppliedPhaseDelayMs = 0f
+        handler.post { refreshFxPhaseUi() }
         captureThread = null
     }
 
