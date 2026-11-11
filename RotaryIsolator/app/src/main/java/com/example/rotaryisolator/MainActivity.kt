@@ -58,8 +58,6 @@ class MainActivity : Activity() {
     @Volatile private var delayMix = 0
     @Volatile private var delayFeedbackPercent = 52
     @Volatile private var delayTonePercent = 50
-    @Volatile private var fxLowEnabled = true
-    @Volatile private var fxMidEnabled = true
     @Volatile private var fxHighEnabled = true
     @Volatile private var delayBpm = 120f
     @Volatile private var delayTapBpm = 120f
@@ -194,16 +192,8 @@ class MainActivity : Activity() {
         delayMix = 0 // Il livello Delay parte sempre chiuso all’avvio dell’app.
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
         delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
-        val independentFxBandsApplied = prefs.getBoolean("beat_fx_independent_bands_v1", false)
-        fxLowEnabled = if (independentFxBandsApplied) prefs.getBoolean("beat_fx_low_enabled", true) else true
-        fxMidEnabled = if (independentFxBandsApplied) prefs.getBoolean("beat_fx_mid_enabled", true) else true
-        fxHighEnabled = if (independentFxBandsApplied) prefs.getBoolean("beat_fx_high_enabled", true) else true
-        if (!independentFxBandsApplied) prefs.edit()
-            .putBoolean("beat_fx_independent_bands_v1", true)
-            .putBoolean("beat_fx_low_enabled", true)
-            .putBoolean("beat_fx_mid_enabled", true)
-            .putBoolean("beat_fx_high_enabled", true)
-            .apply()
+        // Only FX HIGH is retained; legacy LOW/MID preferences are ignored.
+        fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", true)
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         val storedDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 9)
@@ -528,7 +518,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1796,52 +1786,35 @@ class MainActivity : Activity() {
         paintDivisionButtons()
         delayControls.addView(divisions, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
+        // The V10-style Beat FX keeps only the stable HIGH frequency selector.
         val frequencyRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val frequencyLabels = arrayOf("FX LOW", "FX MID", "FX HIGH")
-        val frequencyViews = ArrayList<TextView>()
-        fun frequencyEnabled(index: Int) = when (index) {
-            0 -> fxLowEnabled
-            1 -> fxMidEnabled
-            else -> fxHighEnabled
-        }
-        fun paintFrequencyButtons() {
-            frequencyViews.forEachIndexed { index, button ->
-                val active = frequencyEnabled(index)
-                button.background = android.graphics.drawable.GradientDrawable().apply {
+        val highFrequencyButton = TextView(this).apply {
+            text = "FX HIGH"
+            textSize = 9f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setOnClickListener {
+                fxHighEnabled = !fxHighEnabled
+                background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
-                    setColor(if (active) colorMaster else Color.rgb(55,62,72))
+                    setColor(if (fxHighEnabled) colorMaster else Color.rgb(55,62,72))
                     setStroke(dp(1), colorMaster)
                 }
-                button.setTextColor(if (active) Color.BLACK else Color.WHITE)
+                setTextColor(if (fxHighEnabled) Color.BLACK else Color.WHITE)
+                save(); scheduleUpdate()
             }
         }
-        frequencyLabels.forEachIndexed { index, caption ->
-            val button = TextView(this).apply {
-                text = caption
-                textSize = 9f
-                setTypeface(typeface, Typeface.BOLD)
-                gravity = Gravity.CENTER
-                setOnClickListener {
-                    when (index) {
-                        0 -> fxLowEnabled = !fxLowEnabled
-                        1 -> fxMidEnabled = !fxMidEnabled
-                        2 -> fxHighEnabled = !fxHighEnabled
-                    }
-                    paintFrequencyButtons()
-                    save(); scheduleUpdate()
-                }
-            }
-            frequencyViews.add(button)
-            frequencyRow.addView(button, LinearLayout.LayoutParams(0, -1, 1f).apply {
-                if (index > 0) leftMargin = dp(4)
-            })
+        highFrequencyButton.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(4).toFloat()
+            setColor(if (fxHighEnabled) colorMaster else Color.rgb(55,62,72))
+            setStroke(dp(1), colorMaster)
         }
-        paintFrequencyButtons()
+        highFrequencyButton.setTextColor(if (fxHighEnabled) Color.BLACK else Color.WHITE)
+        frequencyRow.addView(highFrequencyButton, LinearLayout.LayoutParams(-1, -1))
         delayControls.addView(frequencyRow, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
-
 
 
         val delayFeedbackDial = RotaryControl(
@@ -2138,7 +2111,7 @@ class MainActivity : Activity() {
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
                                 delayOn, delayFadeMs, delayDivision, delayMode, delayFeedbackPercent, delayTonePercent,
-                                fxLowEnabled, fxMidEnabled, fxHighEnabled,
+                                fxHighEnabled,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
                                 delaySyncOffsetMs
                             )
