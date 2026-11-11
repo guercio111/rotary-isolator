@@ -52,7 +52,7 @@ class MainActivity : Activity() {
     @Volatile private var delayOn = false
     @Volatile private var captureConsentLocked = false
     @Volatile private var delayFadeMs = 1400
-    @Volatile private var delayDivision = 3 // 1/4, 1/2, 3/4, 1, 2, 4, 8 beats
+    @Volatile private var delayDivision = 2 // V10 divisions: 1/16 .. 16 beats; default quarter note
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
     @Volatile private var selectedBeatFx = 2 // 0 SHORT, 1 LONG, 2 DUB ECHO, 3 REVERB
     @Volatile private var delayMix = 0
@@ -206,7 +206,13 @@ class MainActivity : Activity() {
             .apply()
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
-        delayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0,6)
+        val storedDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 9)
+        delayDivision = if (prefs.getBoolean("dub_delay_division_v10", false)) {
+            storedDelayDivision
+        } else {
+            intArrayOf(2, 3, 4, 5, 6, 7, 8)[storedDelayDivision.coerceIn(0, 6)]
+        }
+        prefs.edit().putBoolean("dub_delay_division_v10", true).apply()
         delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
         delayBpmCorrection = prefs.getFloat("reverb_delay_bpm_correction", 0f).coerceIn(-10f,10f)
         autoBpmEnabled = prefs.getBoolean("auto_bpm_enabled", false)
@@ -1756,7 +1762,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val divisionLabels = arrayOf("¼", "½", "¾", "1", "2", "4", "8")
+        val divisionLabels = arrayOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
         val divisionViews = ArrayList<TextView>()
         fun paintDivisionButtons() {
             divisionViews.forEachIndexed { index, button ->
@@ -1772,9 +1778,10 @@ class MainActivity : Activity() {
         divisionLabels.forEachIndexed { index, caption ->
             val button = TextView(this).apply {
                 text = caption
-                textSize = 10f
+                textSize = 8.5f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
+                setPadding(dp(1), 0, dp(1), 0)
                 setOnClickListener {
                     delayDivision = index
                     paintDivisionButtons()
