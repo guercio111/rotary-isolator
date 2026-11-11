@@ -2300,9 +2300,9 @@ class MainActivity : Activity() {
                             try {
                                 val inputTs = android.media.AudioTimestamp()
                                 val outputTs = android.media.AudioTimestamp()
-                                val inputValid = record.getTimestamp(inputTs)
+                                val inputStatus = record.getTimestamp(inputTs, android.media.AudioTimestamp.TIMEBASE_MONOTONIC)
                                 val outputValid = track.getTimestamp(outputTs)
-                                if (inputValid && outputValid &&
+                                if (inputStatus == 0 && outputValid &&
                                     inputTs.framePosition > 0L && outputTs.framePosition > 0L &&
                                     outputTs.framePosition <= outputFramesWritten) {
                                     val frameDelta = outputTs.framePosition - inputFramesRead
