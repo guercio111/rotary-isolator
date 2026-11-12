@@ -201,8 +201,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
     }
     // Single retained FX HIGH selector. LOW/MID crossovers are removed entirely.
     private val fxHighSplit2500 = LinkwitzRileySplit(sampleRate, 2500f)
-    private val fxHighSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.010))).toFloat()
-    private var smoothedFxHigh = 1f
+    // Smoothly blend the full-band and HIGH-filtered sends over 25 ms.
+    // The crossover keeps running while HIGH is off so its filter state is
+    // always warm when the user re-enables it.
+    private val fxHighSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
+    private var smoothedFxHigh = 0f
+    private var fxHighInitialized = false
 
     fun clear() {
         lines.forEach { it.clear() }
@@ -228,7 +232,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         activeDelayDivision = -1
         delayToneState = 0f
         fxHighSplit2500.clear()
-        smoothedFxHigh = 1f
+        smoothedFxHigh = 0f
+        fxHighInitialized = false
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -362,13 +367,19 @@ internal class SchroederReverb(private val sampleRate: Int) {
         for (i in 0 until count) {
             val source = input[i] / 32768f
 
-            // Only FX HIGH remains. When OFF, the effect receives the untouched
-            // full-band source: no LOW/MID splitters or hidden crossover states.
-            // When ON, only the high-frequency send enters the Beat FX.
-            val highBand = if (fxHighEnabled) fxHighSplit2500.processHigh(source) else source
+            // FX HIGH changes only the frequency content of the FX send.
+            // Keep the crossover running in both states, then crossfade between
+            // full-band and high-band audio. This avoids an instantaneous
+            // waveform/phase discontinuity when HIGH is toggled and prevents
+            // stale crossover state from reappearing on the next activation.
+            val highBand = fxHighSplit2500.processHigh(source)
             val highTarget = if (fxHighEnabled) 1f else 0f
+            if (!fxHighInitialized) {
+                smoothedFxHigh = highTarget
+                fxHighInitialized = true
+            }
             smoothedFxHigh += (highTarget - smoothedFxHigh) * fxHighSmoothing
-            val x = if (fxHighEnabled) highBand * smoothedFxHigh else source
+            val x = source + (highBand - source) * smoothedFxHigh
 
             // Two gentle high-pass stages keep kick/sub energy out of the
             // reverb excitation while retaining a natural mid/high body.
