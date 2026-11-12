@@ -801,11 +801,24 @@ class MainActivity : Activity() {
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
-                    max=(bandRange.endInclusive-bandRange.start).roundToInt()*10
-                    progress=((values[i]-bandRange.start)*10).roundToInt().coerceIn(0,max)
+                    val seekHalf=(max(abs(bandRange.start),abs(bandRange.endInclusive))*10f).roundToInt().coerceAtLeast(1)
+                    max=seekHalf*2
+                    progress=if(values[i]<=0f) {
+                        (seekHalf + values[i]/abs(bandRange.start).coerceAtLeast(0.0001f)*seekHalf).roundToInt()
+                    } else {
+                        (seekHalf + values[i]/bandRange.endInclusive.coerceAtLeast(0.0001f)*seekHalf).roundToInt()
+                    }.coerceIn(0,max)
                     isEnabled=active[i]
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){values[i]=(bandRange.start+p/10f).coerceAtMost(bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()}}
+                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){
+                            if(user){
+                                values[i]=if(p<=seekHalf) bandRange.start+(p.toFloat()/seekHalf)*(0f-bandRange.start)
+                                    else ((p-seekHalf).toFloat()/seekHalf)*bandRange.endInclusive
+                                values[i]=values[i].coerceIn(bandRange.start,bandRange.endInclusive)
+                                vLabel.text="${names[pos]}  ${fmt(values[i])} dB"
+                                scheduleUpdate()
+                            }
+                        }
                         override fun onStartTrackingTouch(s:SeekBar?){if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]}
                         override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
