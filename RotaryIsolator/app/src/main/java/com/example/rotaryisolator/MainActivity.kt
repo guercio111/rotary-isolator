@@ -1626,36 +1626,6 @@ class MainActivity : Activity() {
         var bpmFineSeek: SeekBar? = null
         var phaseJogLastProgress = 100
         var phaseJogSeek: PhaseMarkerSeekBar? = null
-        val autoCenterButton = TextView(this).apply {
-            text = "ALIGN"
-            textSize = 8f
-            setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(6).toFloat()
-                setColor(Color.rgb(55,62,72))
-                setStroke(dp(1), Color.rgb(255,190,45))
-            }
-            setTextColor(Color.rgb(255,190,45))
-            contentDescription = "Allinea automaticamente la fase FX al centro del riferimento MASTER"
-            setOnTouchListener { view, event ->
-                when (event.action) {
-                    MotionEvent.ACTION_DOWN -> {
-                        autoCenterFxPhase()
-                        (view.background as? android.graphics.drawable.GradientDrawable)?.setColor(Color.rgb(255,190,45))
-                        (view as TextView).setTextColor(Color.BLACK)
-                        true
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        (view.background as? android.graphics.drawable.GradientDrawable)?.setColor(Color.rgb(55,62,72))
-                        (view as TextView).setTextColor(Color.rgb(255,190,45))
-                        true
-                    }
-                    else -> true
-                }
-            }
-        }
-
         fun paintClockButton(button: TextView, active: Boolean) {
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
@@ -1783,6 +1753,36 @@ class MainActivity : Activity() {
             scheduleUpdate()
             fxPhaseSeek?.postDelayed({ refreshFxPhaseUi() }, 220L)
         }
+        val autoCenterButton = TextView(this).apply {
+            text = "ALIGN"
+            textSize = 8f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), Color.rgb(255,190,45))
+            }
+            setTextColor(Color.rgb(255,190,45))
+            contentDescription = "Allinea automaticamente la fase FX al centro del riferimento MASTER"
+            setOnTouchListener { view, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        autoCenterFxPhase()
+                        (view.background as? android.graphics.drawable.GradientDrawable)?.setColor(Color.rgb(255,190,45))
+                        (view as TextView).setTextColor(Color.BLACK)
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        (view.background as? android.graphics.drawable.GradientDrawable)?.setColor(Color.rgb(55,62,72))
+                        (view as TextView).setTextColor(Color.rgb(255,190,45))
+                        true
+                    }
+                    else -> true
+                }
+            }
+        }
+
         val phaseBackButton = TextView(this).apply {
             text = "◀"
             textSize = 13f
