@@ -177,24 +177,27 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayToneState = 0f
 
     private fun readDelayTap(delaySamples: Float): Float {
-        var position = delayWriteIndex.toFloat() - delaySamples
-        position %= delayBuffer.size.toFloat()
-        if (position < 0f) position += delayBuffer.size.toFloat()
-        val indexA = position.toInt()
-        val fraction = position - indexA
-        val indexB = if (indexA + 1 == delayBuffer.size) 0 else indexA + 1
+        // Use Double for circular-buffer position math. Float loses sub-sample
+        // precision near this 1,632,000-sample buffer boundary and can round a
+        // negative wrapped position up to exactly size, causing index == size.
+        val size = delayBuffer.size
+        var position = (delayWriteIndex.toDouble() - delaySamples.toDouble()) % size.toDouble()
+        if (position < 0.0) position += size.toDouble()
+        val indexA = position.toInt().coerceIn(0, size - 1)
+        val fraction = (position - indexA.toDouble()).toFloat().coerceIn(0f, 1f)
+        val indexB = if (indexA >= size - 1) 0 else indexA + 1
         val a = delayBuffer[indexA]
         val b = delayBuffer[indexB]
         return a + (b - a) * fraction
     }
 
     private fun readPhaseDelayTap(delaySamples: Float): Float {
-        var position = phaseDelayWriteIndex.toFloat() - delaySamples
-        position %= phaseDelayBuffer.size.toFloat()
-        if (position < 0f) position += phaseDelayBuffer.size.toFloat()
-        val indexA = position.toInt()
-        val fraction = position - indexA
-        val indexB = if (indexA + 1 == phaseDelayBuffer.size) 0 else indexA + 1
+        val size = phaseDelayBuffer.size
+        var position = (phaseDelayWriteIndex.toDouble() - delaySamples.toDouble()) % size.toDouble()
+        if (position < 0.0) position += size.toDouble()
+        val indexA = position.toInt().coerceIn(0, size - 1)
+        val fraction = (position - indexA.toDouble()).toFloat().coerceIn(0f, 1f)
+        val indexB = if (indexA >= size - 1) 0 else indexA + 1
         val a = phaseDelayBuffer[indexA]
         val b = phaseDelayBuffer[indexB]
         return a + (b - a) * fraction
