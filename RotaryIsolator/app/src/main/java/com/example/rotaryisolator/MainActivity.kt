@@ -194,6 +194,8 @@ class MainActivity : Activity() {
     private var colorIso = Color.rgb(70,190,120)
     private var colorFilters = Color.rgb(70,190,120)
     private var colorMaster = Color.rgb(70,190,120)
+    private var colorReverb = Color.rgb(70,190,120)
+    private var colorDelay = Color.rgb(70,190,120)
     private var colorButtons = Color.rgb(255,205,0)
     private var colorBackground = Color.rgb(17,19,23)
     private var colorTitles = Color.rgb(220,70,75)
@@ -320,6 +322,8 @@ class MainActivity : Activity() {
         colorIso = prefs.getInt("color_iso", Color.rgb(70,190,120))
         colorFilters = prefs.getInt("color_filters", Color.rgb(70,190,120))
         colorMaster = prefs.getInt("color_master", Color.rgb(70,190,120))
+        colorReverb = prefs.getInt("color_reverb", colorMaster)
+        colorDelay = prefs.getInt("color_delay", colorMaster)
         colorButtons = prefs.getInt("color_buttons", Color.rgb(255,205,0))
         colorBackground = prefs.getInt("color_background", Color.rgb(17,19,23))
         colorTitles = prefs.getInt("color_titles", Color.rgb(220,70,75))
@@ -619,7 +623,7 @@ class MainActivity : Activity() {
     private fun save() {
         prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putBoolean("limiter",limiterOn).putBoolean("isolator_limiter",isoLimiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
-            .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
+            .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_reverb",colorReverb).putInt("color_delay",colorDelay).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
             .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
@@ -928,32 +932,30 @@ class MainActivity : Activity() {
         val filterAccent = accentFor("FILTERS")
         val stackedTabletLandscape = !phonePortrait && wideLayout
         val useVerticalRows = !wideLayout || stackedTabletLandscape
-        val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
-            filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
-        }
-        if(stackedTabletLandscape) {
-            // Tablet landscape: place the HPF power switch beside its title.
-            // This reclaims the former 44dp switch lane for larger rotary dials.
-            val titleRow=LinearLayout(this).apply {
-                orientation=LinearLayout.HORIZONTAL
-                gravity=Gravity.CENTER_VERTICAL
+        val filterPower = TextView(this).apply {
+            text=if(filtersOn)"ON" else "OFF"
+            textSize=9f*phoneUiScale
+            setTypeface(typeface,Typeface.BOLD)
+            gravity=Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background=android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius=dp(5).toFloat()
+                setColor(if(filtersOn)Color.rgb(28,170,75) else Color.rgb(185,42,48))
+                setStroke(dp(1),if(filtersOn)Color.rgb(125,245,155) else Color.rgb(245,115,120))
             }
-            titleRow.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(0,dp(32),1f))
-            titleRow.addView(filterPower)
-            box.addView(titleRow,LinearLayout.LayoutParams(-1,dp(32)))
-        } else if(useVerticalRows) {
-            // Tablet portrait: retain the established centered title and switch lane.
-            box.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
-            val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterTitle.addView(filterPower)
-            box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
-        } else {
-            // Preserve the established phone layout.
-            box.addView(sectionLabel("HPF",if(compactFilter)11f else 13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactFilter)24 else 32)))
-            val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterTitle.addView(filterPower)
-            box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
+            contentDescription="HPF ON/OFF"
+            setOnClickListener { filtersOn=!filtersOn;save();refreshUi();scheduleUpdate() }
         }
+        val titleRow=LinearLayout(this).apply {
+            orientation=LinearLayout.HORIZONTAL
+            gravity=Gravity.CENTER_VERTICAL
+        }
+        titleRow.addView(
+            sectionLabel("HPF",if(compactFilter)11f else 13f,titleTint(filterAccent)),
+            LinearLayout.LayoutParams(0,dp(32),1f)
+        )
+        titleRow.addView(filterPower,LinearLayout.LayoutParams(dp(if(compactFilter)42 else 48),dp(24)))
+        box.addView(titleRow,LinearLayout.LayoutParams(-1,dp(32)))
         // Match EQ: use the available quadrant height rather than a fixed 138dp strip.
         val verticalRowHeight = ((windowHeightDp()*0.36f-76f)/2f).roundToInt().coerceIn(50,140)
         val verticalDialHeight = if(useVerticalRows) dp((verticalRowHeight-6).coerceAtLeast(44)) else dialHeight()
@@ -1266,17 +1268,17 @@ class MainActivity : Activity() {
     }
 
     private fun showColorOptions(){
-        val categories=arrayOf("EQ","ISOLATOR","FILTRI","MASTER / MANOPOLE","PULSANTI","SFONDO","TITOLI","OPZIONI")
+        val categories=arrayOf("EQ","ISOLATOR","FILTRI","MASTER / MANOPOLE","REVERB","DELAY / ECHO","PULSANTI","SFONDO","TITOLI","OPZIONI")
         AlertDialog.Builder(this).setTitle("PERSONALIZZA COLORI")
             .setItems(categories){_,which->
-                val key=arrayOf("EQ","ISOLATOR","FILTERS","MASTER","BUTTONS","BACKGROUND","TITLES","OPTIONS")[which]
+                val key=arrayOf("EQ","ISOLATOR","FILTERS","MASTER","REVERB","DELAY","BUTTONS","BACKGROUND","TITLES","OPTIONS")[which]
                 val names=arrayOf("Giallo oro","Azzurro","Arancione","Verde","Rosso","Viola","Bianco","Grigio","Nero","Antracite","Blu notte","Blu elettrico","Turchese","Rosa","Magenta","Verde lime","Ambra")
                 val colors=intArrayOf(Color.rgb(214,179,106),Color.rgb(80,180,220),Color.rgb(230,135,70),Color.rgb(70,190,120),Color.rgb(220,70,75),Color.rgb(165,115,220),Color.WHITE,Color.rgb(105,115,130),Color.BLACK,Color.rgb(17,19,23),Color.rgb(20,30,55),Color.rgb(35,90,210),Color.rgb(35,190,180),Color.rgb(235,125,170),Color.rgb(190,55,175),Color.rgb(145,205,55),Color.rgb(235,175,45))
-                val current=when(key){"EQ"->colorEq;"ISOLATOR"->colorIso;"FILTERS"->colorFilters;"MASTER"->colorMaster;"BUTTONS"->colorButtons;"TITLES"->colorTitles;"OPTIONS"->colorOptions;else->colorBackground}
+                val current=when(key){"EQ"->colorEq;"ISOLATOR"->colorIso;"FILTERS"->colorFilters;"MASTER"->colorMaster;"REVERB"->colorReverb;"DELAY"->colorDelay;"BUTTONS"->colorButtons;"TITLES"->colorTitles;"OPTIONS"->colorOptions;else->colorBackground}
                 val selected=colors.indexOf(current).coerceAtLeast(0)
                 AlertDialog.Builder(this).setTitle("COLORE • ${categories[which]}")
                     .setSingleChoiceItems(names,selected){dialog,index->
-                        when(key){"EQ"->colorEq=colors[index];"ISOLATOR"->colorIso=colors[index];"FILTERS"->colorFilters=colors[index];"MASTER"->colorMaster=colors[index];"BUTTONS"->colorButtons=colors[index];"BACKGROUND"->colorBackground=colors[index];"TITLES"->colorTitles=colors[index];"OPTIONS"->colorOptions=colors[index]}
+                        when(key){"EQ"->colorEq=colors[index];"ISOLATOR"->colorIso=colors[index];"FILTERS"->colorFilters=colors[index];"MASTER"->colorMaster=colors[index];"REVERB"->colorReverb=colors[index];"DELAY"->colorDelay=colors[index];"BUTTONS"->colorButtons=colors[index];"BACKGROUND"->colorBackground=colors[index];"TITLES"->colorTitles=colors[index];"OPTIONS"->colorOptions=colors[index]}
                         save();refreshUi();dialog.dismiss()
                     }.setNegativeButton("ANNULLA",null).show()
             }.setNegativeButton("CHIUDI",null).show()
@@ -1554,16 +1556,16 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, 0)
             setBackgroundColor(Color.TRANSPARENT)
         }
-        fun styleToggle(view: TextView, enabled: Boolean) {
+        fun styleToggle(view: TextView, enabled: Boolean, accent: Int) {
             view.text = if (enabled) "ON" else "OFF"
-            view.setTextColor(Color.WHITE)
+            view.setTextColor(if (enabled) Color.BLACK else Color.WHITE)
             view.textSize = 10f
             view.setTypeface(view.typeface, Typeface.BOLD)
             view.gravity = Gravity.CENTER
             view.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
-                setColor(if (enabled) Color.rgb(28,170,75) else Color.rgb(185,42,48))
-                setStroke(dp(1), if (enabled) Color.rgb(125,245,155) else Color.rgb(245,115,120))
+                setColor(if (enabled) accent else Color.rgb(55,62,72))
+                setStroke(dp(1), accent)
             }
         }
         fun fadeRow(title: String, initial: Int, update: (Int) -> Unit): LinearLayout {
@@ -1571,7 +1573,7 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(2), 0, dp(2), 0)
             }
-            val caption = label("$title  " + "%.1f".format(initial / 1000f) + " s", 10f, colorMaster)
+            val caption = label("$title  " + "%.1f".format(initial / 1000f) + " s", 10f, colorReverb)
             caption.gravity = Gravity.CENTER_VERTICAL
             val seek = SeekBar(this).apply {
                 max = 5700
@@ -1600,15 +1602,15 @@ class MainActivity : Activity() {
             gravity = Gravity.TOP or Gravity.START
         }
         val reverbPower = TextView(this).apply {
-            styleToggle(this, reverbOn)
+            styleToggle(this, reverbOn, colorReverb)
             setOnClickListener {
                 reverbOn = !reverbOn
-                styleToggle(this, reverbOn)
+                styleToggle(this, reverbOn, colorReverb)
                 save(); scheduleUpdate()
                 if (reverbOn) updateEffectsCapture(true)
             }
         }
-        val reverbTitle = label("REVERB", 13f, colorMaster)
+        val reverbTitle = label("REVERB", 13f, colorReverb)
         reverbTitle.gravity = Gravity.CENTER_VERTICAL
         header.gravity = Gravity.CENTER_VERTICAL
         header.addView(reverbTitle, LinearLayout.LayoutParams(-2, -1).apply { rightMargin = dp(8) })
@@ -1616,26 +1618,26 @@ class MainActivity : Activity() {
         panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
         val beatDial = RotaryControl(
-            this, "BEAT", reverbBeatPercent.toFloat(), 0f, 100f, colorMaster,
+            this, "BEAT", reverbBeatPercent.toFloat(), 0f, 100f, colorReverb,
             { value -> reverbBeatPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { String.format(java.util.Locale.US, "%.3f", 1f / 32f * Math.pow(16.0, reverbBeatPercent / 100.0)) + " BT" },
             onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val timeDial = RotaryControl(
-            this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
+            this, "TIME", reverbSize / 10f, 0f, 100f, colorReverb,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val depthDial = RotaryControl(
-            this, "DRY/WET", reverbMix.toFloat(), 0f, 100f, colorMaster,
+            this, "DRY/WET", reverbMix.toFloat(), 0f, 100f, colorReverb,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val filterDial = RotaryControl(
-            this, "FILTER", ((ln(reverbLpHz.coerceIn(1500,18000) / 1500f) / ln(12f)) * 100f).coerceIn(0f,100f), 0f, 100f, colorMaster,
+            this, "FILTER", ((ln(reverbLpHz.coerceIn(1500,18000) / 1500f) / ln(12f)) * 100f).coerceIn(0f,100f), 0f, 100f, colorReverb,
             { value -> reverbLpHz = (1500f * 12f.pow(value / 100f)).roundToInt().coerceIn(1500,18000); scheduleUpdate() },
             { if (reverbLpHz >= 1000) "${(reverbLpHz / 1000f).let { String.format(java.util.Locale.US, "%.1f", it) }} kHz" else "$reverbLpHz Hz" },
             onEnd = { save() }, titleInside = false,
@@ -1663,7 +1665,7 @@ class MainActivity : Activity() {
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
-            this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorMaster,
+            this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorDelay,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
@@ -1693,7 +1695,7 @@ class MainActivity : Activity() {
             background = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
                 setColor(Color.rgb(55,62,72))
-                setStroke(dp(1), colorMaster)
+                setStroke(dp(1), colorDelay)
             }
             setOnClickListener {
                 autoBpmEnabled = false
@@ -1709,8 +1711,8 @@ class MainActivity : Activity() {
         fun paintClockButton(button: TextView, active: Boolean) {
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
-                setColor(if (active) colorMaster else Color.rgb(55,62,72))
-                setStroke(dp(1), colorMaster)
+                setColor(if (active) colorDelay else Color.rgb(55,62,72))
+                setStroke(dp(1), colorDelay)
             }
             button.setTextColor(if (active) Color.BLACK else Color.WHITE)
         }
@@ -1925,10 +1927,10 @@ class MainActivity : Activity() {
             }
         }
         val delayPower = TextView(this).apply {
-            styleToggle(this, delayOn)
+            styleToggle(this, delayOn, colorDelay)
             setOnClickListener {
                 delayOn = !delayOn
-                styleToggle(this, delayOn)
+                styleToggle(this, delayOn, colorDelay)
                 save(); scheduleUpdate()
                 if (delayOn) updateEffectsCapture(true)
             }
@@ -1957,7 +1959,7 @@ class MainActivity : Activity() {
             })
         }
         delayControls.addView(clockControlRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
-        val bpmFineCaption = label("PITCH  −10%  |  0  |  +10%", 8f, colorMaster).apply {
+        val bpmFineCaption = label("PITCH  −10%  |  0  |  +10%", 8f, colorDelay).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
         delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.55f).apply { topMargin = dp(2) })
@@ -1990,7 +1992,7 @@ class MainActivity : Activity() {
         // Separate spring-centred FX phase jog. Dragging changes only the FX
         // phase trim; on release the handle returns to centre while the trim
         // remains applied. The existing PITCH fader above is left untouched.
-        val fxPhaseTitle = label("FX PHASE JOG  •  MISURA…", 8f, colorMaster).apply {
+        val fxPhaseTitle = label("FX PHASE JOG  •  MISURA…", 8f, colorDelay).apply {
             gravity = Gravity.CENTER
         }
         fxPhaseCaption = fxPhaseTitle
@@ -2059,8 +2061,8 @@ class MainActivity : Activity() {
                 val selected = selectedBeatFx == index
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
-                    setColor(if (selected) colorMaster else Color.rgb(55,62,72))
-                    setStroke(dp(1), colorMaster)
+                    setColor(if (selected) colorDelay else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorDelay)
                 }
                 button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
             }
@@ -2098,8 +2100,8 @@ class MainActivity : Activity() {
                 val selected = delayDivision == index
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
-                    setColor(if (selected) colorMaster else Color.rgb(55,62,72))
-                    setStroke(dp(1), colorMaster)
+                    setColor(if (selected) colorDelay else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorDelay)
                 }
                 button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
             }
@@ -2142,16 +2144,16 @@ class MainActivity : Activity() {
                     toggle()
                     background = android.graphics.drawable.GradientDrawable().apply {
                         cornerRadius = dp(4).toFloat()
-                        setColor(if (isSelected()) colorMaster else Color.rgb(55,62,72))
-                        setStroke(dp(1), colorMaster)
+                        setColor(if (isSelected()) colorDelay else Color.rgb(55,62,72))
+                        setStroke(dp(1), colorDelay)
                     }
                     setTextColor(if (isSelected()) Color.BLACK else Color.WHITE)
                     save(); scheduleUpdate()
                 }
                 background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
-                    setColor(if (isSelected()) colorMaster else Color.rgb(55,62,72))
-                    setStroke(dp(1), colorMaster)
+                    setColor(if (isSelected()) colorDelay else Color.rgb(55,62,72))
+                    setStroke(dp(1), colorDelay)
                 }
                 setTextColor(if (isSelected()) Color.BLACK else Color.WHITE)
             }
@@ -2166,13 +2168,13 @@ class MainActivity : Activity() {
 
 
         val delayFeedbackDial = RotaryControl(
-            this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorMaster,
+            this, "FEEDBACK", delayFeedbackPercent.toFloat(), 0f, 90f, colorDelay,
             { value -> delayFeedbackPercent = value.roundToInt().coerceIn(0,90); scheduleUpdate() },
             { "${delayFeedbackPercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val delayToneDial = RotaryControl(
-            this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorMaster,
+            this, "TONE", delayTonePercent.toFloat(), 0f, 100f, colorDelay,
             { value -> delayTonePercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "${delayTonePercent}%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
