@@ -812,7 +812,7 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
+                val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,zeroCentered=key=="ISOLATOR")
                 knob.isEnabled=active[i]
                 // In portrait each dial occupies the same flexible column; the
                 // control measures itself from its row, never from a guessed width.
@@ -2879,7 +2879,8 @@ private class RotaryControl(
     private val step:Float = 0f,
     private val spaciousText:Boolean = false,
     private val labelScale:Float = 1f,
-    private val wheelStep:Float = 0f
+    private val wheelStep:Float = 0f,
+    private val zeroCentered:Boolean = false
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -2923,7 +2924,12 @@ private class RotaryControl(
                 p.style=Paint.Style.STROKE
             }
         }
-        val n=((v-minV)/(maxV-minV)).coerceIn(0f,1f)
+        // ISOLATOR dials use 0 dB at the physical center of the sweep,
+        // even when the available positive and negative ranges are asymmetric.
+        val n=if(zeroCentered) {
+            if(v<=0f) (0.5f*(v-minV)/(0f-minV).coerceAtLeast(0.0001f)).coerceIn(0f,0.5f)
+            else (0.5f+0.5f*v/maxV.coerceAtLeast(0.0001f)).coerceIn(0.5f,1f)
+        } else ((v-minV)/(maxV-minV)).coerceIn(0f,1f)
         p.color=accent;p.strokeWidth=dp(6f);c.drawArc(arc,135f,270f*n,false,p)
         p.style=Paint.Style.FILL;p.color=0xFF292E36.toInt();c.drawCircle(cx,cy,rad*.70f,p)
         val a=Math.toRadians((135+270*n).toDouble())
@@ -2946,7 +2952,10 @@ private class RotaryControl(
         if(degrees<0f)degrees+=360f
         if(degrees<45f)degrees+=360f
         val fraction=((degrees.coerceIn(135f,405f)-135f)/270f).coerceIn(0f,1f)
-        v=quantize(minV+fraction*(maxV-minV))
+        v=quantize(if(zeroCentered) {
+            if(fraction<=0.5f) minV+(fraction*2f)*(0f-minV)
+            else (fraction-0.5f)*2f*maxV
+        } else minV+fraction*(maxV-minV))
         changed(v);invalidate()
     }
     override fun onTouchEvent(e:MotionEvent):Boolean{
