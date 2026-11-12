@@ -419,7 +419,19 @@ class MainActivity : Activity() {
         val previousTaskId = prefs.getInt("session_task_id", -1)
         val isNewTask = previousTaskId != -1 && previousTaskId != taskId
         val returningFromBackground = prefs.getBoolean("session_in_background", false) && !isNewTask
-        if (defaultSettingsOnStart && savedInstanceState == null && !returningFromBackground) applyStartupDefaults()
+        val freshAppLaunch = savedInstanceState == null && !returningFromBackground
+        if (defaultSettingsOnStart && freshAppLaunch) applyStartupDefaults()
+        // ISOLATOR always starts flat on a fresh app launch, independently of
+        // the general startup-defaults option. Background/process restoration
+        // keeps the live mixer values unchanged.
+        if (freshAppLaunch) {
+            for (i in 0..2) {
+                iso[i] = 0f
+                previousIso[i] = 0f
+                sectionPreviousIso[i] = 0f
+            }
+            save()
+        }
         prefs.edit().putInt("session_task_id", taskId).putBoolean("session_in_background", false).apply()
         buildUi()
         connectAudio()
@@ -816,7 +828,10 @@ class MainActivity : Activity() {
             },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
             bandActions.addView(circleAction("F",actionFlatSize) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
-                values[i]=0f; scheduleUpdate(); refreshUi()
+                values[i]=0f
+                save()
+                scheduleUpdate()
+                refreshUi()
             },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
