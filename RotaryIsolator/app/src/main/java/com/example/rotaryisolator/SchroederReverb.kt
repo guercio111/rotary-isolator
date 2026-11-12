@@ -154,6 +154,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var reverbPreDelayWriteIndex = 0
     private var smoothedReverbPreDelaySamples = 0f
     private var smoothedReverbFilterHz = 14000f
+    // The FILTER control also damps the recirculating FDN tail, not just its input.
+    // This one-pole coefficient maps the selected cutoff to a stable feedback low-pass.
+    private var smoothedReverbDamping = exp((-2.0 * PI * 14000.0 / sampleRate).toFloat())
     // A separate, low-feedback quarter-note echo return. The reverb network
     // above is left unchanged so a zero delay setting is bit-for-bit equivalent.
     private val delayBuffer = FloatArray(sampleRate * 34)
@@ -233,6 +236,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         reverbPreDelayWriteIndex = 0
         smoothedReverbPreDelaySamples = 0f
         smoothedReverbFilterHz = 14000f
+        smoothedReverbDamping = exp((-2.0 * PI * 14000.0 / sampleRate).toFloat())
         delayBuffer.fill(0f)
         delayWriteIndex = 0
         phaseDelayBuffer.fill(0f)
@@ -380,10 +384,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
 
         // TIME controls the diffuse tail; BEAT adds a tempo-related pre-delay.
         // DRY/WET is the independent return level and FILTER is the X-PAD high cut.
+        // Keep the longest normal tail below the near-freeze region. The previous
+        // 0.955 maximum could make individual FDN modes linger as audible ringing.
         val feedback = if (freeze) 0.965f else
-            (0.78f + size * 0.175f).coerceIn(0.78f, 0.955f)
-        val damping = if (freeze) 0.035f else
-            (0.08f + (1f - size) * 0.10f + (1f - requestedLp / 18000f) * 0.12f).coerceIn(0.015f, 0.32f)
+            (0.78f + size * 0.16f).coerceIn(0.78f, 0.94f)
+        // FILTER is now a true high-cut inside the feedback loop. A one-pole
+        // coefficient of exp(-2*pi*fc/fs) gives progressively darker, less resonant
+        // repeats as the cutoff is lowered, while remaining stable at both extremes.
+        val targetReverbDamping = exp((-2.0 * PI * requestedLp / sampleRate).toFloat())
 
         for (i in 0 until count) {
             val source = input[i] / 32768f
@@ -416,6 +424,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             hp2X = hpOut1
             hp2Y = hpOut2
             smoothedReverbFilterHz += (requestedLp - smoothedReverbFilterHz) * filterSmoothing
+            smoothedReverbDamping += (targetReverbDamping - smoothedReverbDamping) * filterSmoothing
             val lpA = (1f - exp((-2.0 * PI * smoothedReverbFilterHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
             lpY += lpA * (hpOut2 - lpY)
 
@@ -437,7 +446,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
 
             var wet = 0f
             for (n in 0 until 8) {
-                val delayed = lines[n].read(damping)
+                val delayed = lines[n].read(smoothedReverbDamping)
                 matrix[n] = delayed
                 wet += delayed * outputPattern[n]
             }
