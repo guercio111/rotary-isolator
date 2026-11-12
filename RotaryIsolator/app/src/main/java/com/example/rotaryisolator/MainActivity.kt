@@ -900,30 +900,48 @@ class MainActivity : Activity() {
             }else{
                 val knob=RotaryControl(this,names[i],current,0f,1f,filterAccent,{v->
                     if(i==1)resonance=v else filters[0]=v
-                    
                     scheduleUpdate()
                 },{((if(i==1)resonance else filters[0])*100).roundToInt().toString()+"%"},onStart={previousFilters[i]=if(i==1)resonance else filters[0]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,bottomTextLift=if(useVerticalRows)8f else 0f)
                 knob.isEnabled=controlEnabled
-                if(stackedTabletLandscape && i==1){knob.scaleX=0.78f;knob.scaleY=0.78f}
-                // Make the HPF dial more prominent on tablet portrait;
-                // resonance keeps its original size.
-                if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
-                if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
-                controlRow.addView(knob,if(stackedTabletLandscape) LinearLayout.LayoutParams(-1,-1) else if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout) filterLandscapeDialHeight else verticalDialHeight,1f))
+                if(stackedTabletLandscape) {
+                    // Both filter dials use the same footprint as each Reverb dial.
+                    controlRow.addView(knob,LinearLayout.LayoutParams(0,-1,1f))
+                } else {
+                    if (useVerticalRows && i == 0) { knob.scaleX = 1.04f; knob.scaleY = 1.04f }
+                    if (useVerticalRows && i == 1) { knob.scaleX = 0.72f; knob.scaleY = 0.72f }
+                    controlRow.addView(knob,if(useVerticalRows) LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,if(wideLayout) filterLandscapeDialHeight else verticalDialHeight,1f))
+                }
             }
-            col.addView(controlRow,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,0,1f) else if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
-            val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            filterActions.addView(circleAction("↶",filterReturnSize){
-                val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
-                if(i==1)resonance=old else filters[0]=old
-                save();refreshUi();scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
-            filterActions.addView(circleAction("0",filterFlatSize){
-                previousFilters[i]=if(i==1)resonance else filters[0]
-                if(i==1)resonance=0f else filters[0]=0f
-                scheduleUpdate();refreshUi()
-            },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
-            col.addView(filterActions,if(stackedTabletLandscape)LinearLayout.LayoutParams(-1,dp(30)) else if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
+            if(stackedTabletLandscape) {
+                // Yellow actions sit to the right of each rotary, like mixer strip controls.
+                val filterActions=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+                filterActions.addView(circleAction("↶",filterReturnSize){
+                    val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
+                    if(i==1)resonance=old else filters[0]=old
+                    save();refreshUi();scheduleUpdate()
+                },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{bottomMargin=dp(4)})
+                filterActions.addView(circleAction("0",filterFlatSize){
+                    previousFilters[i]=if(i==1)resonance else filters[0]
+                    if(i==1)resonance=0f else filters[0]=0f
+                    scheduleUpdate();refreshUi()
+                },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
+                controlRow.addView(filterActions,LinearLayout.LayoutParams(dp(filterFlatSize+8),-1))
+                col.addView(controlRow,LinearLayout.LayoutParams(-1,0,1f))
+            } else {
+                col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
+                val filterActions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+                filterActions.addView(circleAction("↶",filterReturnSize){
+                    val old=previousFilters[i]; previousFilters[i]=if(i==1)resonance else filters[0]
+                    if(i==1)resonance=old else filters[0]=old
+                    save();refreshUi();scheduleUpdate()
+                },LinearLayout.LayoutParams(dp(filterReturnSize),dp(filterReturnSize)).apply{rightMargin=dp(filterActionGap)})
+                filterActions.addView(circleAction("0",filterFlatSize){
+                    previousFilters[i]=if(i==1)resonance else filters[0]
+                    if(i==1)resonance=0f else filters[0]=0f
+                    scheduleUpdate();refreshUi()
+                },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
+                col.addView(filterActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1) else LinearLayout.LayoutParams(-1,dp(filterActionHeight)))
+            }
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
         }
         box.addView(row,if(useVerticalRows) LinearLayout.LayoutParams(-1,0,1f).apply{topMargin=dp(4)} else LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(if(compactFilter)4 else 7)});parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections["FILTERS"]=box
