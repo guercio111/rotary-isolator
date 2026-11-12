@@ -300,7 +300,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         fxPhaseOffsetMs: Float = 0f,
         reverbBeatPercent: Int = 50
     ) {
-        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
+        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.90f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
         val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
@@ -499,7 +499,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // Effect switches use the existing smoothed send levels as a short
             // output fade. A hard gate here creates an abrupt waveform discontinuity
             // exactly when the user toggles an effect.
-            val reverbReturn = wet * smoothedMix * 1.28f
+            val reverbReturn = wet * smoothedMix
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f
             // Frequency selection is upstream on the FX send. The wet return
             // remains untouched so reverb tails and delay feedback are natural.
