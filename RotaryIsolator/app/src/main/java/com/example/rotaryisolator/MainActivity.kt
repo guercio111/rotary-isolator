@@ -851,15 +851,24 @@ class MainActivity : Activity() {
         val filterPower = roundAction("",if(filtersOn)"ON" else "OFF",filtersOn){
             filtersOn=!filtersOn;save();refreshUi();scheduleUpdate()
         }
-        if(useVerticalRows) {
-            // Tablet portrait: center the section title and reserve the same
-            // 44dp control lane used by EQ and ISOLATOR.
+        if(stackedTabletLandscape) {
+            // Tablet landscape: place the HPF power switch beside its title.
+            // This reclaims the former 44dp switch lane for larger rotary dials.
+            val titleRow=LinearLayout(this).apply {
+                orientation=LinearLayout.HORIZONTAL
+                gravity=Gravity.CENTER_VERTICAL
+            }
+            titleRow.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(0,dp(32),1f))
+            titleRow.addView(filterPower)
+            box.addView(titleRow,LinearLayout.LayoutParams(-1,dp(32)))
+        } else if(useVerticalRows) {
+            // Tablet portrait: retain the established centered title and switch lane.
             box.addView(sectionLabel("HPF",13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(32)).apply { gravity=Gravity.CENTER_HORIZONTAL })
             val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterTitle.addView(filterPower)
             box.addView(filterTitle,LinearLayout.LayoutParams(-1,dp(44)))
         } else {
-            // Preserve the established phone and landscape presentation.
+            // Preserve the established phone layout.
             box.addView(sectionLabel("HPF",if(compactFilter)11f else 13f,titleTint(filterAccent)),LinearLayout.LayoutParams(-1,dp(if(compactFilter)24 else 32)))
             val filterTitle=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             filterTitle.addView(filterPower)
@@ -875,9 +884,10 @@ class MainActivity : Activity() {
         for(i in 0..1){
             val col=LinearLayout(this).apply{orientation=if(stackedTabletLandscape)LinearLayout.VERTICAL else if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val current=if(i==1)resonance else filters[0]
-            val filterReturnSize=if(stackedTabletLandscape)22 else if(compactFilter)18 else 42
-            val filterFlatSize=if(stackedTabletLandscape)26 else if(compactFilter)22 else 56
-            val filterActionGap=if(stackedTabletLandscape)4 else if(compactFilter)1 else 8
+            // Match the yellow action buttons in the EQ / ISOLATOR sections.
+            val filterReturnSize=if(stackedTabletLandscape)42 else if(compactFilter)18 else 42
+            val filterFlatSize=if(stackedTabletLandscape)56 else if(compactFilter)22 else 56
+            val filterActionGap=if(stackedTabletLandscape)8 else if(compactFilter)1 else 8
             val filterActionHeight=if(stackedTabletLandscape)30 else if(compactFilter)24 else 58
             val controlEnabled=filtersOn
             // Tablet portrait: EQ dials use the full row width and are centered
@@ -925,7 +935,7 @@ class MainActivity : Activity() {
                     if(i==1)resonance=0f else filters[0]=0f
                     scheduleUpdate();refreshUi()
                 },LinearLayout.LayoutParams(dp(filterFlatSize),dp(filterFlatSize)))
-                controlRow.addView(filterActions,LinearLayout.LayoutParams(dp(filterFlatSize+8),-1))
+                controlRow.addView(filterActions,LinearLayout.LayoutParams(dp(filterReturnSize+filterFlatSize+filterActionGap),-1))
                 col.addView(controlRow,LinearLayout.LayoutParams(-1,0,1f))
             } else {
                 col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,if(wideLayout) filterLandscapeDialHeight else dialHeight()))
