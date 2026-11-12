@@ -304,7 +304,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         fxPhaseOffsetMs: Float = 0f,
         reverbBeatPercent: Int = 50
     ) {
-        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.90f) else 0f
+        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.94f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
         val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
@@ -441,7 +441,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val delayedExcitation = reverbPreDelayBuffer[preDelayIndex] +
                 (reverbPreDelayBuffer[preDelayNext] - reverbPreDelayBuffer[preDelayIndex]) * preDelayFraction
             reverbPreDelayWriteIndex = if (safePreDelayWrite + 1 >= reverbPreDelayBuffer.size) 0 else safePreDelayWrite + 1
-            var excitation = delayedExcitation * 0.45f
+            var excitation = delayedExcitation * 0.53f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -458,7 +458,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 lines[n].write(excitation * inputPattern[n] + matrix[n] * feedback)
             }
 
-            wet *= 0.35355339f
+            wet *= 0.375f
             for (diffuser in outputDiffusers) wet = diffuser.tick(wet)
 
             val transitionProgress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
