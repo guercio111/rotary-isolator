@@ -1625,6 +1625,37 @@ class MainActivity : Activity() {
         }
         var bpmFineSeek: SeekBar? = null
         var phaseJogLastProgress = 100
+        var phaseJogSeek: PhaseMarkerSeekBar? = null
+        val autoCenterButton = TextView(this).apply {
+            text = "ALIGN"
+            textSize = 8f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                setColor(Color.rgb(55,62,72))
+                setStroke(dp(1), Color.rgb(255,190,45))
+            }
+            setTextColor(Color.rgb(255,190,45))
+            contentDescription = "Allinea automaticamente la fase FX al centro del riferimento MASTER"
+            setOnTouchListener { view, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        autoCenterFxPhase()
+                        (view.background as? android.graphics.drawable.GradientDrawable)?.setColor(Color.rgb(255,190,45))
+                        (view as TextView).setTextColor(Color.BLACK)
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        (view.background as? android.graphics.drawable.GradientDrawable)?.setColor(Color.rgb(55,62,72))
+                        (view as TextView).setTextColor(Color.rgb(255,190,45))
+                        true
+                    }
+                    else -> true
+                }
+            }
+        }
+
         fun paintClockButton(button: TextView, active: Boolean) {
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
@@ -1725,6 +1756,33 @@ class MainActivity : Activity() {
             fxBpmLastBeatIndex = Long.MIN_VALUE
             scheduleUpdate()
         }
+        fun autoCenterFxPhase() {
+            val error = currentFxPhaseErrorMs()
+            if (!error.isFinite()) {
+                fxPhaseCaption?.text = "ATTENDI MISURA FASE"
+                return
+            }
+            val halfRange = (currentFxPeriodMs() * 0.5f).coerceAtLeast(1f)
+            // Apply the inverse of the measured FX phase error. Wrap the
+            // correction into one half-beat so the jog remains in its range.
+            val fullRange = halfRange * 2f
+            var corrected = (fxPhaseOffsetMs - error) % fullRange
+            if (corrected > halfRange) corrected -= fullRange
+            if (corrected < -halfRange) corrected += fullRange
+            fxPhaseOffsetMs = corrected
+            fxBpmLastBeatIndex = Long.MIN_VALUE
+            phaseJogLastProgress = 100
+            fxPhaseSeek?.let { seek ->
+                android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
+                    duration = 180L
+                    addUpdateListener { animation -> seek.progress = animation.animatedValue as Int }
+                    start()
+                }
+            }
+            refreshFxPhaseUi()
+            scheduleUpdate()
+            fxPhaseSeek?.postDelayed({ refreshFxPhaseUi() }, 220L)
+        }
         val phaseBackButton = TextView(this).apply {
             text = "◀"
             textSize = 13f
@@ -1804,7 +1862,8 @@ class MainActivity : Activity() {
         }
         fxBpmBeat = fxBeatLamp
         delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(46), dp(40)))
-        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(4) })
+        delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(2) })
+        delayTop.addView(autoCenterButton, LinearLayout.LayoutParams(dp(48), dp(40)).apply { rightMargin = dp(4) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
         delayTop.addView(fxBeatLamp, LinearLayout.LayoutParams(dp(22), dp(40)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.25f))
@@ -1856,7 +1915,7 @@ class MainActivity : Activity() {
         }
         fxPhaseCaption = fxPhaseTitle
         refreshFxPhaseUi()
-        val phaseJogSeek = PhaseMarkerSeekBar().apply {
+        phaseJogSeek = PhaseMarkerSeekBar().apply {
             max = 200
             contentDescription = "Allineamento fase: riferimento MASTER verde e riferimento FX giallo"
             progress = 100
