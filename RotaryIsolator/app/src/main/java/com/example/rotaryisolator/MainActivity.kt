@@ -1512,37 +1512,46 @@ class MainActivity : Activity() {
             { value -> reverbBeatPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { String.format(java.util.Locale.US, "%.3f", 1f / 32f * Math.pow(16.0, reverbBeatPercent / 100.0)) + " BT" },
             onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val timeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val depthDial = RotaryControl(
             this, "DRY/WET", reverbMix.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val filterDial = RotaryControl(
             this, "FILTER", ((ln(reverbLpHz.coerceIn(1500,18000) / 1500f) / ln(12f)) * 100f).coerceIn(0f,100f), 0f, 100f, colorMaster,
             { value -> reverbLpHz = (1500f * 12f.pow(value / 100f)).roundToInt().coerceIn(1500,18000); scheduleUpdate() },
             { if (reverbLpHz >= 1000) "${(reverbLpHz / 1000f).let { String.format(java.util.Locale.US, "%.1f", it) }} kHz" else "$reverbLpHz Hz" },
             onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val reverbRow = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        val reverbTopRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        // Four independent performance controls: tempo-related pre-delay,
-        // tail time, dry/wet balance and the X-PAD-style high-cut filter.
-        reverbRow.addView(beatDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbRow.addView(timeDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbRow.addView(filterDial, LinearLayout.LayoutParams(0, -1, 1f))
+        val reverbBottomRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        // Larger 2x2 layout: BEAT / TIME above, DRY-WET / FILTER below.
+        reverbTopRow.addView(beatDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbTopRow.addView(timeDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(depthDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(filterDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbRow.addView(reverbTopRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbRow.addView(reverbBottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
