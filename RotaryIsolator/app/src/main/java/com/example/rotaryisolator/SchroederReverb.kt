@@ -208,7 +208,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // LOW + MID + HIGH therefore reconstruct the original full-band signal.
     private val fxLowMidSplit = LinkwitzRileySplit(sampleRate, 250f)
     private val fxMidHighSplit = LinkwitzRileySplit(sampleRate, 2500f)
-    private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.015))).toFloat()
+    private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.035))).toFloat()
     private var smoothedFxLow = 1f
     private var smoothedFxMid = 1f
     private var smoothedFxHigh = 1f
@@ -346,11 +346,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
             delayDivisionSwitch = true
             activeDelayDivision = requestedDivision
         } else if (!delayDivisionSwitch && delayTransitionPosition >= delayTransitionLength &&
-            kotlin.math.abs(targetDelaySamples - delayTransitionToSamples) > 1f) {
-            // BPM/TIME changes also move to the new tap without a hard discontinuity.
+            kotlin.math.abs(targetDelaySamples - delayTransitionToSamples) > sampleRate * 0.005f) {
+            // BPM/TIME changes use the same fade-out / fade-in handoff as beat
+            // division changes. Never crossfade two different delay taps: their
+            // phase interference creates the high-pitched whistle heard on tempo moves.
             delayTransitionFromSamples = delayTransitionToSamples
             delayTransitionToSamples = targetDelaySamples
             delayTransitionPosition = 0
+            delayDivisionSwitch = true
         }
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
@@ -471,11 +474,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val safeWriteIndex = Math.floorMod(delayWriteIndex, delayBuffer.size)
             delayBuffer[safeWriteIndex] = (phaseShiftedInput * 0.68f + delayToneState * modeFeedback).coerceIn(-0.88f, 0.88f)
             delayWriteIndex = if (safeWriteIndex + 1 >= delayBuffer.size) 0 else safeWriteIndex + 1
-            // TEST: OFF is a hard output gate. The fade controls continue to shape
-            // the return while enabled, but a disabled switch must produce no wet
-            // signal at all. This isolates lingering DSP tails from stale AudioTrack output.
-            val reverbReturn = if (inputEnabled) wet * smoothedMix * 1.28f else 0f
-            val delayReturn = if (delayEnabled) delayToneState * smoothedDelayMix * 1.28f else 0f
+            // Effect switches use the existing smoothed send levels as a short
+            // output fade. A hard gate here creates an abrupt waveform discontinuity
+            // exactly when the user toggles an effect.
+            val reverbReturn = wet * smoothedMix * 1.28f
+            val delayReturn = delayToneState * smoothedDelayMix * 1.28f
             // Frequency selection is upstream on the FX send. The wet return
             // remains untouched so reverb tails and delay feedback are natural.
             val raw = reverbReturn + delayReturn
