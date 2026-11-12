@@ -199,6 +199,8 @@ class MainActivity : Activity() {
     private var colorTitles = Color.rgb(220,70,75)
     private var colorOptions = Color.rgb(255,205,0)
     private var limiterOn = true
+    // Independent ISOLATOR boost ceiling; the global output limiter remains separate.
+    private var isoLimiterOn = true
     private var mouseWheelAdjustOn = false
     private var mouseWheelSensitivity = 1f
     private var compressorOn = false
@@ -348,6 +350,7 @@ class MainActivity : Activity() {
             .apply()
         val limiterDefaultApplied = prefs.getBoolean("limiter_default_v1", false)
         limiterOn = if (limiterDefaultApplied) prefs.getBoolean("limiter", true) else true
+        isoLimiterOn = prefs.getBoolean("isolator_limiter", true)
         compressorOn = prefs.getBoolean("compressor_on", false)
         compThreshold = prefs.getFloat("comp_threshold", -18f).coerceIn(-36f, 0f)
         compRatio = prefs.getFloat("comp_ratio", 3f).coerceIn(1f, 12f)
@@ -387,6 +390,14 @@ class MainActivity : Activity() {
         for(i in 0..2){
             previousIso[i]=prefs.getFloat("previous_iso_$i",iso[i])
             sectionPreviousIso[i]=prefs.getFloat("section_previous_iso_$i",iso[i])
+        }
+        if (isoLimiterOn) {
+            for (i in 0..2) {
+                val ceiling = if (i == 0) 0f else 6f
+                iso[i] = iso[i].coerceIn(-24f, ceiling)
+                previousIso[i] = previousIso[i].coerceIn(-24f, ceiling)
+                sectionPreviousIso[i] = sectionPreviousIso[i].coerceIn(-24f, ceiling)
+            }
         }
         previousFilters[0]=prefs.getFloat("previous_hpf",filters[0])
         previousFilters[1]=0f
@@ -594,7 +605,7 @@ class MainActivity : Activity() {
     }
 
     private fun save() {
-        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putBoolean("limiter",limiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
+        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putBoolean("limiter",limiterOn).putBoolean("isolator_limiter",isoLimiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
@@ -768,6 +779,8 @@ class MainActivity : Activity() {
         val names = if(key=="EQ" && eqDoubleMid) listOf("HIGH","MID HIGH","MID LOW","LOW") else listOf("HIGH","MID","LOW")
         for(pos in indices.indices){
             val i=indices[pos]
+            val bandCeiling = if (key == "ISOLATOR" && isoLimiterOn) (if (i == 0) 0f else 6f) else range.endInclusive
+            val bandRange = range.start..bandCeiling
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
@@ -776,18 +789,18 @@ class MainActivity : Activity() {
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
-                    max=(range.endInclusive-range.start).roundToInt()*10
-                    progress=((values[i]-range.start)*10).roundToInt().coerceIn(0,max)
+                    max=(bandRange.endInclusive-bandRange.start).roundToInt()*10
+                    progress=((values[i]-bandRange.start)*10).roundToInt().coerceIn(0,max)
                     isEnabled=active[i]
                     setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
-                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){values[i]=range.start+p/10f;vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()}}
+                        override fun onProgressChanged(s:SeekBar?,p:Int,user:Boolean){if(user){values[i]=(bandRange.start+p/10f).coerceAtMost(bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()}}
                         override fun onStartTrackingTouch(s:SeekBar?){if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]}
                         override fun onStopTrackingTouch(s:SeekBar?){scheduleUpdate()}
                     })
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],range.start,range.endInclusive,sectionAccent,{v->values[i]=v;vLabel.text="${names[i]}  ${fmt(v)} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
+                val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows)
                 knob.isEnabled=active[i]
                 // In portrait each dial occupies the same flexible column; the
                 // control measures itself from its row, never from a guessed width.
@@ -799,7 +812,7 @@ class MainActivity : Activity() {
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
-                values[i]=old; save(); refreshUi(); scheduleUpdate()
+                values[i]=old.coerceIn(bandRange.start,bandRange.endInclusive); save(); refreshUi(); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
             bandActions.addView(circleAction("F",actionFlatSize) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
@@ -833,6 +846,45 @@ class MainActivity : Activity() {
             }
         }
         headerControls.addView(sectionPower,LinearLayout.LayoutParams(dp(if(compactHeader)38 else 48),dp(if(compactHeader)24 else 28)).apply{rightMargin=dp(5)})
+        if (key == "ISOLATOR") {
+            val isoLimiterButton = Button(this).apply {
+                fun paintLimiter() {
+                    text = if (isoLimiterOn) "LIMITER ON" else "LIMITER OFF"
+                    backgroundTintList = ColorStateList.valueOf(
+                        if (isoLimiterOn) Color.rgb(25,150,65) else Color.rgb(105,55,55)
+                    )
+                }
+                textSize = (if (compactHeader) 7f else 8.5f) * phoneUiScale
+                isAllCaps = false
+                setTextColor(Color.WHITE)
+                minWidth = 0
+                minimumWidth = 0
+                minHeight = dp(if (compactHeader) 24 else 27)
+                minimumHeight = dp(if (compactHeader) 24 else 27)
+                setPadding(dp(2), 0, dp(2), 0)
+                paintLimiter()
+                contentDescription = "ISOLATOR LIMITER on/off"
+                setOnClickListener {
+                    isoLimiterOn = !isoLimiterOn
+                    if (isoLimiterOn) {
+                        for (i in 0..2) {
+                            val ceiling = if (i == 0) 0f else 6f
+                            iso[i] = iso[i].coerceIn(-24f, ceiling)
+                            previousIso[i] = previousIso[i].coerceIn(-24f, ceiling)
+                            sectionPreviousIso[i] = sectionPreviousIso[i].coerceIn(-24f, ceiling)
+                        }
+                    }
+                    save()
+                    scheduleUpdate()
+                    refreshUi()
+                }
+            }
+            headerControls.addView(
+                isoLimiterButton,
+                LinearLayout.LayoutParams(dp(if (compactHeader) 66 else 82), dp(if (compactHeader) 24 else 28))
+                    .apply { rightMargin = dp(5) }
+            )
+        }
         headerControls.addView(circleAction("F",if(compactHeader)30 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
@@ -2653,7 +2705,8 @@ class MainActivity : Activity() {
                 }
                 val isoFreqs=floatArrayOf(250f,4000f,20000f)
                 for(i in 0..2){
-                    val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,24f) else 0f
+                    val isoCeiling = if (isoLimiterOn) (if (i == 0) 0f else 6f) else 24f
+                    val isoGain=if(isoOn && isoControlOn[i])iso[i].coerceIn(-24f,isoCeiling) else 0f
                     fx.setPostEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,isoFreqs[i],isoGain))
                 }
             }
@@ -2663,9 +2716,11 @@ class MainActivity : Activity() {
             val masterLow=(if(bassBoostOn)bassBoostDb else 0f)+(if(loudnessOn)loudness/100f*12f else 0f)
             val masterHigh=if(loudnessOn)loudness/100f*8f else 0f
             for(ch in 0..1){
-                val low=if(isoOn && isoControlOn[0])iso[0].coerceIn(-24f,24f) else 0f
-                val mid=if(isoOn && isoControlOn[1])iso[1].coerceIn(-24f,24f) else 0f
-                val high=if(isoOn && isoControlOn[2])iso[2].coerceIn(-24f,24f) else 0f
+                val lowCeiling = if (isoLimiterOn) 0f else 24f
+                val midHighCeiling = if (isoLimiterOn) 6f else 24f
+                val low=if(isoOn && isoControlOn[0])iso[0].coerceIn(-24f,lowCeiling) else 0f
+                val mid=if(isoOn && isoControlOn[1])iso[1].coerceIn(-24f,midHighCeiling) else 0f
+                val high=if(isoOn && isoControlOn[2])iso[2].coerceIn(-24f,midHighCeiling) else 0f
                 fx.setPostEqBandByChannelIndex(ch,0,DynamicsProcessing.EqBand(true,250f,low+masterLow))
                 fx.setPostEqBandByChannelIndex(ch,1,DynamicsProcessing.EqBand(true,4000f,mid))
                 fx.setPostEqBandByChannelIndex(ch,2,DynamicsProcessing.EqBand(true,20000f,high+masterHigh))
