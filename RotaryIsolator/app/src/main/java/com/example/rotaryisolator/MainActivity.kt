@@ -1506,49 +1506,25 @@ class MainActivity : Activity() {
         panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
         val depthDial = RotaryControl(
-            this, "DEPTH", reverbMix.toFloat(), 0f, 100f, colorMaster,
+            this, "DRY/WET", reverbMix.toFloat(), 0f, 100f, colorMaster,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
         )
         val timeDial = RotaryControl(
-            this, "SIZE", reverbSize / 10f, 0f, 100f, colorMaster,
+            this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
         )
         val reverbRow = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        // In tablet portrait the Reverb main dials were visually larger
-        // than the four Delay dials. Scale only their drawing, not their
-        // touch/layout bounds, to match the Delay rotary size.
-        if (!phonePortrait && !wideLayout) {
-            listOf(depthDial, timeDial).forEach { it.scaleX = 0.72f; it.scaleY = 0.72f }
-        }
-        reverbRow.addView(depthDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        reverbRow.addView(timeDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        val reverbFeedbackDial = RotaryControl(
-            this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorMaster,
-            { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbFeedbackPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
-        )
-        if (!phonePortrait && !wideLayout) { reverbFeedbackDial.scaleX = 0.72f; reverbFeedbackDial.scaleY = 0.72f }
-        reverbRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        val reverbDecayDial = RotaryControl(
-            this, "DECAY", reverbDecayPercent.toFloat(), 0f, 100f, colorMaster,
-            { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbDecayPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
-        )
-        val reverbColorDial = RotaryControl(
-            this, "COLOR", reverbColorPercent.toFloat(), 0f, 100f, colorMaster,
-            { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbColorPercent%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.2f, bottomTextLift = 4f
-        )
+        // The V10-style Reverb panel is deliberately reduced to its two
+        // meaningful performance controls: wet return level and decay time.
+        reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbRow.addView(timeDial, LinearLayout.LayoutParams(0, -1, 1f))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
@@ -2017,23 +1993,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(2), dp(2), dp(2), dp(2))
         }
-        val reverbControlsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        val reverbSideColumn = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-        }
-        reverbSideColumn.addView(reverbDecayDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        reverbSideColumn.addView(reverbColorDial, LinearLayout.LayoutParams(-1, 0, 1f))
-        // Give DECAY and COLOR enough width for noticeably larger rotary faces
-        // while keeping their captions and values below each dial.
-        reverbControlsRow.addView(reverbSideColumn, LinearLayout.LayoutParams(dp(if (!phonePortrait && !wideLayout) 58 else 74), -1).apply {
-            rightMargin = dp(3)
-        })
-        reverbControlsRow.addView(reverbRow, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbColumn.addView(reverbControlsRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, 0, 1f))
         val delayColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
