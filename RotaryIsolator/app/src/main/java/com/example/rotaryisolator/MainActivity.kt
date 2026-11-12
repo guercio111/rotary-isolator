@@ -1304,19 +1304,19 @@ class MainActivity : Activity() {
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
                 setColor(Color.rgb(55,62,72))
-                setStroke(dp(1), colorMaster)
+                setStroke(dp(1), colorDelay)
             }
         }
         bpmReadout?.text = "RICERCA BPM…"
         bpmButton?.text = "BPM STOP"
-        bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
+        bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), colorDelay) }
         updateEffectsCapture(true)
     }
 
     private fun stopBpmAnalyzer() {
         bpmAnalyzerOn = false
         bpmButton?.text = "BPM START"
-        bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), Color.rgb(125,245,155)) }
+        bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), colorDelay) }
         bpmReadout?.text = "— BPM"
         bpmBeat?.setTextColor(Color.rgb(75,85,95))
         if (!captureNeeded()) stopAudioCaptureTest()
@@ -1415,8 +1415,8 @@ class MainActivity : Activity() {
             button.text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = dp(6).toFloat()
-                setColor(if (autoBpmEnabled) colorMaster else Color.rgb(55,62,72))
-                setStroke(dp(1), colorMaster)
+                setColor(if (autoBpmEnabled) colorDelay else Color.rgb(55,62,72))
+                setStroke(dp(1), colorDelay)
             }
         }
     }
