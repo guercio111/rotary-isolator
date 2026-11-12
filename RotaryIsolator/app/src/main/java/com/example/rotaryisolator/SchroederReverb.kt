@@ -291,7 +291,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delaySyncOffsetMs: Float = 0f,
         fxPhaseOffsetMs: Float = 0f
     ) {
-        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 1.42f) else 0f
+        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.90f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
         val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
@@ -361,20 +361,22 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val delayMixSmoothing = (1.0 - exp(-3.0 / (sampleRate * delayFadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
         val size = roomSize.coerceIn(0, 1000) / 1000f * 1.30f
         val hp = hpHz.coerceIn(20, 1200).toFloat()
-        val color = reverbColorPercent.coerceIn(0,100) / 100f
-        val lp = (lpHz.coerceIn(1000, 20000) * (0.55f + color * 0.90f)).coerceIn(1000f, 20000f)
+        // Fixed, musical top-end damping: no hidden COLOR control.
+        val lp = lpHz.coerceIn(1000, 20000).toFloat()
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
         val lpA = (1f - exp((-2.0 * PI * lp / sampleRate).toFloat())).coerceIn(0.001f, 1f)
 
-        // A long but controlled room tail; freeze is bounded to avoid runaway.
-        // Dedicated Reverb FEEDBACK control: 50% preserves approximately the
-        // previous tail length; lower values shorten it, higher values extend it.
-        val decay = reverbDecayPercent.coerceIn(0,100) / 100f
+        // TIME is mapped to a predictable decay range instead of stacking
+        // several interacting FEEDBACK/DECAY controls. The mean FDN delay is
+        // approximately 92 ms; this T60 mapping gives a useful 0.7–6.0 s range.
+        val timeSeconds = 0.7f + (reverbSize.coerceIn(0, 1000) / 1000f) * 5.3f
+        val meanDelaySeconds = 0.092f
         val feedback = if (freeze) 0.965f else
-            (0.78f + size * 0.10f + reverbFeedbackPercent.coerceIn(0,100) / 100f * 0.146f + (decay - 0.5f) * 0.09f).coerceIn(0.78f, 0.955f)
-        // COLOR moves the late tail from dark/warm to open/bright.
+            kotlin.math.exp((-6.907755f * meanDelaySeconds / timeSeconds)).coerceIn(0.40f, 0.91f)
+        // Gentle fixed damping keeps the late tail smooth and prevents metallic
+        // high-frequency build-up; the user's TIME control governs the tail.
         val damping = if (freeze) 0.035f else
-            (0.09f + (1f - size.coerceIn(0f, 1f)) * 0.16f + (0.5f - color) * 0.12f).coerceIn(0.015f, 0.32f)
+            (0.12f + (1f - size.coerceIn(0f, 1f)) * 0.06f).coerceIn(0.06f, 0.22f)
 
         for (i in 0 until count) {
             val source = input[i] / 32768f
@@ -477,7 +479,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // Effect switches use the existing smoothed send levels as a short
             // output fade. A hard gate here creates an abrupt waveform discontinuity
             // exactly when the user toggles an effect.
-            val reverbReturn = wet * smoothedMix * 1.28f
+            val reverbReturn = wet * smoothedMix
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f
             // Frequency selection is upstream on the FX send. The wet return
             // remains untouched so reverb tails and delay feedback are natural.
