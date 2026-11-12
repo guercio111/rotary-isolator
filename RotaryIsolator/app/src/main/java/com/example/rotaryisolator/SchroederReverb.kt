@@ -371,19 +371,23 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
         val requestedDivision = delayDivision.coerceIn(0, 9)
         if (requestedDivision != activeDelayDivision) {
-            // Beat-division changes are discrete: hand off at silence immediately.
-            val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
-            val currentTap = if (delayDivisionSwitch) {
-                if (progress < 0.5f) delayTransitionFromSamples else delayTransitionToSamples
-            } else {
-                val eased = progress * progress * (3f - 2f * progress)
-                delayTransitionFromSamples +
-                    (delayTransitionToSamples - delayTransitionFromSamples) * eased
+            // Beat-division changes are discrete. If another handoff is already
+            // running, queue the newest target instead of restarting mid-fade:
+            // restarting would jump the gain and create an audible thump.
+            if (!delayDivisionSwitch) {
+                val progress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
+                val currentTap = if (delayTransitionPosition < delayTransitionLength) {
+                    val eased = progress * progress * (3f - 2f * progress)
+                    delayTransitionFromSamples +
+                        (delayTransitionToSamples - delayTransitionFromSamples) * eased
+                } else {
+                    delayTransitionToSamples
+                }
+                delayTransitionFromSamples = currentTap
+                delayTransitionToSamples = targetDelaySamples
+                delayTransitionPosition = 0
+                delayDivisionSwitch = true
             }
-            delayTransitionFromSamples = currentTap
-            delayTransitionToSamples = targetDelaySamples
-            delayTransitionPosition = 0
-            delayDivisionSwitch = true
             activeDelayDivision = requestedDivision
             delayTargetCandidateSamples = targetDelaySamples
             delayTargetStableSamples = 0
