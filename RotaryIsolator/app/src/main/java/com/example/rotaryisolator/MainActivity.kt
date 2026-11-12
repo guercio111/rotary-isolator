@@ -90,6 +90,7 @@ class MainActivity : Activity() {
     @Volatile private var reverbOn = false
     @Volatile private var reverbMix = 0
     @Volatile private var reverbSize = 950
+    @Volatile private var reverbBeatPercent = 50
     @Volatile private var reverbHpHz = 420
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFadeMs = 1400
@@ -263,6 +264,7 @@ class MainActivity : Activity() {
         reverbOn = prefs.getBoolean("reverb_on", false)
         reverbMix = prefs.getInt("reverb_mix", 0).coerceIn(0,100)
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
+        reverbBeatPercent = prefs.getInt("reverb_beat_percent", 50).coerceIn(0,100)
         reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
         reverbDecayPercent = prefs.getInt("reverb_decay", 50).coerceIn(0,100)
         reverbColorPercent = prefs.getInt("reverb_color", 50).coerceIn(0,100)
@@ -597,7 +599,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1505,26 +1507,42 @@ class MainActivity : Activity() {
         header.addView(reverbPower, LinearLayout.LayoutParams(dp(42), dp(20)))
         panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
-        val depthDial = RotaryControl(
-            this, "DRY/WET", reverbMix.toFloat(), 0f, 100f, colorMaster,
-            { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
+        val beatDial = RotaryControl(
+            this, "BEAT", reverbBeatPercent.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbBeatPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { String.format(java.util.Locale.US, "%.3f", 1f / 32f * Math.pow(16.0, reverbBeatPercent / 100.0)) + " BT" },
+            onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
         )
         val timeDial = RotaryControl(
             this, "TIME", reverbSize / 10f, 0f, 100f, colorMaster,
             { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
             { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.15f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
+        )
+        val depthDial = RotaryControl(
+            this, "DRY/WET", reverbMix.toFloat(), 0f, 100f, colorMaster,
+            { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
+        )
+        val filterDial = RotaryControl(
+            this, "FILTER", ((ln(reverbLpHz.coerceIn(1500,18000) / 1500f) / ln(12f)) * 100f).coerceIn(0f,100f), 0f, 100f, colorMaster,
+            { value -> reverbLpHz = (1500f * 12f.pow(value / 100f)).roundToInt().coerceIn(1500,18000); scheduleUpdate() },
+            { if (reverbLpHz >= 1000) "${(reverbLpHz / 1000f).let { String.format(java.util.Locale.US, "%.1f", it) }} kHz" else "$reverbLpHz Hz" },
+            onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.05f
         )
         val reverbRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        // The V10-style Reverb panel is deliberately reduced to its two
-        // meaningful performance controls: wet return level and decay time.
-        reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, -1, 1f))
+        // Four independent performance controls: tempo-related pre-delay,
+        // tail time, dry/wet balance and the X-PAD-style high-cut filter.
+        reverbRow.addView(beatDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbRow.addView(timeDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbRow.addView(depthDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbRow.addView(filterDial, LinearLayout.LayoutParams(0, -1, 1f))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
@@ -2257,7 +2275,7 @@ class MainActivity : Activity() {
                                 delayOn, delayFadeMs, delayDivision, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxLowEnabled, fxMidEnabled, fxHighEnabled,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
-                                delaySyncOffsetMs, fxPhaseOffsetMs
+                                delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
                             )
                             fxAppliedPhaseDelayMs = processor.getFxPhaseDelayMs()
                             var written = 0
