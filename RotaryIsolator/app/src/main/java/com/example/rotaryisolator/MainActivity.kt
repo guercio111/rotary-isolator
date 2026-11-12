@@ -1961,10 +1961,12 @@ class MainActivity : Activity() {
         delayControls.addView(fxPhaseTitle, LinearLayout.LayoutParams(-1, dp(15)).apply {
             topMargin = dp(1)
         })
-        delayControls.addView(phaseJogSeek, LinearLayout.LayoutParams(-1, dp(25)).apply {
-            topMargin = dp(1)
-            bottomMargin = dp(2)
-        })
+        phaseJogSeek?.let { seek ->
+            delayControls.addView(seek, LinearLayout.LayoutParams(-1, dp(25)).apply {
+                topMargin = dp(1)
+                bottomMargin = dp(2)
+            })
+        }
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
