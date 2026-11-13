@@ -133,6 +133,17 @@ class MainActivity : Activity() {
         if (error < -period * 0.5f) error += period
         return error
     }
+    private fun syncFxPhaseSeekToMeasuredPhase() {
+        val error = currentFxPhaseErrorMs()
+        if (!error.isFinite()) return
+        val halfRange = (currentFxPeriodMs() * 0.5f).coerceAtLeast(1f)
+        fxPhaseSeek?.let { seek ->
+            if (!seek.isPressed) {
+                seek.progress = (100f - error / halfRange * 100f).roundToInt().coerceIn(0, 200)
+                seek.invalidate()
+            }
+        }
+    }
     private fun refreshFxPhaseUi() {
         val error = currentFxPhaseErrorMs()
         fxPhaseCaption?.text = if (error.isFinite()) {
@@ -1419,6 +1430,9 @@ class MainActivity : Activity() {
                         String.format(java.util.Locale.US, "%.1f BPM  %d%%", detected, (confidence * 100f).roundToInt().coerceIn(0,100))
                     else "RICERCA BPM…"
                     bpmButton?.text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
+                    // Re-track the hand as the selected beat period and the DSP's
+                    // smoothed phase delay change. Never fight a manual finger drag.
+                    syncFxPhaseSeekToMeasuredPhase()
                 }
             }
         }
@@ -1818,13 +1832,7 @@ class MainActivity : Activity() {
             // Keep the jog handle locked to the same measured phase used by
             // the yellow FX marker. The requested trim alone can point the hand
             // the wrong way while DSP smoothing/latency is still being applied.
-            val measuredPhaseError = currentFxPhaseErrorMs()
-            val halfRange = (fxPeriodMs * 0.5f).coerceAtLeast(1f)
-            if (measuredPhaseError.isFinite()) {
-                fxPhaseSeek?.progress = (100f - measuredPhaseError / halfRange * 100f)
-                    .roundToInt().coerceIn(0, 200)
-            }
-            fxPhaseSeek?.invalidate()
+            syncFxPhaseSeekToMeasuredPhase()
             fxBpmLastBeatIndex = Long.MIN_VALUE
             scheduleUpdate()
         }
@@ -2149,6 +2157,7 @@ class MainActivity : Activity() {
                 setPadding(dp(1), 0, dp(1), 0)
                 setOnClickListener {
                     delayDivision = index
+                    syncFxPhaseSeekToMeasuredPhase()
                     fxPhaseSeek?.invalidate()
                     paintDivisionButtons()
                     save(); scheduleUpdate()
