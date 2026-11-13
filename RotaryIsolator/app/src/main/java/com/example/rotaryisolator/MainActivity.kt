@@ -2156,22 +2156,32 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(dp(1), 0, dp(1), 0)
                 setOnClickListener {
+                    // LOCK freezes the phase correction the user actually found,
+                    // not the zero/center position. Read the measured phase using
+                    // the OLD division before changing the FX period.
+                    val preserveLockedCorrection = delayClockLocked && fxOutputLatencyMs.isFinite()
+                    val lockedPhaseErrorMs = if (preserveLockedCorrection) {
+                        currentFxPhaseErrorMs()
+                    } else {
+                        Float.NaN
+                    }
                     delayDivision = index
-                    // When the master clock has acquired/locked phase, preserve
-                    // the FX downbeat across division changes. The DSP phase tap
-                    // is recalculated for the new FX period so latency + tap
-                    // delay lands on an exact multiple of that period.
-                    val keepPhaseLocked = delayClockLocked || autoPhaseSynced
-                    if (keepPhaseLocked && fxOutputLatencyMs.isFinite()) {
-                        val newPeriod = currentFxPeriodMs()
-                        val phaseBase = fxOutputLatencyMs + delaySyncOffsetMs
-                        val fullRange = newPeriod.coerceAtLeast(1f)
-                        var correction = (-phaseBase) % fullRange
-                        if (correction > fullRange * 0.5f) correction -= fullRange
-                        if (correction < -fullRange * 0.5f) correction += fullRange
+                    if (preserveLockedCorrection && lockedPhaseErrorMs.isFinite()) {
+                        val newPeriod = currentFxPeriodMs().coerceAtLeast(1f)
+                        // Keep the same MASTER-relative correction, wrapped only
+                        // when the new beat division is shorter than that offset.
+                        var targetError = lockedPhaseErrorMs % newPeriod
+                        if (targetError > newPeriod * 0.5f) targetError -= newPeriod
+                        if (targetError < -newPeriod * 0.5f) targetError += newPeriod
+                        // currentFxPhaseErrorMs = output latency + applied phase
+                        // delay + sync offset. Set the DSP target to retain that
+                        // measured error instead of forcing it back to zero.
+                        var correction = targetError - fxOutputLatencyMs - delaySyncOffsetMs
+                        correction %= newPeriod
+                        if (correction > newPeriod * 0.5f) correction -= newPeriod
+                        if (correction < -newPeriod * 0.5f) correction += newPeriod
                         fxPhaseOffsetMs = correction
-                        phaseJogLastProgress = 100
-                        fxPhaseSeek?.progress = 100
+                        syncFxPhaseSeekToMeasuredPhase()
                     } else {
                         syncFxPhaseSeekToMeasuredPhase()
                     }
