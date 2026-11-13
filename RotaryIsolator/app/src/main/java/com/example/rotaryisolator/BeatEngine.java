@@ -64,32 +64,49 @@ public final class BeatEngine {
     public synchronized long getPhaseMs() { return phaseMs; }
     public synchronized double getPeriodMs() { return periodMs; }
 
-    /** Re-align phase to the strongest recent onset peak without restarting capture or changing tempo. */
+    /**
+     * Acquire the beat phase from recurring onsets across several beats.
+     * A single loud transient (fill, snare flam, or syncopation) must not
+     * move the clock by half a beat. Tempo is left untouched.
+     */
     public synchronized void sync(long nowMs) {
         if (periodMs <= 0.0 || ringCount < 3) return;
-        // Limit the search to just over one beat to avoid latching onto an
-        // unrelated fill from the previous bar.
-        int searchFrames = Math.max(2, Math.min(ringCount - 2,
-                (int)Math.ceil((periodMs * 1.15) / HOP_MS)));
-        int strongestAge = -1;
-        float strongest = Float.NEGATIVE_INFINITY;
-        for (int age = 1; age < searchFrames; age++) {
-            float value = atFromNewest(age);
-            if (value >= atFromNewest(age - 1) && value >= atFromNewest(age + 1)
-                    && value > strongest) {
-                strongest = value;
-                strongestAge = age;
+
+        int periodFrames = Math.max(2, (int)Math.round(periodMs / HOP_MS));
+        int cycles = Math.min(4, Math.max(1, (ringCount - 4) / periodFrames));
+        if (cycles < 2) return;
+
+        int searchFrames = Math.min(periodFrames, ringCount - cycles * periodFrames - 3);
+        if (searchFrames < 2) return;
+
+        int bestAge = -1;
+        double bestScore = Double.NEGATIVE_INFINITY;
+        // Test every possible phase within one beat. For each candidate,
+        // accumulate the strongest nearby onset over the previous cycles.
+        for (int age = 1; age <= searchFrames; age++) {
+            double score = 0.0;
+            for (int beat = 0; beat < cycles; beat++) {
+                int targetAge = age + beat * periodFrames;
+                float localPeak = 0f;
+                for (int delta = -2; delta <= 2; delta++) {
+                    int sampleAge = targetAge + delta;
+                    if (sampleAge >= 1 && sampleAge < ringCount - 1) {
+                        localPeak = Math.max(localPeak, atFromNewest(sampleAge));
+                    }
+                }
+                score += localPeak;
+            }
+            score /= cycles;
+            if (score > bestScore) {
+                bestScore = score;
+                bestAge = age;
             }
         }
-        if (strongestAge < 0) {
-            strongestAge = 0;
-            for (int age = 1; age < searchFrames; age++) {
-                float value = atFromNewest(age);
-                if (value > strongest) { strongest = value; strongestAge = age; }
-            }
+
+        if (bestAge >= 0) {
+            phaseMs = nowMs - Math.round(bestAge * HOP_MS);
+            locked = true;
         }
-        phaseMs = nowMs - Math.round(strongestAge * HOP_MS);
-        locked = true;
     }
 
     /** Freeze/unfreeze the tempo clock. Detection continues in the background. */
