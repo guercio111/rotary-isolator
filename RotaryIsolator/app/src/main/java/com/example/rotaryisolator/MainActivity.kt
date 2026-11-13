@@ -1944,15 +1944,30 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             paintClockButton(this, false)
             setOnClickListener {
-                val period = validatedBeatEngine.getPeriodMs()
-                if (period > 0.0 && validatedBeatEngine.getPhaseMs() > 0L) {
-                    // SKIP advances the beat count by one complete beat.
-                    // Never shift the phase by half a beat: that creates an
-                    // offbeat clock. Keep the shared FX compensation untouched.
-                    val skipMs = period.toFloat()
-                    validatedBeatEngine.nudgePhase(skipMs)
-                    autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
-                    bpmLastBeatIndex = Long.MIN_VALUE
+                val masterPeriod = validatedBeatEngine.getPeriodMs()
+                if (masterPeriod > 0.0 && validatedBeatEngine.getPhaseMs() > 0L) {
+                    // SKIP corrects the FX echo phase only. Moving the MASTER
+                    // anchor by one full beat cannot change its beat phase and
+                    // can desynchronize the beat counter from the music.
+                    val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
+                    val halfMasterBeatMs = (masterPeriod * 0.5).toFloat()
+                    // For subdivisions shorter than half a master beat, use
+                    // half of the selected FX cycle; otherwise move by half a
+                    // master beat so LONG DELAY remains on the musical offbeat grid.
+                    val phaseStepMs = if (halfMasterBeatMs >= fxPeriodMs - 1f) {
+                        fxPeriodMs * 0.5f
+                    } else {
+                        halfMasterBeatMs
+                    }
+                    var shiftedPhase = (fxPhaseOffsetMs + phaseStepMs) % fxPeriodMs
+                    if (shiftedPhase > fxPeriodMs * 0.5f) shiftedPhase -= fxPeriodMs
+                    if (shiftedPhase < -fxPeriodMs * 0.5f) shiftedPhase += fxPeriodMs
+                    fxPhaseOffsetMs = shiftedPhase
+                    parallelReverbProcessor?.requestDelayReset()
+                    fxBpmLastBeatIndex = Long.MIN_VALUE
+                    phaseJogLastProgress = 100
+                    refreshFxPhaseUi()
+                    syncFxPhaseSeekToMeasuredPhase()
                     scheduleUpdate()
                     paintClockButton(this, true)
                     postDelayed({ paintClockButton(this, false) }, 250L)
