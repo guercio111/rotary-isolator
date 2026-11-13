@@ -1361,10 +1361,9 @@ class MainActivity : Activity() {
         // engine used by the main clock. Never run a second independent detector.
         if (autoBpmEnabled && !delayClockLocked && !autoPhaseSynced && detected > 0f &&
             period > 0.0 && confidence >= 0.30f) {
-            validatedBeatEngine.sync(nowMs)
+            autoPhaseSynced = validatedBeatEngine.sync(nowMs)
             phase = validatedBeatEngine.getPhaseMs()
             period = validatedBeatEngine.getPeriodMs()
-            autoPhaseSynced = phase > 0L
         }
         if (detected > 0f && period > 0.0 && phase > 0L) {
             val beatIndex = kotlin.math.floor((nowMs - phase).toDouble() / period).toLong()
@@ -1791,9 +1790,9 @@ class MainActivity : Activity() {
                 val now = android.os.SystemClock.elapsedRealtime()
                 // Re-anchor the shared phase only; keep the detector and clock running.
                 val beforePhase = validatedBeatEngine.getPhaseMs()
-                validatedBeatEngine.sync(now)
+                val syncAcquired = validatedBeatEngine.sync(now)
                 val afterPhase = validatedBeatEngine.getPhaseMs()
-                if (afterPhase <= 0L || validatedBeatEngine.getPeriodMs() <= 0.0) {
+                if (!syncAcquired || afterPhase <= 0L || validatedBeatEngine.getPeriodMs() <= 0.0) {
                     bpmReadout?.text = "ATTENDI BPM STABILE"
                 } else {
                     autoBpmNextBeatMs = afterPhase + validatedBeatEngine.getPeriodMs().toLong()
@@ -1932,9 +1931,8 @@ class MainActivity : Activity() {
                 val resetNow = android.os.SystemClock.elapsedRealtime()
                 // Re-acquire only when the tempo estimate is already stable.
                 // Otherwise AUTO remains free to acquire phase when confidence recovers.
-                if (validatedBeatEngine.getConfidence() >= 0.30f) {
+                val resetSynced = validatedBeatEngine.getConfidence() >= 0.30f &&
                     validatedBeatEngine.sync(resetNow)
-                }
                 delaySyncOffsetMs = 0f
                 fxPhaseOffsetMs = 0f
                 fxBpmLastBeatIndex = Long.MIN_VALUE
@@ -1942,7 +1940,7 @@ class MainActivity : Activity() {
                 fxPhaseSeek?.progress = 100
                 fxPhaseSeek?.invalidate()
                 val resetPhase = validatedBeatEngine.getPhaseMs()
-                autoPhaseSynced = resetPhase > 0L && validatedBeatEngine.getConfidence() >= 0.30f
+                autoPhaseSynced = resetSynced && resetPhase > 0L
                 if (autoPhaseSynced) {
                     autoBpmNextBeatMs = resetPhase + validatedBeatEngine.getPeriodMs().toLong()
                     bpmLastBeatIndex = Long.MIN_VALUE
