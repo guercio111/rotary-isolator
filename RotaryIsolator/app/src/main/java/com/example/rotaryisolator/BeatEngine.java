@@ -69,21 +69,20 @@ public final class BeatEngine {
      * A single loud transient (fill, snare flam, or syncopation) must not
      * move the clock by half a beat. Tempo is left untouched.
      */
-    public synchronized void sync(long nowMs) {
-        if (periodMs <= 0.0 || ringCount < 3) return;
+    public synchronized boolean sync(long nowMs) {
+        if (periodMs <= 0.0 || ringCount < 3) return false;
 
         int periodFrames = Math.max(2, (int)Math.round(periodMs / HOP_MS));
-        int cycles = Math.min(4, Math.max(1, (ringCount - 4) / periodFrames));
-        if (cycles < 2) return;
-
-        int searchFrames = Math.min(periodFrames, ringCount - cycles * periodFrames - 3);
-        if (searchFrames < 2) return;
+        // To compare every phase across a full beat, retain at least two
+        // earlier repetitions in addition to the candidate's current cycle.
+        int cycles = Math.min(4, (ringCount - periodFrames - 3) / periodFrames);
+        if (cycles < 2) return false;
 
         int bestAge = -1;
         double bestScore = Double.NEGATIVE_INFINITY;
         // Test every possible phase within one beat. For each candidate,
         // accumulate the strongest nearby onset over the previous cycles.
-        for (int age = 1; age <= searchFrames; age++) {
+        for (int age = 1; age <= periodFrames; age++) {
             double score = 0.0;
             for (int beat = 0; beat < cycles; beat++) {
                 int targetAge = age + beat * periodFrames;
@@ -103,10 +102,10 @@ public final class BeatEngine {
             }
         }
 
-        if (bestAge >= 0) {
-            phaseMs = nowMs - Math.round(bestAge * HOP_MS);
-            locked = true;
-        }
+        if (bestAge < 0 || bestScore <= 0f) return false;
+        phaseMs = nowMs - Math.round(bestAge * HOP_MS);
+        locked = true;
+        return true;
     }
 
     /** Freeze/unfreeze the tempo clock. Detection continues in the background. */
