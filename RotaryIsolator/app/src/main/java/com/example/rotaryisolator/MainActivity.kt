@@ -2157,8 +2157,27 @@ class MainActivity : Activity() {
                 setPadding(dp(1), 0, dp(1), 0)
                 setOnClickListener {
                     delayDivision = index
-                    syncFxPhaseSeekToMeasuredPhase()
+                    // When the master clock has acquired/locked phase, preserve
+                    // the FX downbeat across division changes. The DSP phase tap
+                    // is recalculated for the new FX period so latency + tap
+                    // delay lands on an exact multiple of that period.
+                    val keepPhaseLocked = delayClockLocked || autoPhaseSynced
+                    if (keepPhaseLocked && fxOutputLatencyMs.isFinite()) {
+                        val newPeriod = currentFxPeriodMs()
+                        val phaseBase = fxOutputLatencyMs + delaySyncOffsetMs
+                        val fullRange = newPeriod.coerceAtLeast(1f)
+                        var correction = (-phaseBase) % fullRange
+                        if (correction > fullRange * 0.5f) correction -= fullRange
+                        if (correction < -fullRange * 0.5f) correction += fullRange
+                        fxPhaseOffsetMs = correction
+                        phaseJogLastProgress = 100
+                        fxPhaseSeek?.progress = 100
+                    } else {
+                        syncFxPhaseSeekToMeasuredPhase()
+                    }
                     fxPhaseSeek?.invalidate()
+                    refreshFxPhaseUi()
+                    fxBpmLastBeatIndex = Long.MIN_VALUE
                     paintDivisionButtons()
                     save(); scheduleUpdate()
                 }
