@@ -1904,11 +1904,14 @@ class MainActivity : Activity() {
             paintClockButton(this, false)
             setOnClickListener {
                 val period = validatedBeatEngine.getPeriodMs()
-                if (period > 0.0) {
-                    val skipMs = (period * 0.5).toFloat()
+                if (period > 0.0 && validatedBeatEngine.getPhaseMs() > 0L) {
+                    // SKIP advances the beat count by one complete beat.
+                    // Never shift the phase by half a beat: that creates an
+                    // offbeat clock. Keep the shared FX compensation untouched.
+                    val skipMs = period.toFloat()
                     validatedBeatEngine.nudgePhase(skipMs)
-                    delaySyncOffsetMs = (delaySyncOffsetMs + skipMs).coerceIn(-250f, 250f)
                     autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
+                    bpmLastBeatIndex = Long.MIN_VALUE
                     scheduleUpdate()
                     paintClockButton(this, true)
                     postDelayed({ paintClockButton(this, false) }, 250L)
@@ -1926,14 +1929,26 @@ class MainActivity : Activity() {
                 validatedBeatEngine.setPitchPercent(0f)
                 delayClockLocked = false
                 validatedBeatEngine.setClockLocked(false)
-                validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime())
+                val resetNow = android.os.SystemClock.elapsedRealtime()
+                // Re-acquire only when the tempo estimate is already stable.
+                // Otherwise AUTO remains free to acquire phase when confidence recovers.
+                if (validatedBeatEngine.getConfidence() >= 0.30f) {
+                    validatedBeatEngine.sync(resetNow)
+                }
                 delaySyncOffsetMs = 0f
                 fxPhaseOffsetMs = 0f
                 fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
                 fxPhaseSeek?.invalidate()
-                autoPhaseSynced = false
+                val resetPhase = validatedBeatEngine.getPhaseMs()
+                autoPhaseSynced = resetPhase > 0L && validatedBeatEngine.getConfidence() >= 0.30f
+                if (autoPhaseSynced) {
+                    autoBpmNextBeatMs = resetPhase + validatedBeatEngine.getPeriodMs().toLong()
+                    bpmLastBeatIndex = Long.MIN_VALUE
+                } else {
+                    bpmReadout?.text = "ATTENDI BPM STABILE"
+                }
                 bpmFineSeek?.progress = 100
                 delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
                 lockButton.text = "LOCK"
