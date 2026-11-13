@@ -331,7 +331,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         reverbBeatPercent: Int = 50
     ) {
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.94f) else 0f
-        val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.28f else 0f
+        val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.36f else 0f
         val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // V10-inspired SEND voicings. Pioneer does not publish the internal DSP
         // coefficients; these fixed voicings reproduce the documented behavior:
