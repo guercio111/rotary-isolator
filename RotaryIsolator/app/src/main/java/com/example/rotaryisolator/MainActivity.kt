@@ -1820,12 +1820,11 @@ class MainActivity : Activity() {
             }
         }
         fun phaseNudge(direction: Float) {
-            val period = validatedBeatEngine.getPeriodMs()
-            if (period <= 0.0) return
-            // Arrows and FX PHASE JOG fader control the same FX-only phase trim.
-            // MASTER/BeatEngine remain untouched; audio DSP and yellow marker use this exact value.
-            val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
-            val fxPeriodMs = (period.toFloat() * beatFraction).coerceAtLeast(1f)
+            if (validatedBeatEngine.getPeriodMs() <= 0.0) return
+            // Arrows and FX PHASE JOG use the same FX period as the DSP/marker.
+            // Do not derive the step from the MASTER detector: AUTO/LOCK can
+            // hold a slightly different effective FX BPM, amplified at the extremes.
+            val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
             val stepMs = -fxPeriodMs * direction / 64f
             fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
             refreshFxPhaseUi()
@@ -2050,12 +2049,12 @@ class MainActivity : Activity() {
                     if (!fromUser) return
                     val delta = progress - phaseJogLastProgress
                     phaseJogLastProgress = progress
-                    val period = validatedBeatEngine.getPeriodMs()
-                    if (period > 0.0 && delta != 0) {
-                        // Same FX-only phase trim used by the left/right arrows.
+                    val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
+                    if (fxPeriodMs > 0f && delta != 0) {
+                        // Use the exact period used by the DSP and phase markers.
+                        // Deriving it from the MASTER detector instead can diverge
+                        // from the locked FX BPM, especially at 1/16 and 16 beats.
                         // One full fader travel corresponds to half an FX beat.
-                        val beatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
-                        val fxPeriodMs = (period.toFloat() * beatFraction).coerceAtLeast(1f)
                         val stepMs = -delta * fxPeriodMs / 400f
                         fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs)
                             .coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
