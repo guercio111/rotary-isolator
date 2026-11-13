@@ -182,7 +182,9 @@ class MainActivity : Activity() {
         android.util.Log.i("FREQUALIZER_CAPTURE", line)
     }
     private fun captureDiagSnapshot(): String = synchronized(captureDiagLock) {
-        captureDiagnostics.joinToString("\\n")
+        val activityEvents = captureDiagnostics.joinToString("\\n")
+        val serviceEvents = prefs.getString("capture_service_diag", "").orEmpty()
+        if (serviceEvents.isBlank()) activityEvents else activityEvents + "\\n\\nSERVIZIO MEDIA PROJECTION:\\n" + serviceEvents
     }
     private val captureRequestCode = 7420
     private val capturePermissionRequestCode = 7421
@@ -445,12 +447,22 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        if (captureProjection != null || captureNeeded()) {
+            captureDiag("ACTIVITY onPause; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId")
+        }
         // Persist the live mixer and mark the session as backgrounded. If Android
         // later reclaims the process for battery/memory management, the next
         // Activity instance knows to restore the saved controls, not startup defaults.
         save()
         prefs.edit().putBoolean("session_in_background", true).apply()
         super.onPause()
+    }
+
+    override fun onStop() {
+        if (captureProjection != null || captureNeeded()) {
+            captureDiag("ACTIVITY onStop; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId")
+        }
+        super.onStop()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -2293,13 +2305,16 @@ class MainActivity : Activity() {
         }
         if (!captureNeeded()) return
         try {
-            // Use the same proven startup sequence as the S25 build:
-            // start the mediaProjection foreground service first, then obtain
-            // the projection only after Android has had time to promote it.
+            // Start a clean service trace for this explicit user-authorized session.
+            prefs.edit().putString("capture_service_diag", "").apply()
+            captureDiag("AVVIO SESSIONE: ActivityResult autorizzato; taskId=$taskId finishing=$isFinishing changingConfig=$isChangingConfigurations")
+            // Promote the mediaProjection foreground service before consuming the one-shot consent token.
             val serviceIntent = android.content.Intent(this, AudioCaptureForegroundService::class.java)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
+            captureDiag("FOREGROUND SERVICE richiesto; SDK=${Build.VERSION.SDK_INT}")
             handler.postDelayed({
                 try {
+                    captureDiag("CREAZIONE MediaProjection dopo promozione servizio; taskId=$taskId finishing=$isFinishing")
                     val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
                     val projection = manager.getMediaProjection(resultCode, data)
                     if (projection == null) {
@@ -2309,6 +2324,7 @@ class MainActivity : Activity() {
                     }
                     intentionallyStoppingProjection = null
                     captureProjection = projection
+                    captureDiag("MediaProjection ottenuta; id=${System.identityHashCode(projection)}; captureNeeded=${captureNeeded()}")
                     projection.registerCallback(object : android.media.projection.MediaProjection.Callback() {
                         override fun onStop() {
                             runOnUiThread {
@@ -2919,6 +2935,9 @@ class MainActivity : Activity() {
     }
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
+        if (captureProjection != null || captureNeeded()) {
+            captureDiag("ACTIVITY onDestroy; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId")
+        }
         // An intentional close starts a fresh session next time; background
         // process reclamation and configuration changes keep the saved state.
         if (isFinishing) {
