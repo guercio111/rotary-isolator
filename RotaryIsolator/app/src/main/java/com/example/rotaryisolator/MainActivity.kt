@@ -1809,6 +1809,9 @@ class MainActivity : Activity() {
                 if (!syncAcquired || afterPhase <= 0L || validatedBeatEngine.getPeriodMs() <= 0.0) {
                     bpmReadout?.text = "ATTENDI BPM STABILE"
                 } else {
+                    // A fresh master phase must not be mixed with echoes
+                    // still circulating from the previous phase/clock position.
+                    parallelReverbProcessor?.requestDelayReset()
                     autoBpmNextBeatMs = afterPhase + validatedBeatEngine.getPeriodMs().toLong()
                     bpmLastBeatIndex = Long.MIN_VALUE
                     delaySyncOffsetMs = 0f
@@ -1963,6 +1966,9 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             paintClockButton(this, false)
             setOnClickListener {
+                // RST also clears the old delay feedback history; otherwise
+                // long repeats from the previous phase keep playing against the new clock.
+                parallelReverbProcessor?.requestDelayReset()
                 delayBpmCorrection = 0f
                 validatedBeatEngine.setPitchPercent(0f)
                 delayClockLocked = false
