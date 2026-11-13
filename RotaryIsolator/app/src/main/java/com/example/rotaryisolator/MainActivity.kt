@@ -1815,9 +1815,15 @@ class MainActivity : Activity() {
             val stepMs = -fxPeriodMs * direction / 64f
             fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
             refreshFxPhaseUi()
-            // Keep the jog handle visibly at the corrected FX offset.
+            // Keep the jog handle locked to the same measured phase used by
+            // the yellow FX marker. The requested trim alone can point the hand
+            // the wrong way while DSP smoothing/latency is still being applied.
+            val measuredPhaseError = currentFxPhaseErrorMs()
             val halfRange = (fxPeriodMs * 0.5f).coerceAtLeast(1f)
-            fxPhaseSeek?.progress = (100f - fxPhaseOffsetMs / halfRange * 100f).roundToInt().coerceIn(0, 200)
+            if (measuredPhaseError.isFinite()) {
+                fxPhaseSeek?.progress = (100f - measuredPhaseError / halfRange * 100f)
+                    .roundToInt().coerceIn(0, 200)
+            }
             fxPhaseSeek?.invalidate()
             fxBpmLastBeatIndex = Long.MIN_VALUE
             scheduleUpdate()
