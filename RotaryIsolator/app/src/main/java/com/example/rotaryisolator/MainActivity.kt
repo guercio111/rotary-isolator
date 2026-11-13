@@ -164,6 +164,9 @@ class MainActivity : Activity() {
     private var parallelReverbProcessor: SchroederReverb? = null
     private var captureThread: Thread? = null
     @Volatile private var captureRunning = false
+    // Prevent a new AudioRecord/AudioTrack pair from starting until the previous
+    // capture thread has exited and its streams have been released.
+    @Volatile private var captureCleanupPending = false
     @Volatile private var captureRestartAttempts = 0
     @Volatile private var captureRestartPending = false
     private var captureDialog: AlertDialog? = null
@@ -2224,6 +2227,12 @@ class MainActivity : Activity() {
         sections["FX"] = box
     }
     private fun startAudioCaptureTest() {
+        // A previous blocking AudioRecord read may still be unwinding after stop().
+        // Wait asynchronously; never block the UI thread or overlap capture streams.
+        if (captureCleanupPending) {
+            handler.postDelayed({ if (!captureCleanupPending) startAudioCaptureTest() }, 100L)
+            return
+        }
         // Reuse the existing MediaProjection session after a track/route switch.
         // Only request Android approval when no live session exists.
         if (captureRunning || captureRestartPending) return
@@ -2348,6 +2357,15 @@ class MainActivity : Activity() {
     }
 
     private fun beginAudioCapture(projection: android.media.projection.MediaProjection) {
+        // The old I/O worker owns its local streams until it has left read()/write().
+        if (captureCleanupPending) {
+            handler.postDelayed({
+                if (!captureCleanupPending && captureProjection === projection && captureNeeded() && !captureRunning) {
+                    beginAudioCapture(projection)
+                }
+            }, 100L)
+            return
+        }
         try {
             val sampleRate = 48000
             val format = android.media.AudioFormat.Builder()
@@ -2529,16 +2547,53 @@ class MainActivity : Activity() {
         }
     }
 
-    // Rebuild only the input/output audio streams after a track or route change.
-    // Keep the MediaProjection token and its foreground service alive, so Android
-    // does not ask for a new screen-capture approval for every song.
+    // Stop the streams first to unblock any blocking read()/write(), but do not
+    // release either object while the capture worker may still be using it.
+    // Cleanup runs off the UI thread and completes only after the worker exits.
     private fun releaseCaptureIoOnly() {
+        captureRunning = false
+
+        // A cleanup worker already owns the detached streams. Do not release them twice.
+        if (captureCleanupPending && captureThread == null && captureRecord == null && captureTrack == null) {
+            return
+        }
+
+        val worker = captureThread
         val record = captureRecord
+        val track = captureTrack
+        captureThread = null
         captureRecord = null
+        captureTrack = null
+
+        if (worker != null && worker !== Thread.currentThread() && worker.isAlive) {
+            captureCleanupPending = true
+            // stop() is the cancellation signal for blocking AudioRecord.read() and
+            // AudioTrack.write(). Actual release is deferred until after join().
+            try { record?.stop() } catch (_: Throwable) {}
+            try { track?.stop() } catch (_: Throwable) {}
+
+            Thread({
+                try { worker.join() } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
+                try { record?.release() } catch (_: Throwable) {}
+                try { track?.pause() } catch (_: Throwable) {}
+                try { track?.flush() } catch (_: Throwable) {}
+                try { track?.release() } catch (_: Throwable) {}
+                parallelReverbProcessor = null
+                fxOutputLatencyMs = Float.NaN
+                fxAppliedPhaseDelayMs = 0f
+                captureCleanupPending = false
+                if (!isFinishing) handler.post { refreshFxPhaseUi() }
+            }, "Frequalizer-CaptureCleanup").apply {
+                isDaemon = true
+                start()
+            }
+            return
+        }
+
         try { record?.stop() } catch (_: Throwable) {}
         try { record?.release() } catch (_: Throwable) {}
-        val track = captureTrack
-        captureTrack = null
         try { track?.pause() } catch (_: Throwable) {}
         try { track?.flush() } catch (_: Throwable) {}
         try { track?.stop() } catch (_: Throwable) {}
@@ -2547,7 +2602,6 @@ class MainActivity : Activity() {
         fxOutputLatencyMs = Float.NaN
         fxAppliedPhaseDelayMs = 0f
         handler.post { refreshFxPhaseUi() }
-        captureThread = null
     }
 
     private fun scheduleCaptureRestart(projection: android.media.projection.MediaProjection, error: Throwable) {
