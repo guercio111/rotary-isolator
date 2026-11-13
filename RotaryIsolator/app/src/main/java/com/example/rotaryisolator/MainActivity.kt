@@ -1813,6 +1813,10 @@ class MainActivity : Activity() {
                     bpmLastBeatIndex = Long.MIN_VALUE
                     delaySyncOffsetMs = 0f
                     autoPhaseSynced = true
+                    // After SYNC acquires the MASTER beat, apply the existing
+                    // measured-phase ALIGN routine once so FX marker and jog
+                    // handle move to the center without manual intervention.
+                    autoCenterFxPhase()
                 }
                 paintClockButton(this, true)
                 postDelayed({ paintClockButton(this, false) }, 500L)
