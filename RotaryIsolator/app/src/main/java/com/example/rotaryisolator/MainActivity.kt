@@ -2230,7 +2230,7 @@ class MainActivity : Activity() {
         // A previous blocking AudioRecord read may still be unwinding after stop().
         // Wait asynchronously; never block the UI thread or overlap capture streams.
         if (captureCleanupPending) {
-            handler.postDelayed({ if (!captureCleanupPending) startAudioCaptureTest() }, 100L)
+            handler.postDelayed({ startAudioCaptureTest() }, 100L)
             return
         }
         // Reuse the existing MediaProjection session after a track/route switch.
@@ -2360,7 +2360,7 @@ class MainActivity : Activity() {
         // The old I/O worker owns its local streams until it has left read()/write().
         if (captureCleanupPending) {
             handler.postDelayed({
-                if (!captureCleanupPending && captureProjection === projection && captureNeeded() && !captureRunning) {
+                if (captureProjection === projection && captureNeeded() && !captureRunning) {
                     beginAudioCapture(projection)
                 }
             }, 100L)
