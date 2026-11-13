@@ -1813,10 +1813,32 @@ class MainActivity : Activity() {
                     bpmLastBeatIndex = Long.MIN_VALUE
                     delaySyncOffsetMs = 0f
                     autoPhaseSynced = true
-                    // After SYNC acquires the MASTER beat, apply the existing
-                    // measured-phase ALIGN routine once so FX marker and jog
-                    // handle move to the center without manual intervention.
-                    autoCenterFxPhase()
+                    // Apply one measured FX phase correction after MASTER SYNC.
+                    // This is the same correction used by ALIGN, without changing
+                    // the BPM detector or the master clock.
+                    val syncPhaseError = currentFxPhaseErrorMs()
+                    if (syncPhaseError.isFinite()) {
+                        val halfRange = (currentFxPeriodMs() * 0.5f).coerceAtLeast(1f)
+                        val fullRange = halfRange * 2f
+                        var corrected = (fxPhaseOffsetMs - syncPhaseError) % fullRange
+                        if (corrected > halfRange) corrected -= fullRange
+                        if (corrected < -halfRange) corrected += fullRange
+                        fxPhaseOffsetMs = corrected
+                        fxBpmLastBeatIndex = Long.MIN_VALUE
+                        phaseJogLastProgress = 100
+                        fxPhaseSeek?.let { seek ->
+                            android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
+                                duration = 180L
+                                addUpdateListener { animation -> seek.progress = animation.animatedValue as Int }
+                                start()
+                            }
+                        }
+                        refreshFxPhaseUi()
+                        scheduleUpdate()
+                        fxPhaseSeek?.postDelayed({ refreshFxPhaseUi() }, 220L)
+                    } else {
+                        fxPhaseCaption?.text = "ATTENDI MISURA FASE"
+                    }
                 }
                 paintClockButton(this, true)
                 postDelayed({ paintClockButton(this, false) }, 500L)
