@@ -200,6 +200,16 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private val phaseDelaySwitchLength = (sampleRate * 0.012f).toInt().coerceAtLeast(2)
     private var phaseDelaySwitchFromSamples = 0f
     private var phaseDelaySwitchToSamples = 0f
+    // A clock re-sync must discard repeats created under the previous phase.
+    // The request is consumed only by the audio thread, never by the UI thread.
+    @Volatile private var delayResetRequested = false
+    private val delayResetFadeSamples = (sampleRate * 0.008f).toInt().coerceAtLeast(1)
+    private var delayResetFadeOutRemaining = 0
+    private var delayResetFadeInRemaining = 0
+
+    fun requestDelayReset() {
+        delayResetRequested = true
+    }
 
     private fun readDelayTap(delaySamples: Float): Float {
         // Use Double for circular-buffer position math. Float loses sub-sample
@@ -330,6 +340,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
         fxPhaseOffsetMs: Float = 0f,
         reverbBeatPercent: Int = 50
     ) {
+        if (delayResetRequested) {
+            delayResetRequested = false
+            delayResetFadeOutRemaining = delayResetFadeSamples
+            delayResetFadeInRemaining = 0
+        }
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.94f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.36f else 0f
         val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
@@ -588,8 +603,37 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // Effect switches use the existing smoothed send levels as a short
             // output fade. A hard gate here creates an abrupt waveform discontinuity
             // exactly when the user toggles an effect.
+            var delayResetGain = 1f
+            if (delayResetFadeOutRemaining > 0) {
+                delayResetGain = delayResetFadeOutRemaining.toFloat() / delayResetFadeSamples
+                delayResetFadeOutRemaining--
+                if (delayResetFadeOutRemaining == 0) {
+                    // Flush both the feedback echo and its phase-history buffer
+                    // at silence. Reverb state and the selected FX settings stay intact.
+                    delayBuffer.fill(0f)
+                    phaseDelayBuffer.fill(0f)
+                    delayWriteIndex = 0
+                    phaseDelayWriteIndex = 0
+                    delayToneState = 0f
+                    phaseDelaySwitch = false
+                    phaseDelaySwitchPosition = 0
+                    phaseDelaySwitchFromSamples = smoothedFxPhaseDelaySamples
+                    phaseDelaySwitchToSamples = smoothedFxPhaseDelaySamples
+                    delayTransitionFromSamples = targetDelaySamples
+                    delayTransitionToSamples = targetDelaySamples
+                    delayTransitionPosition = delayTransitionLength
+                    delayDivisionSwitch = false
+                    activeDelayDivision = requestedDivision
+                    delayTargetCandidateSamples = targetDelaySamples
+                    delayTargetStableSamples = 0
+                    delayResetFadeInRemaining = delayResetFadeSamples
+                }
+            } else if (delayResetFadeInRemaining > 0) {
+                delayResetGain = 1f - delayResetFadeInRemaining.toFloat() / delayResetFadeSamples
+                delayResetFadeInRemaining--
+            }
             val reverbReturn = wet * smoothedMix
-            val delayReturn = delayToneState * smoothedDelayMix * 1.28f
+            val delayReturn = delayToneState * smoothedDelayMix * 1.28f * delayResetGain
             // Frequency selection is upstream on the FX send. The wet return
             // remains untouched so reverb tails and delay feedback are natural.
             val raw = reverbReturn + delayReturn
