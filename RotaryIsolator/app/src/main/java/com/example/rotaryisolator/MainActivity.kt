@@ -1788,6 +1788,15 @@ class MainActivity : Activity() {
                         // AUTO's pending acquisition from re-syncing it.
                         autoPhaseSynced = true
                         delayBpm = validatedBeatEngine.getClockBpm().coerceIn(60f,180f)
+                        // Center only the jog control; keep fxPhaseOffsetMs intact.
+                        phaseJogLastProgress = 100
+                        fxPhaseSeek?.let { seek ->
+                            android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
+                                duration = 180L
+                                addUpdateListener { animation -> seek.progress = animation.animatedValue as Int }
+                                start()
+                            }
+                        }
                     }
                     text = if (delayClockLocked) "LOCK ON" else "LOCK"
                     paintClockButton(this, delayClockLocked)
@@ -1815,34 +1824,22 @@ class MainActivity : Activity() {
                     // makes the effect disappear until a fresh repeat is generated.
                     autoBpmNextBeatMs = afterPhase + validatedBeatEngine.getPeriodMs().toLong()
                     bpmLastBeatIndex = Long.MIN_VALUE
-                    delaySyncOffsetMs = 0f
+                    // MASTER SYNC changes only the master clock anchor.
+                    // Never rewrite the user's independent FX phase trim here:
+                    // that manual correction must survive every later SYNC.
                     autoPhaseSynced = true
-                    // Apply one measured FX phase correction after MASTER SYNC.
-                    // This is the same correction used by ALIGN, without changing
-                    // the BPM detector or the master clock.
-                    val syncPhaseError = currentFxPhaseErrorMs()
-                    if (syncPhaseError.isFinite()) {
-                        val halfRange = (currentFxPeriodMs() * 0.5f).coerceAtLeast(1f)
-                        val fullRange = halfRange * 2f
-                        var corrected = (fxPhaseOffsetMs - syncPhaseError) % fullRange
-                        if (corrected > halfRange) corrected -= fullRange
-                        if (corrected < -halfRange) corrected += fullRange
-                        fxPhaseOffsetMs = corrected
-                        fxBpmLastBeatIndex = Long.MIN_VALUE
-                        phaseJogLastProgress = 100
-                        fxPhaseSeek?.let { seek ->
-                            android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
-                                duration = 180L
-                                addUpdateListener { animation -> seek.progress = animation.animatedValue as Int }
-                                start()
-                            }
+                    fxBpmLastBeatIndex = Long.MIN_VALUE
+                    phaseJogLastProgress = 100
+                    fxPhaseSeek?.let { seek ->
+                        android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
+                            duration = 180L
+                            addUpdateListener { animation -> seek.progress = animation.animatedValue as Int }
+                            start()
                         }
-                        refreshFxPhaseUi()
-                        scheduleUpdate()
-                        fxPhaseSeek?.postDelayed({ refreshFxPhaseUi() }, 220L)
-                    } else {
-                        fxPhaseCaption?.text = "ATTENDI MISURA FASE"
                     }
+                    refreshFxPhaseUi()
+                    scheduleUpdate()
+                    fxPhaseSeek?.postDelayed({ refreshFxPhaseUi() }, 220L)
                 }
                 paintClockButton(this, true)
                 postDelayed({ paintClockButton(this, false) }, 500L)
@@ -2204,33 +2201,13 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(dp(1), 0, dp(1), 0)
                 setOnClickListener {
-                    // Once AUTO/SYNC has acquired the phase, preserve the same
-                    // MASTER-relative FX position across every division change.
-                    // This must not depend on tempo LOCK being enabled.
-                    val preserveMeasuredPhase = (delayClockLocked || autoPhaseSynced) &&
-                        fxOutputLatencyMs.isFinite()
-                    val measuredPhaseErrorMs = if (preserveMeasuredPhase) {
-                        currentFxPhaseErrorMs()
-                    } else {
-                        Float.NaN
-                    }
+                    // A division change alters the echo interval, not the
+                    // user's absolute manual phase correction. Keep that value
+                    // untouched; the DSP wraps it to the new FX cycle itself.
                     delayDivision = index
-                    if (preserveMeasuredPhase && measuredPhaseErrorMs.isFinite()) {
-                        val newPeriod = currentFxPeriodMs().coerceAtLeast(1f)
-                        var targetError = measuredPhaseErrorMs % newPeriod
-                        if (targetError > newPeriod * 0.5f) targetError -= newPeriod
-                        if (targetError < -newPeriod * 0.5f) targetError += newPeriod
-                        // Preserve output latency compensation and the measured
-                        // phase error; only wrap it into the new division period.
-                        var correction = targetError - fxOutputLatencyMs - delaySyncOffsetMs
-                        correction %= newPeriod
-                        if (correction > newPeriod * 0.5f) correction -= newPeriod
-                        if (correction < -newPeriod * 0.5f) correction += newPeriod
-                        fxPhaseOffsetMs = correction
-                        syncFxPhaseSeekToMeasuredPhase()
-                    } else {
-                        syncFxPhaseSeekToMeasuredPhase()
-                    }
+                    phaseJogLastProgress = 100
+                    fxPhaseSeek?.progress = 100
+                    fxPhaseSeek?.invalidate()
                     fxPhaseSeek?.invalidate()
                     refreshFxPhaseUi()
                     fxBpmLastBeatIndex = Long.MIN_VALUE
