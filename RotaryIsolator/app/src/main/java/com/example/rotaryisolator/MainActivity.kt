@@ -116,8 +116,8 @@ class MainActivity : Activity() {
     @Volatile private var delaySyncOffsetMs = 0f
     // Independent FX-only phase trim. It never touches the master BeatEngine or BPM.
     @Volatile private var fxPhaseOffsetMs = 0f
-    // Alternate SKIP direction so the second press exactly undoes the first.
-    @Volatile private var skipPhaseForward = true
+    // Exact phase delta applied by SKIP; the next press removes only this delta.
+    @Volatile private var skipPhaseAppliedMs = 0f
     // Real capture-to-playback latency, measured from AudioRecord/AudioTrack monotonic timestamps.
     @Volatile private var fxOutputLatencyMs = Float.NaN
     // One-shot startup alignment, applied after the first valid output-latency timestamp.
@@ -1964,12 +1964,19 @@ class MainActivity : Activity() {
                         1f, 2f, 4f, 8f, 16f
                     )[delayDivision.coerceIn(0, 9)]
                     val fxCycleMs = (masterPeriodMs * division).coerceAtLeast(1f)
-                    val skipStepMs = fxCycleMs * 0.25f
-                    val signedStepMs = if (skipPhaseForward) -skipStepMs else skipStepMs
                     val halfRange = (fxCycleMs * 0.5f).coerceAtLeast(1f)
-                    fxPhaseOffsetMs = (fxPhaseOffsetMs + signedStepMs)
-                        .coerceIn(-halfRange, halfRange)
-                    skipPhaseForward = !skipPhaseForward
+                    if (abs(skipPhaseAppliedMs) > 0.01f) {
+                        // Return to the exact phase before the previous SKIP.
+                        fxPhaseOffsetMs = (fxPhaseOffsetMs - skipPhaseAppliedMs)
+                            .coerceIn(-halfRange, halfRange)
+                        skipPhaseAppliedMs = 0f
+                    } else {
+                        val beforeSkip = fxPhaseOffsetMs
+                        fxPhaseOffsetMs = (beforeSkip - fxCycleMs * 0.25f)
+                            .coerceIn(-halfRange, halfRange)
+                        // Store the actual applied delta, including any range clamp.
+                        skipPhaseAppliedMs = fxPhaseOffsetMs - beforeSkip
+                    }
                     refreshFxPhaseUi()
                     syncFxPhaseSeekToMeasuredPhase()
                     fxBpmLastBeatIndex = Long.MIN_VALUE
