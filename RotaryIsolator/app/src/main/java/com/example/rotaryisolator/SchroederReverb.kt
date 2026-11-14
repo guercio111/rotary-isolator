@@ -189,6 +189,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // sub/low-mid energy into a boomy, wave-like resonance.
     private var delayFeedbackHpInput = 0f
     private var delayFeedbackHpOutput = 0f
+    private val delayFeedbackHpAlpha = exp((-2.0 * PI * 115.0 / sampleRate).toFloat())
     // Coalesce continuous BPM/TIME/phase adjustments. A delay tap is moved only
     // after the requested time has settled, avoiding repeated 120 ms mute ramps
     // while the user is turning a control or the clock is making small corrections.
@@ -586,8 +587,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // A 115 Hz first-order high-pass in the recirculation path only.
             // This leaves the initial echo untouched and progressively clears
             // low-frequency buildup on LONG/DUB repeats, including LOW/MID sends.
-            val feedbackHpAlpha = exp((-2.0 * PI * 115.0 / sampleRate).toFloat())
-            val feedbackHighPassed = feedbackHpAlpha *
+            val feedbackHighPassed = delayFeedbackHpAlpha *
                 (delayFeedbackHpOutput + delayedForFeedback - delayFeedbackHpInput)
             delayFeedbackHpInput = delayedForFeedback
             delayFeedbackHpOutput = feedbackHighPassed
