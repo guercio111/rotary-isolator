@@ -2625,7 +2625,7 @@ class MainActivity : Activity() {
                                 if (inputStatus == 0 && outputValid &&
                                     inputTs.framePosition > 0L && outputTs.framePosition > 0L &&
                                     outputTs.framePosition <= outputFramesWritten) {
-                                    val frameDelta = outputTs.framePosition - inputFramesRead
+                                    val frameDelta = outputTs.framePosition - inputTs.framePosition
                                     val captureTimeForOutputFrameNs = inputTs.nanoTime +
                                         (frameDelta.toDouble() * 1_000_000_000.0 / sampleRate).toLong()
                                     val measuredLatencyMs = (outputTs.nanoTime - captureTimeForOutputFrameNs) / 1_000_000.0
