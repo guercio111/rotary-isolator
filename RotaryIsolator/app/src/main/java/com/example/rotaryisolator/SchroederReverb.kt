@@ -163,13 +163,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayWriteIndex = 0
     // FX phase trim is applied to the incoming send before it enters the
     // feedback loop. The feedback tap itself keeps its exact beat period.
-    private val phaseDelayBuffer = FloatArray(sampleRate * 18)
-    private var phaseDelayWriteIndex = 0
-    @Volatile private var smoothedFxPhaseDelaySamples = 0f
+    // Signed trim is applied to the audible delay tap, not as a pre-delay.
+    @Volatile private var smoothedFxPhaseOffsetSamples = 0f
     private var smoothedDelayMix = 0f
 
     /** Actual smoothed FX send delay, in milliseconds, as applied by the audio thread. */
-    fun getFxPhaseDelayMs(): Float = smoothedFxPhaseDelaySamples * 1000f / sampleRate
+    fun getFxPhaseDelayMs(): Float = smoothedFxPhaseOffsetSamples * 1000f / sampleRate
     // Beat-division changes use a short dual-tap crossfade. This avoids
     // abruptly moving the read head through the circular buffer (zipper/click noise).
     private var delayTransitionFromSamples = sampleRate * 0.5f
@@ -184,6 +183,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // metallic/comb sweep caused by mixing two unrelated beat taps together.
     private var delayDivisionSwitch = false
     private var delayToneState = 0f
+    private var delayFeedbackToneState = 0f
     // Coalesce continuous BPM/TIME/phase adjustments. A delay tap is moved only
     // after the requested time has settled, avoiding repeated 120 ms mute ramps
     // while the user is turning a control or the clock is making small corrections.
@@ -195,13 +195,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var smoothedDelayFeedback = 0f
     private var smoothedDelayToneAlpha = 0f
     private val delayParameterSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.03))).toFloat()
-    // Large phase jumps (notably when a beat division wraps a negative trim)
-    // switch read heads at silence instead of sweeping the buffer and pitching audio.
-    private var phaseDelaySwitch = false
-    private var phaseDelaySwitchPosition = 0
-    private val phaseDelaySwitchLength = (sampleRate * 0.012f).toInt().coerceAtLeast(2)
-    private var phaseDelaySwitchFromSamples = 0f
-    private var phaseDelaySwitchToSamples = 0f
     // A clock re-sync must discard repeats created under the previous phase.
     // The request is consumed only by the audio thread, never by the UI thread.
     @Volatile private var delayResetRequested = false
@@ -228,17 +221,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         return a + (b - a) * fraction
     }
 
-    private fun readPhaseDelayTap(delaySamples: Float): Float {
-        val size = phaseDelayBuffer.size
-        var position = (phaseDelayWriteIndex.toDouble() - delaySamples.toDouble()) % size.toDouble()
-        if (position < 0.0) position += size.toDouble()
-        val indexA = position.toInt().coerceIn(0, size - 1)
-        val fraction = (position - indexA.toDouble()).toFloat().coerceIn(0f, 1f)
-        val indexB = if (indexA >= size - 1) 0 else indexA + 1
-        val a = phaseDelayBuffer[indexA]
-        val b = phaseDelayBuffer[indexB]
-        return a + (b - a) * fraction
-    }
     // Three-band V10-style Beat FX send. Both LR4 crossovers run continuously,
     // even when a band is not selected, so their filter states never go stale.
     // The second split is applied only to the remainder above the LOW crossover:
@@ -269,23 +251,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
         smoothedReverbDamping = exp((-2.0 * PI * 14000.0 / sampleRate).toFloat())
         delayBuffer.fill(0f)
         delayWriteIndex = 0
-        phaseDelayBuffer.fill(0f)
-        phaseDelayWriteIndex = 0
-        smoothedFxPhaseDelaySamples = 0f
+        smoothedFxPhaseOffsetSamples = 0f
         smoothedDelayMix = 0f
         delayTransitionFromSamples = sampleRate * 0.5f
         delayTransitionToSamples = sampleRate * 0.5f
         delayTransitionPosition = 0
         activeDelayDivision = -1
         delayToneState = 0f
+        delayFeedbackToneState = 0f
         delayTargetCandidateSamples = sampleRate * 0.5f
         delayTargetStableSamples = 0
         smoothedDelayFeedback = 0f
         smoothedDelayToneAlpha = 0f
-        phaseDelaySwitch = false
-        phaseDelaySwitchPosition = 0
-        phaseDelaySwitchFromSamples = 0f
-        phaseDelaySwitchToSamples = 0f
         fxLowMidSplit.clear()
         fxMidHighSplit.clear()
         smoothedFxLow = 1f
@@ -377,14 +354,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val targetDelaySamples = (sampleRate *
             (beatPeriodMs / 1000f * beatFraction + delaySyncOffsetMs.coerceIn(-250f,250f) / 1000f)
         ).coerceIn(1f, (delayBuffer.size - 2).toFloat())
-        // Convert the signed phase trim to its equivalent non-negative offset
-        // within one beat. It shifts the first echo's phase, while the feedback
-        // loop continues to repeat at the unchanged selected beat division.
+        // Keep the jog as a signed time correction. The audible read tap moves
+        // earlier/later by this amount; a separate unshifted tap feeds feedback.
         val fxPhasePeriodMs = beatPeriodMs * beatFraction
-        var normalizedFxPhaseMs = fxPhaseOffsetMs % fxPhasePeriodMs
-        if (normalizedFxPhaseMs < 0f) normalizedFxPhaseMs += fxPhasePeriodMs
-        val targetFxPhaseDelaySamples = (normalizedFxPhaseMs * sampleRate / 1000f)
-            .coerceIn(0f, (phaseDelayBuffer.size - 2).toFloat())
+        val targetFxPhaseOffsetSamples = (
+            fxPhaseOffsetMs.coerceIn(-fxPhasePeriodMs * 0.49f, fxPhasePeriodMs * 0.49f) *
+                sampleRate / 1000f
+        )
         // Fast subdivisions need the phase read head to settle well inside one FX cycle.
         // A fixed 25 ms time constant is almost a full 1/16-note at typical tempos,
         // so the applied phase lags and the FX phase indicators appear to wander.
@@ -436,29 +412,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
             }
         }
 
-        // A large FX phase jump must not glide a read head through hundreds of
-        // milliseconds of audio. Fade the send down, change phase, and fade it up.
-        if (phaseDelaySwitch) {
-            // If a newer phase command arrives during the 12 ms handoff,
-            // retarget the transition instead of completing an obsolete move.
-            // Keep the currently audible side as the new transition origin.
-            val halfLength = (phaseDelaySwitchLength / 2).coerceAtLeast(1)
-            if (abs(targetFxPhaseDelaySamples - phaseDelaySwitchToSamples) > sampleRate * 0.002f) {
-                val currentTap = if (phaseDelaySwitchPosition < halfLength) {
-                    phaseDelaySwitchFromSamples
-                } else {
-                    phaseDelaySwitchToSamples
-                }
-                phaseDelaySwitchFromSamples = currentTap
-                phaseDelaySwitchToSamples = targetFxPhaseDelaySamples
-                phaseDelaySwitchPosition = 0
-            }
-        } else if (abs(targetFxPhaseDelaySamples - smoothedFxPhaseDelaySamples) > sampleRate * 0.03f) {
-            phaseDelaySwitch = true
-            phaseDelaySwitchPosition = 0
-            phaseDelaySwitchFromSamples = smoothedFxPhaseDelaySamples
-            phaseDelaySwitchToSamples = targetFxPhaseDelaySamples
-        }
         val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
         val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
@@ -566,11 +519,20 @@ internal class SchroederReverb(private val sampleRate: Int) {
             wet *= 0.375f
             for (diffuser in outputDiffusers) wet = diffuser.tick(wet)
 
+            smoothedFxPhaseOffsetSamples +=
+                (targetFxPhaseOffsetSamples - smoothedFxPhaseOffsetSamples) * fxPhaseDelaySmoothing
+            val phaseOffsetSamples = smoothedFxPhaseOffsetSamples
             val transitionProgress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
             val transitionBlend = transitionProgress * transitionProgress * (3f - 2f * transitionProgress)
-            val oldTap = readDelayTap(delayTransitionFromSamples)
-            val newTap = readDelayTap(delayTransitionToSamples)
-            val delayed = if (delayDivisionSwitch) {
+            val oldFeedbackTap = readDelayTap(delayTransitionFromSamples)
+            val newFeedbackTap = readDelayTap(delayTransitionToSamples)
+            val oldOutputTap = readDelayTap(
+                (delayTransitionFromSamples + phaseOffsetSamples).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+            )
+            val newOutputTap = readDelayTap(
+                (delayTransitionToSamples + phaseOffsetSamples).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+            )
+            fun blendTap(oldTap: Float, newTap: Float): Float = if (delayDivisionSwitch) {
                 val halfLength = (delayTransitionLength / 2).coerceAtLeast(1)
                 if (delayTransitionPosition < halfLength) {
                     val fade = (delayTransitionPosition.toFloat() / halfLength).coerceIn(0f, 1f)
@@ -585,53 +547,22 @@ internal class SchroederReverb(private val sampleRate: Int) {
             } else {
                 oldTap + (newTap - oldTap) * transitionBlend
             }
+            val delayedForFeedback = blendTap(oldFeedbackTap, newFeedbackTap)
+            val delayed = blendTap(oldOutputTap, newOutputTap)
             if (delayTransitionPosition < delayTransitionLength) {
                 delayTransitionPosition++
             } else {
                 delayTransitionFromSamples = delayTransitionToSamples
                 delayDivisionSwitch = false
             }
-            // Tone is fixed per voicing for now; the V10 TONE control is not
-            // exposed in this simplified interface. Darker repeats in DUB mode
-            // progressively lose top end, while SHORT stays crisp.
+            // Signed phase trim affects only the audible read tap. Feedback uses
+            // the unshifted tap, preserving the exact selected repeat interval.
             delayToneState += smoothedDelayToneAlpha * (delayed - delayToneState)
-            // Keep the circular-buffer cursor in range even if a previous
-            // interrupted processing cycle left it at an unexpected position.
-            // Phase-shift only the incoming send. The delay feedback loop keeps
-            // reading and writing at the exact selected beat period, so the jog
-            // cannot retune BPM or make the repeats progressively drift.
-            val safePhaseWriteIndex = Math.floorMod(phaseDelayWriteIndex, phaseDelayBuffer.size)
-            phaseDelayBuffer[safePhaseWriteIndex] = x
-            val phaseShiftedInput: Float
-            if (phaseDelaySwitch) {
-                val halfLength = (phaseDelaySwitchLength / 2).coerceAtLeast(1)
-                if (phaseDelaySwitchPosition < halfLength) {
-                    val fade = (phaseDelaySwitchPosition.toFloat() / halfLength).coerceIn(0f, 1f)
-                    val smoothFade = fade * fade * (3f - 2f * fade)
-                    phaseShiftedInput = readPhaseDelayTap(phaseDelaySwitchFromSamples) * (1f - smoothFade)
-                } else {
-                    if (phaseDelaySwitchPosition == halfLength) {
-                        smoothedFxPhaseDelaySamples = phaseDelaySwitchToSamples
-                    }
-                    val fade = ((phaseDelaySwitchPosition - halfLength).toFloat() /
-                        (phaseDelaySwitchLength - halfLength).coerceAtLeast(1)).coerceIn(0f, 1f)
-                    val smoothFade = fade * fade * (3f - 2f * fade)
-                    phaseShiftedInput = readPhaseDelayTap(phaseDelaySwitchToSamples) * smoothFade
-                }
-                phaseDelaySwitchPosition++
-                if (phaseDelaySwitchPosition >= phaseDelaySwitchLength) {
-                    smoothedFxPhaseDelaySamples = phaseDelaySwitchToSamples
-                    phaseDelaySwitch = false
-                }
-            } else {
-                smoothedFxPhaseDelaySamples +=
-                    (targetFxPhaseDelaySamples - smoothedFxPhaseDelaySamples) * fxPhaseDelaySmoothing
-                phaseShiftedInput = readPhaseDelayTap(smoothedFxPhaseDelaySamples)
-            }
-            phaseDelayWriteIndex = if (safePhaseWriteIndex + 1 >= phaseDelayBuffer.size) 0 else safePhaseWriteIndex + 1
+            delayFeedbackToneState +=
+                smoothedDelayToneAlpha * (delayedForFeedback - delayFeedbackToneState)
 
             val safeWriteIndex = Math.floorMod(delayWriteIndex, delayBuffer.size)
-            delayBuffer[safeWriteIndex] = (phaseShiftedInput * 0.68f + delayToneState * smoothedDelayFeedback).coerceIn(-0.88f, 0.88f)
+            delayBuffer[safeWriteIndex] = (x * 0.68f + delayFeedbackToneState * smoothedDelayFeedback).coerceIn(-0.88f, 0.88f)
             delayWriteIndex = if (safeWriteIndex + 1 >= delayBuffer.size) 0 else safeWriteIndex + 1
             // Effect switches use the existing smoothed send levels as a short
             // output fade. A hard gate here creates an abrupt waveform discontinuity
@@ -644,18 +575,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     // Flush both the feedback echo and its phase-history buffer
                     // at silence. Reverb state and the selected FX settings stay intact.
                     delayBuffer.fill(0f)
-                    phaseDelayBuffer.fill(0f)
                     delayWriteIndex = 0
-                    phaseDelayWriteIndex = 0
                     delayToneState = 0f
-                    phaseDelaySwitch = false
-                    phaseDelaySwitchPosition = 0
-                    // The new FX phase target is now authoritative. Snap the
-                    // applied phase at silence so stale phase from the previous
-                    // clock cannot survive RST/SKIP and reappear after the fade.
-                    smoothedFxPhaseDelaySamples = targetFxPhaseDelaySamples
-                    phaseDelaySwitchFromSamples = targetFxPhaseDelaySamples
-                    phaseDelaySwitchToSamples = targetFxPhaseDelaySamples
+                    delayFeedbackToneState = 0f
+                    // Snap the signed trim at silence so no previous clock phase
+                    // can survive RST/SKIP and reappear after the fade.
+                    smoothedFxPhaseOffsetSamples = targetFxPhaseOffsetSamples
                     delayTransitionFromSamples = targetDelaySamples
                     delayTransitionToSamples = targetDelaySamples
                     delayTransitionPosition = delayTransitionLength
