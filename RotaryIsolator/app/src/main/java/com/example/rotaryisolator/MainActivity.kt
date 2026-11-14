@@ -2016,6 +2016,7 @@ class MainActivity : Activity() {
                 if (resetFxOffset < -resetPeriod * 0.5f) resetFxOffset += resetPeriod
                 delaySyncOffsetMs = 0f
                 fxPhaseOffsetMs = resetFxOffset
+                skipPhaseAppliedMs = 0f
                 fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
