@@ -203,12 +203,20 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // A clock re-sync must discard repeats created under the previous phase.
     // The request is consumed only by the audio thread, never by the UI thread.
     @Volatile private var delayResetRequested = false
+    @Volatile private var clockEngineResetRequested = false
+    private var hardClockResetPending = false
     private val delayResetFadeSamples = (sampleRate * 0.008f).toInt().coerceAtLeast(1)
     private var delayResetFadeOutRemaining = 0
     private var delayResetFadeInRemaining = 0
 
     fun requestDelayReset() {
         delayResetRequested = true
+    }
+
+    // Full BPM/clock reset: the request is consumed by the audio thread and
+    // applied only after the delay return has faded to silence.
+    fun requestClockEngineReset() {
+        clockEngineResetRequested = true
     }
 
     private fun readDelayTap(delaySamples: Float): Float {
@@ -340,6 +348,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
         fxPhaseOffsetMs: Float = 0f,
         reverbBeatPercent: Int = 50
     ) {
+        if (clockEngineResetRequested) {
+            clockEngineResetRequested = false
+            hardClockResetPending = true
+            delayResetRequested = true
+        }
         if (delayResetRequested) {
             delayResetRequested = false
             delayResetFadeOutRemaining = delayResetFadeSamples
@@ -626,6 +639,16 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     activeDelayDivision = requestedDivision
                     delayTargetCandidateSamples = targetDelaySamples
                     delayTargetStableSamples = 0
+                    if (hardClockResetPending) {
+                        // Discard every stale FX phase/read-head transition as well
+                        // as the echo history. The next block starts from zero phase.
+                        smoothedFxPhaseDelaySamples = 0f
+                        phaseDelaySwitch = false
+                        phaseDelaySwitchPosition = 0
+                        phaseDelaySwitchFromSamples = 0f
+                        phaseDelaySwitchToSamples = 0f
+                        hardClockResetPending = false
+                    }
                     delayResetFadeInRemaining = delayResetFadeSamples
                 }
             } else if (delayResetFadeInRemaining > 0) {
