@@ -454,9 +454,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val upperBand = fxLowMidSplit.processHigh(source)
             val midBand = fxMidHighSplit.processLow(upperBand)
             val highBand = fxMidHighSplit.processHigh(upperBand)
-            val anyBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
+            // At least one Beat FX frequency band must always feed the effect.
+            // MID is the safe fallback for older preferences or any inconsistent state.
+            val useMidBand = fxMidEnabled || (!fxLowEnabled && !fxHighEnabled)
+            val anyBandSelected = fxLowEnabled || useMidBand || fxHighEnabled
             val lowTarget = if (fxLowEnabled) 1f else 0f
-            val midTarget = if (fxMidEnabled) 1f else 0f
+            val midTarget = if (useMidBand) 1f else 0f
             val highTarget = if (fxHighEnabled) 1f else 0f
             smoothedFxLow += (lowTarget - smoothedFxLow) * fxBandSmoothing
             smoothedFxMid += (midTarget - smoothedFxMid) * fxBandSmoothing
