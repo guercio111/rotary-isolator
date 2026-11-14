@@ -385,7 +385,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
         if (normalizedFxPhaseMs < 0f) normalizedFxPhaseMs += fxPhasePeriodMs
         val targetFxPhaseDelaySamples = (normalizedFxPhaseMs * sampleRate / 1000f)
             .coerceIn(0f, (phaseDelayBuffer.size - 2).toFloat())
-        val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
+        // Fast subdivisions need the phase read head to settle well inside one FX cycle.
+        // A fixed 25 ms time constant is almost a full 1/16-note at typical tempos,
+        // so the applied phase lags and the FX phase indicators appear to wander.
+        // Scale smoothing with the selected division, capped at the former 25 ms
+        // for longer notes, while keeping a small floor to avoid abrupt jumps.
+        val fxPhaseSmoothingSeconds = (fxPhasePeriodMs / 1000f * 0.08f)
+            .coerceIn(0.0015f, 0.025f)
+        val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * fxPhaseSmoothingSeconds))).toFloat()
         val requestedDivision = delayDivision.coerceIn(0, 9)
         if (requestedDivision != activeDelayDivision) {
             // Beat-division changes are discrete. If another handoff is already
