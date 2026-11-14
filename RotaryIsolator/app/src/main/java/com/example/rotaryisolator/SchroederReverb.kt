@@ -617,8 +617,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     delayToneState = 0f
                     phaseDelaySwitch = false
                     phaseDelaySwitchPosition = 0
-                    phaseDelaySwitchFromSamples = smoothedFxPhaseDelaySamples
-                    phaseDelaySwitchToSamples = smoothedFxPhaseDelaySamples
+                    // The new FX phase target is now authoritative. Snap the
+                    // applied phase at silence so stale phase from the previous
+                    // clock cannot survive RST/SKIP and reappear after the fade.
+                    smoothedFxPhaseDelaySamples = targetFxPhaseDelaySamples
+                    phaseDelaySwitchFromSamples = targetFxPhaseDelaySamples
+                    phaseDelaySwitchToSamples = targetFxPhaseDelaySamples
                     delayTransitionFromSamples = targetDelaySamples
                     delayTransitionToSamples = targetDelaySamples
                     delayTransitionPosition = delayTransitionLength
