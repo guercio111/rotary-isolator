@@ -1980,38 +1980,48 @@ class MainActivity : Activity() {
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
             paintClockButton(this, false)
+            contentDescription = "Reset completo del motore BPM, clock e sincronizzazione FX"
             setOnClickListener {
-                // RST also clears the old delay feedback history; otherwise
-                // long repeats from the previous phase keep playing against the new clock.
-                parallelReverbProcessor?.requestDelayReset()
+                // Full reset: discard every old tempo/phase estimate, not just
+                // the visible offsets. AUTO can acquire again from fresh audio.
+                parallelReverbProcessor?.requestClockEngineReset()
+                validatedBeatEngine.reset()
+                bpmLastBeatIndex = Long.MIN_VALUE
+                fxBpmLastBeatIndex = Long.MIN_VALUE
+                bpmUiLastUpdate = 0L
+
                 delayBpmCorrection = 0f
-                validatedBeatEngine.setPitchPercent(0f)
+                delayBpm = 120f
+                delayTapBpm = 120f
                 delayClockLocked = false
-                validatedBeatEngine.setClockLocked(false)
-                val resetNow = android.os.SystemClock.elapsedRealtime()
-                // Re-acquire only when the tempo estimate is already stable.
-                // Otherwise AUTO remains free to acquire phase when confidence recovers.
-                val resetSynced = validatedBeatEngine.getConfidence() >= 0.30f &&
-                    validatedBeatEngine.sync(resetNow)
                 delaySyncOffsetMs = 0f
                 fxPhaseOffsetMs = 0f
-                fxBpmLastBeatIndex = Long.MIN_VALUE
-                refreshFxPhaseUi()
+                fxAppliedPhaseDelayMs = 0f
+
+                autoPhaseSynced = false
+                autoBpmNextBeatMs = 0L
+                autoBpmHasEstimate = false
+                autoBpmHistory.clear()
+                autoBpmPreviousBass = 0f
+                autoBpmLowpassState = 0f
+                autoBpmLastAnalysisMs = 0L
+
+                lastDelayTapMs = 0L
+                delayTapIntervals.clear()
+
+                bpmBeat?.setTextColor(Color.rgb(75,85,95))
+                fxBpmBeat?.setTextColor(Color.rgb(75,85,95))
+                bpmReadout?.text = if (autoBpmEnabled || bpmAnalyzerOn) "RICERCA BPM…" else "— BPM"
+                bpmUiLabel?.text = "120.0"
+                bpmFineSeek?.progress = 100
                 fxPhaseSeek?.progress = 100
                 fxPhaseSeek?.invalidate()
-                val resetPhase = validatedBeatEngine.getPhaseMs()
-                autoPhaseSynced = resetSynced && resetPhase > 0L
-                if (autoPhaseSynced) {
-                    autoBpmNextBeatMs = resetPhase + validatedBeatEngine.getPeriodMs().toLong()
-                    bpmLastBeatIndex = Long.MIN_VALUE
-                } else {
-                    bpmReadout?.text = "ATTENDI BPM STABILE"
-                }
-                bpmFineSeek?.progress = 100
-                delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
+                refreshFxPhaseUi()
+
                 lockButton.text = "LOCK"
                 paintClockButton(lockButton, false)
-                save(); scheduleUpdate()
+                save()
+                scheduleUpdate()
             }
         }
         val delayPower = TextView(this).apply {
