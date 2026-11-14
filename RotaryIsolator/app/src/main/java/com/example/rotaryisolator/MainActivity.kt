@@ -1857,10 +1857,17 @@ class MainActivity : Activity() {
             val stepMs = -fxPeriodMs * direction / 64f
             fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
             refreshFxPhaseUi()
-            // Keep the jog handle locked to the same measured phase used by
-            // the yellow FX marker. The requested trim alone can point the hand
-            // the wrong way while DSP smoothing/latency is still being applied.
-            syncFxPhaseSeekToMeasuredPhase()
+            // Move the visible jog handle immediately with the same signed
+            // phase trim sent to the DSP. The measured-phase tracker will take
+            // over as the audio thread applies its smoothed offset.
+            val halfRange = (fxPeriodMs * 0.5f).coerceAtLeast(1f)
+            fxPhaseSeek?.let { seek ->
+                if (!seek.isPressed) {
+                    seek.progress = (100f - fxPhaseOffsetMs / halfRange * 100f)
+                        .roundToInt().coerceIn(0, 200)
+                    seek.invalidate()
+                }
+            }
             fxBpmLastBeatIndex = Long.MIN_VALUE
             scheduleUpdate()
         }
