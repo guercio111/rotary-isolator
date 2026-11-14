@@ -118,6 +118,8 @@ class MainActivity : Activity() {
     @Volatile private var fxPhaseOffsetMs = 0f
     // Real capture-to-playback latency, measured from AudioRecord/AudioTrack monotonic timestamps.
     @Volatile private var fxOutputLatencyMs = Float.NaN
+    // One-shot startup alignment, applied after the first valid output-latency timestamp.
+    @Volatile private var fxStartupPhaseAligned = false
     // Smoothed phase delay currently applied inside the DSP, not merely requested by the UI.
     @Volatile private var fxAppliedPhaseDelayMs = 0f
     private fun currentFxPeriodMs(): Float {
@@ -2549,6 +2551,7 @@ class MainActivity : Activity() {
             captureTrack = track
             parallelReverbProcessor = SchroederReverb(sampleRate)
             fxOutputLatencyMs = Float.NaN
+            fxStartupPhaseAligned = false
             fxAppliedPhaseDelayMs = 0f
             handler.post { refreshFxPhaseUi() }
             captureRecord = record
@@ -2631,6 +2634,29 @@ class MainActivity : Activity() {
                                             smoothedFxLatencyMs * 0.90f + measuredLatencyMs.toFloat() * 0.10f
                                         } else measuredLatencyMs.toFloat()
                                         fxOutputLatencyMs = smoothedFxLatencyMs
+                                        // At the first trustworthy timestamp, compensate the
+                                        // capture-to-output latency once so MASTER and FX markers
+                                        // begin together. AUTO/SYNC remains authoritative if it
+                                        // has already acquired the beat phase.
+                                        if (!fxStartupPhaseAligned) {
+                                            fxStartupPhaseAligned = true
+                                            handler.post {
+                                                if (!autoPhaseSynced && !delayClockLocked) {
+                                                    val phaseError = currentFxPhaseErrorMs()
+                                                    if (phaseError.isFinite()) {
+                                                        val period = currentFxPeriodMs().coerceAtLeast(1f)
+                                                        val half = period * 0.5f
+                                                        var correction = (fxPhaseOffsetMs - phaseError) % period
+                                                        if (correction > half) correction -= period
+                                                        if (correction < -half) correction += period
+                                                        fxPhaseOffsetMs = correction
+                                                        syncFxPhaseSeekToMeasuredPhase()
+                                                        refreshFxPhaseUi()
+                                                        scheduleUpdate()
+                                                    }
+                                                }
+                                            }
+                                        }
                                         val latencyNow = android.os.SystemClock.elapsedRealtime()
                                         if (latencyNow - lastFxLatencyUi >= 200L) {
                                             lastFxLatencyUi = latencyNow
