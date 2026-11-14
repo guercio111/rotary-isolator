@@ -39,7 +39,10 @@ public final class BeatEngine {
         lastAnalysisMs = phaseMs = 0L;
         periodMs = 0.0;
         locked = false;
+        pitchPercent = 0f;
+        for (int i = 0; i < novelty.length; i++) novelty[i] = 0f;
         for (int i = 0; i < sampleWindow.length; i++) sampleWindow[i] = 0f;
+        for (int i = 0; i < real.length; i++) { real[i] = 0f; imag[i] = 0f; }
         for (int i = 0; i < previousMagnitude.length; i++) previousMagnitude[i] = 0f;
     }
 
