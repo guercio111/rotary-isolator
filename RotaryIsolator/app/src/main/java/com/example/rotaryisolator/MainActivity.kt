@@ -116,6 +116,8 @@ class MainActivity : Activity() {
     @Volatile private var delaySyncOffsetMs = 0f
     // Independent FX-only phase trim. It never touches the master BeatEngine or BPM.
     @Volatile private var fxPhaseOffsetMs = 0f
+    // Alternate SKIP direction so the second press exactly undoes the first.
+    @Volatile private var skipPhaseForward = true
     // Real capture-to-playback latency, measured from AudioRecord/AudioTrack monotonic timestamps.
     @Volatile private var fxOutputLatencyMs = Float.NaN
     // One-shot startup alignment, applied after the first valid output-latency timestamp.
@@ -1857,10 +1859,17 @@ class MainActivity : Activity() {
             val stepMs = -fxPeriodMs * direction / 64f
             fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
             refreshFxPhaseUi()
-            // Keep the jog handle locked to the same measured phase used by
-            // the yellow FX marker. The requested trim alone can point the hand
-            // the wrong way while DSP smoothing/latency is still being applied.
-            syncFxPhaseSeekToMeasuredPhase()
+            // Move the visible jog handle immediately with the same signed
+            // phase trim sent to the DSP. The measured-phase tracker will take
+            // over as the audio thread applies its smoothed offset.
+            val halfRange = (fxPeriodMs * 0.5f).coerceAtLeast(1f)
+            fxPhaseSeek?.let { seek ->
+                if (!seek.isPressed) {
+                    seek.progress = (100f - fxPhaseOffsetMs / halfRange * 100f)
+                        .roundToInt().coerceIn(0, 200)
+                    seek.invalidate()
+                }
+            }
             fxBpmLastBeatIndex = Long.MIN_VALUE
             scheduleUpdate()
         }
@@ -1944,25 +1953,29 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             paintClockButton(this, false)
             setOnClickListener {
-                val now = android.os.SystemClock.elapsedRealtime()
-                // SKIP reacquires the musical downbeat without shifting the FX
-                // trim by half a cycle or flushing the live echo feedback buffer.
-                val acquired = validatedBeatEngine.sync(now)
-                val phase = validatedBeatEngine.getPhaseMs()
-                val period = validatedBeatEngine.getPeriodMs()
-                if (acquired && phase > 0L && period > 0.0) {
-                    autoPhaseSynced = true
-                    autoBpmNextBeatMs = phase + period.toLong()
-                    bpmLastBeatIndex = Long.MIN_VALUE
-                    fxBpmLastBeatIndex = Long.MIN_VALUE
-                    phaseJogLastProgress = 100
-                    syncFxPhaseSeekToMeasuredPhase()
+                // SKIP is clock-derived and reversible: alternate a quarter of
+                // the selected FX cycle forward/back without changing MASTER BPM.
+                val masterPeriodMs = validatedBeatEngine.getPeriodMs().toFloat()
+                if (!masterPeriodMs.isFinite() || masterPeriodMs <= 0f) {
+                    bpmReadout?.text = "ATTENDI BPM STABILE"
+                } else {
+                    val division = floatArrayOf(
+                        1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f,
+                        1f, 2f, 4f, 8f, 16f
+                    )[delayDivision.coerceIn(0, 9)]
+                    val fxCycleMs = (masterPeriodMs * division).coerceAtLeast(1f)
+                    val skipStepMs = fxCycleMs * 0.25f
+                    val signedStepMs = if (skipPhaseForward) -skipStepMs else skipStepMs
+                    val halfRange = (fxCycleMs * 0.5f).coerceAtLeast(1f)
+                    fxPhaseOffsetMs = (fxPhaseOffsetMs + signedStepMs)
+                        .coerceIn(-halfRange, halfRange)
+                    skipPhaseForward = !skipPhaseForward
                     refreshFxPhaseUi()
+                    syncFxPhaseSeekToMeasuredPhase()
+                    fxBpmLastBeatIndex = Long.MIN_VALUE
                     scheduleUpdate()
                     paintClockButton(this, true)
                     postDelayed({ paintClockButton(this, false) }, 250L)
-                } else {
-                    bpmReadout?.text = "ATTENDI BPM STABILE"
                 }
             }
         }
