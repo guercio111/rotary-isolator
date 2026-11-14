@@ -532,23 +532,29 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val newOutputTap = readDelayTap(
                 (delayTransitionToSamples + phaseOffsetSamples).coerceIn(1f, (delayBuffer.size - 2).toFloat())
             )
-            fun blendTap(oldTap: Float, newTap: Float): Float = if (delayDivisionSwitch) {
+            val oldTapGain: Float
+            val newTapGain: Float
+            if (delayDivisionSwitch) {
                 val halfLength = (delayTransitionLength / 2).coerceAtLeast(1)
                 if (delayTransitionPosition < halfLength) {
                     val fade = (delayTransitionPosition.toFloat() / halfLength).coerceIn(0f, 1f)
                     val smoothFade = fade * fade * (3f - 2f * fade)
-                    oldTap * (1f - smoothFade)
+                    oldTapGain = 1f - smoothFade
+                    newTapGain = 0f
                 } else {
                     val fade = ((delayTransitionPosition - halfLength).toFloat() /
                         (delayTransitionLength - halfLength).coerceAtLeast(1)).coerceIn(0f, 1f)
                     val smoothFade = fade * fade * (3f - 2f * fade)
-                    newTap * smoothFade
+                    oldTapGain = 0f
+                    newTapGain = smoothFade
                 }
             } else {
-                oldTap + (newTap - oldTap) * transitionBlend
+                oldTapGain = 1f - transitionBlend
+                newTapGain = transitionBlend
             }
-            val delayedForFeedback = blendTap(oldFeedbackTap, newFeedbackTap)
-            val delayed = blendTap(oldOutputTap, newOutputTap)
+            val delayedForFeedback =
+                oldFeedbackTap * oldTapGain + newFeedbackTap * newTapGain
+            val delayed = oldOutputTap * oldTapGain + newOutputTap * newTapGain
             if (delayTransitionPosition < delayTransitionLength) {
                 delayTransitionPosition++
             } else {
