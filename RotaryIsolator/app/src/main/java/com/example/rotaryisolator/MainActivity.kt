@@ -2617,10 +2617,11 @@ class MainActivity : Activity() {
                                 if (inputStatus == 0 && outputValid &&
                                     inputTs.framePosition > 0L && outputTs.framePosition > 0L &&
                                     outputTs.framePosition <= outputFramesWritten) {
-                                    val frameDelta = outputTs.framePosition - inputTs.framePosition
-                                    val captureTimeForOutputFrameNs = inputTs.nanoTime +
-                                        (frameDelta.toDouble() * 1_000_000_000.0 / sampleRate).toLong()
-                                    val measuredLatencyMs = (outputTs.nanoTime - captureTimeForOutputFrameNs) / 1_000_000.0
+                                    // AudioRecord and AudioTrack have independent frame-position origins.
+                                    // Subtracting their frame counters fabricates a false sample offset.
+                                    // Their monotonic frame timestamps already share the same timebase;
+                                    // their time difference is the capture-to-playback pipeline latency.
+                                    val measuredLatencyMs = (outputTs.nanoTime - inputTs.nanoTime) / 1_000_000.0
                                     if (measuredLatencyMs in 0.0..2000.0) {
                                         smoothedFxLatencyMs = if (smoothedFxLatencyMs.isFinite()) {
                                             smoothedFxLatencyMs * 0.90f + measuredLatencyMs.toFloat() * 0.10f
