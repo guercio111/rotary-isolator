@@ -2182,11 +2182,12 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val divisionLabels = arrayOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
+        // 1/16 temporarily hidden for an isolated stability test. Keep original DSP indices for every remaining division.
+        val divisionLabels = arrayOf("1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
         val divisionViews = ArrayList<TextView>()
         fun paintDivisionButtons() {
             divisionViews.forEachIndexed { index, button ->
-                val selected = delayDivision == index
+                val selected = delayDivision == index + 1
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
                     setColor(if (selected) colorDelay else Color.rgb(55,62,72))
@@ -2206,7 +2207,7 @@ class MainActivity : Activity() {
                     // A division change alters the echo interval, not the
                     // user's absolute manual phase correction. Keep that value
                     // untouched; the DSP wraps it to the new FX cycle itself.
-                    delayDivision = index
+                    delayDivision = index + 1
                     phaseJogLastProgress = 100
                     fxPhaseSeek?.progress = 100
                     fxPhaseSeek?.invalidate()
