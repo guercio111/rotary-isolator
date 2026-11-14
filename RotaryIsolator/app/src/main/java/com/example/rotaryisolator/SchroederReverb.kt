@@ -491,20 +491,30 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // With no band selected the Beat FX receives the complete spectrum.
             // The crossovers are always advanced, avoiding stale state and clicks
             // when the user toggles any band during playback.
+            // Keep all crossover filters running so their internal states remain
+            // warm when a band is selected. With no band selected, bypass the
+            // crossover sum entirely: the Beat FX receives the original PCM
+            // sample, not a reconstructed LOW+MID+HIGH signal. This guarantees
+            // true full-band unity routing and avoids crossover phase/level
+            // interaction in the default (all bands off) state.
             val lowBand = fxLowMidSplit.processLow(source)
             val upperBand = fxLowMidSplit.processHigh(source)
             val midBand = fxMidHighSplit.processLow(upperBand)
             val highBand = fxMidHighSplit.processHigh(upperBand)
             val anyBandSelected = fxLowEnabled || fxMidEnabled || fxHighEnabled
-            val lowTarget = if (!anyBandSelected || fxLowEnabled) 1f else 0f
-            val midTarget = if (!anyBandSelected || fxMidEnabled) 1f else 0f
-            val highTarget = if (!anyBandSelected || fxHighEnabled) 1f else 0f
+            val lowTarget = if (fxLowEnabled) 1f else 0f
+            val midTarget = if (fxMidEnabled) 1f else 0f
+            val highTarget = if (fxHighEnabled) 1f else 0f
             smoothedFxLow += (lowTarget - smoothedFxLow) * fxBandSmoothing
             smoothedFxMid += (midTarget - smoothedFxMid) * fxBandSmoothing
             smoothedFxHigh += (highTarget - smoothedFxHigh) * fxBandSmoothing
-            val x = lowBand * smoothedFxLow +
-                midBand * smoothedFxMid +
-                highBand * smoothedFxHigh
+            val x = if (!anyBandSelected) {
+                source
+            } else {
+                lowBand * smoothedFxLow +
+                    midBand * smoothedFxMid +
+                    highBand * smoothedFxHigh
+            }
 
             // Two gentle high-pass stages keep kick/sub energy out of the
             // reverb excitation while retaining a natural mid/high body.
