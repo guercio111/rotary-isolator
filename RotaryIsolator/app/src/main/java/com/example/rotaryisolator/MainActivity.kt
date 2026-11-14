@@ -1811,9 +1811,8 @@ class MainActivity : Activity() {
                 if (!syncAcquired || afterPhase <= 0L || validatedBeatEngine.getPeriodMs() <= 0.0) {
                     bpmReadout?.text = "ATTENDI BPM STABILE"
                 } else {
-                    // A fresh master phase must not be mixed with echoes
-                    // still circulating from the previous phase/clock position.
-                    parallelReverbProcessor?.requestDelayReset()
+                    // Keep the live delay feedback history. Clearing it here
+                    // makes the effect disappear until a fresh repeat is generated.
                     autoBpmNextBeatMs = afterPhase + validatedBeatEngine.getPeriodMs().toLong()
                     bpmLastBeatIndex = Long.MIN_VALUE
                     delaySyncOffsetMs = 0f
@@ -1946,33 +1945,25 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             paintClockButton(this, false)
             setOnClickListener {
-                val masterPeriod = validatedBeatEngine.getPeriodMs()
-                if (masterPeriod > 0.0 && validatedBeatEngine.getPhaseMs() > 0L) {
-                    // SKIP corrects the FX echo phase only. Moving the MASTER
-                    // anchor by one full beat cannot change its beat phase and
-                    // can desynchronize the beat counter from the music.
-                    val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
-                    val halfMasterBeatMs = (masterPeriod * 0.5).toFloat()
-                    // For subdivisions shorter than half a master beat, use
-                    // half of the selected FX cycle; otherwise move by half a
-                    // master beat so LONG DELAY remains on the musical offbeat grid.
-                    val phaseStepMs = if (halfMasterBeatMs >= fxPeriodMs - 1f) {
-                        fxPeriodMs * 0.5f
-                    } else {
-                        halfMasterBeatMs
-                    }
-                    var shiftedPhase = (fxPhaseOffsetMs + phaseStepMs) % fxPeriodMs
-                    if (shiftedPhase > fxPeriodMs * 0.5f) shiftedPhase -= fxPeriodMs
-                    if (shiftedPhase < -fxPeriodMs * 0.5f) shiftedPhase += fxPeriodMs
-                    fxPhaseOffsetMs = shiftedPhase
-                    parallelReverbProcessor?.requestDelayReset()
+                val now = android.os.SystemClock.elapsedRealtime()
+                // SKIP reacquires the musical downbeat without shifting the FX
+                // trim by half a cycle or flushing the live echo feedback buffer.
+                val acquired = validatedBeatEngine.sync(now)
+                val phase = validatedBeatEngine.getPhaseMs()
+                val period = validatedBeatEngine.getPeriodMs()
+                if (acquired && phase > 0L && period > 0.0) {
+                    autoPhaseSynced = true
+                    autoBpmNextBeatMs = phase + period.toLong()
+                    bpmLastBeatIndex = Long.MIN_VALUE
                     fxBpmLastBeatIndex = Long.MIN_VALUE
                     phaseJogLastProgress = 100
-                    refreshFxPhaseUi()
                     syncFxPhaseSeekToMeasuredPhase()
+                    refreshFxPhaseUi()
                     scheduleUpdate()
                     paintClockButton(this, true)
                     postDelayed({ paintClockButton(this, false) }, 250L)
+                } else {
+                    bpmReadout?.text = "ATTENDI BPM STABILE"
                 }
             }
         }
