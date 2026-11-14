@@ -177,7 +177,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var activeDelayDivision = -1
     // Keep the handoff shorter than the shortest 1/16-beat delay; a 120 ms
     // transition smeared the subdivisions and could mask the selected rhythm.
-    private var delayTransitionLength = (sampleRate * 0.012f).toInt().coerceAtLeast(1)
+    // Keep the Build 621 silent handoff: fade the old tap out, switch at
+    // silence, then fade the new tap in. The former 120 ms window avoids
+    // metallic combing when the Beat division changes.
+    private var delayTransitionLength = (sampleRate * 0.12f).toInt().coerceAtLeast(1)
     // Division changes use a zero-crossfade handoff: fade the old tap down,
     // switch read heads at silence, then fade the new tap up. This avoids the
     // metallic/comb sweep caused by mixing two unrelated beat taps together.
@@ -357,27 +360,17 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // Keep the jog as a signed time correction. The audible read tap moves
         // earlier/later by this amount; a separate unshifted tap feeds feedback.
         val fxPhasePeriodMs = beatPeriodMs * beatFraction
-        // Keep division handoffs short relative to the selected FX cycle.
-        // A fixed 12 ms handoff consumes too much of a 1/16 or 1/8 beat and
-        // audibly smears its onset. Update only between handoffs so an active
-        // transition never changes duration halfway through.
-        if (!delayDivisionSwitch) {
-            delayTransitionLength = (sampleRate * (fxPhasePeriodMs / 1000f * 0.08f))
-                .coerceIn(sampleRate * 0.002f, sampleRate * 0.012f)
-                .toInt().coerceAtLeast(1)
-        }
+        // Keep the silent handoff duration fixed, as in Build 621.
+        // A subdivision-scaled 2–12 ms fade is too short to mask read-head
+        // discontinuities and can create a metallic transient on Beat changes.
         val targetFxPhaseOffsetSamples = (
             fxPhaseOffsetMs.coerceIn(-fxPhasePeriodMs * 0.49f, fxPhasePeriodMs * 0.49f) *
                 sampleRate / 1000f
         )
-        // Fast subdivisions need the phase read head to settle well inside one FX cycle.
-        // A fixed 25 ms time constant is almost a full 1/16-note at typical tempos,
-        // so the applied phase lags and the FX phase indicators appear to wander.
-        // Scale smoothing with the selected division, capped at the former 25 ms
-        // for longer notes, while keeping a small floor to avoid abrupt jumps.
-        val fxPhaseSmoothingSeconds = (fxPhasePeriodMs / 1000f * 0.08f)
-            .coerceIn(0.0015f, 0.025f)
-        val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * fxPhaseSmoothingSeconds))).toFloat()
+        // Smooth the manual phase fader with the stable 25 ms time constant
+        // used before subdivision-dependent acceleration was introduced.
+        // This prevents rapid read-head motion from becoming an audible zipper.
+        val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025f))).toFloat()
         val requestedDivision = delayDivision.coerceIn(0, 9)
         if (requestedDivision != activeDelayDivision) {
             // Beat-division changes are discrete. If another handoff is already
