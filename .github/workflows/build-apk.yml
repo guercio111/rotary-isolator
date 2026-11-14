@@ -92,7 +92,7 @@ jobs:
           '''
           if "AudioCaptureForegroundService" not in xml:
               xml = xml.replace("</application>", service + nl + "    </application>", 1)
-          required = "orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density"
+          required = "orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode|fontScale|layoutDirection|locale|mcc|mnc|colorMode"
           tags = list(re.finditer(r'<activity[^>]*>', xml))
           match = next((m for m in tags if "MainActivity" in m.group(0)), None)
           if match is None:
