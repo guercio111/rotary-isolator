@@ -1993,8 +1993,17 @@ class MainActivity : Activity() {
                 // Otherwise AUTO remains free to acquire phase when confidence recovers.
                 val resetSynced = validatedBeatEngine.getConfidence() >= 0.30f &&
                     validatedBeatEngine.sync(resetNow)
+                // Keep the measured capture/playback latency compensated when RST
+                // clears the FX phase. Zeroing this trim would put the return late
+                // by the full output latency and can sound like counter-beat.
+                delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
+                val resetPeriod = currentFxPeriodMs().coerceAtLeast(1f)
+                var resetFxOffset = if (fxOutputLatencyMs.isFinite()) -fxOutputLatencyMs else 0f
+                resetFxOffset %= resetPeriod
+                if (resetFxOffset > resetPeriod * 0.5f) resetFxOffset -= resetPeriod
+                if (resetFxOffset < -resetPeriod * 0.5f) resetFxOffset += resetPeriod
                 delaySyncOffsetMs = 0f
-                fxPhaseOffsetMs = 0f
+                fxPhaseOffsetMs = resetFxOffset
                 fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
@@ -2008,7 +2017,6 @@ class MainActivity : Activity() {
                     bpmReadout?.text = "ATTENDI BPM STABILE"
                 }
                 bpmFineSeek?.progress = 100
-                delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
                 lockButton.text = "LOCK"
                 paintClockButton(lockButton, false)
                 save(); scheduleUpdate()
@@ -2202,26 +2210,24 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(dp(1), 0, dp(1), 0)
                 setOnClickListener {
-                    // LOCK freezes the phase correction the user actually found,
-                    // not the zero/center position. Read the measured phase using
-                    // the OLD division before changing the FX period.
-                    val preserveLockedCorrection = delayClockLocked && fxOutputLatencyMs.isFinite()
-                    val lockedPhaseErrorMs = if (preserveLockedCorrection) {
+                    // Once AUTO/SYNC has acquired the phase, preserve the same
+                    // MASTER-relative FX position across every division change.
+                    // This must not depend on tempo LOCK being enabled.
+                    val preserveMeasuredPhase = (delayClockLocked || autoPhaseSynced) &&
+                        fxOutputLatencyMs.isFinite()
+                    val measuredPhaseErrorMs = if (preserveMeasuredPhase) {
                         currentFxPhaseErrorMs()
                     } else {
                         Float.NaN
                     }
                     delayDivision = index
-                    if (preserveLockedCorrection && lockedPhaseErrorMs.isFinite()) {
+                    if (preserveMeasuredPhase && measuredPhaseErrorMs.isFinite()) {
                         val newPeriod = currentFxPeriodMs().coerceAtLeast(1f)
-                        // Keep the same MASTER-relative correction, wrapped only
-                        // when the new beat division is shorter than that offset.
-                        var targetError = lockedPhaseErrorMs % newPeriod
+                        var targetError = measuredPhaseErrorMs % newPeriod
                         if (targetError > newPeriod * 0.5f) targetError -= newPeriod
                         if (targetError < -newPeriod * 0.5f) targetError += newPeriod
-                        // currentFxPhaseErrorMs = output latency + applied phase
-                        // delay + sync offset. Set the DSP target to retain that
-                        // measured error instead of forcing it back to zero.
+                        // Preserve output latency compensation and the measured
+                        // phase error; only wrap it into the new division period.
                         var correction = targetError - fxOutputLatencyMs - delaySyncOffsetMs
                         correction %= newPeriod
                         if (correction > newPeriod * 0.5f) correction -= newPeriod
