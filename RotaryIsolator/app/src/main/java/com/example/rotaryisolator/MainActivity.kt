@@ -1951,25 +1951,15 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             paintClockButton(this, false)
             setOnClickListener {
-                val now = android.os.SystemClock.elapsedRealtime()
-                // SKIP reacquires the musical downbeat without shifting the FX
-                // trim by half a cycle or flushing the live echo feedback buffer.
-                val acquired = validatedBeatEngine.sync(now)
-                val phase = validatedBeatEngine.getPhaseMs()
-                val period = validatedBeatEngine.getPeriodMs()
-                if (acquired && phase > 0L && period > 0.0) {
-                    autoPhaseSynced = true
-                    autoBpmNextBeatMs = phase + period.toLong()
-                    bpmLastBeatIndex = Long.MIN_VALUE
-                    fxBpmLastBeatIndex = Long.MIN_VALUE
-                    phaseJogLastProgress = 100
-                    syncFxPhaseSeekToMeasuredPhase()
-                    refreshFxPhaseUi()
-                    scheduleUpdate()
+                // SKIP is a one-shot FX phase jump, not another MASTER SYNC.
+                // Advance the selected FX cycle by one quarter while keeping
+                // BPM, master phase, LOCK and the live delay feedback untouched.
+                if (validatedBeatEngine.getPeriodMs() <= 0.0) {
+                    bpmReadout?.text = "ATTENDI BPM STABILE"
+                } else {
+                    phaseNudge(16f)
                     paintClockButton(this, true)
                     postDelayed({ paintClockButton(this, false) }, 250L)
-                } else {
-                    bpmReadout?.text = "ATTENDI BPM STABILE"
                 }
             }
         }
