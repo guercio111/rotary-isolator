@@ -2009,6 +2009,7 @@ class MainActivity : Activity() {
                 fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
+                phaseJogLastProgress = 100
                 fxPhaseSeek?.invalidate()
                 val resetPhase = validatedBeatEngine.getPhaseMs()
                 autoPhaseSynced = resetSynced && resetPhase > 0L
