@@ -176,7 +176,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayTransitionToSamples = sampleRate * 0.5f
     private var delayTransitionPosition = 0
     private var activeDelayDivision = -1
-    private val delayTransitionLength = (sampleRate * 0.12f).toInt().coerceAtLeast(1)
+    // Keep the handoff shorter than the shortest 1/16-beat delay; a 120 ms
+    // transition smeared the subdivisions and could mask the selected rhythm.
+    private val delayTransitionLength = (sampleRate * 0.012f).toInt().coerceAtLeast(1)
     // Division changes use a zero-crossfade handoff: fade the old tap down,
     // switch read heads at silence, then fade the new tap up. This avoids the
     // metallic/comb sweep caused by mixing two unrelated beat taps together.
