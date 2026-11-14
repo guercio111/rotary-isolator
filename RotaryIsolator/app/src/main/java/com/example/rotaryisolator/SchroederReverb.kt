@@ -177,7 +177,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var activeDelayDivision = -1
     // Keep the handoff shorter than the shortest 1/16-beat delay; a 120 ms
     // transition smeared the subdivisions and could mask the selected rhythm.
-    private val delayTransitionLength = (sampleRate * 0.012f).toInt().coerceAtLeast(1)
+    private var delayTransitionLength = (sampleRate * 0.012f).toInt().coerceAtLeast(1)
     // Division changes use a zero-crossfade handoff: fade the old tap down,
     // switch read heads at silence, then fade the new tap up. This avoids the
     // metallic/comb sweep caused by mixing two unrelated beat taps together.
@@ -357,6 +357,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // Keep the jog as a signed time correction. The audible read tap moves
         // earlier/later by this amount; a separate unshifted tap feeds feedback.
         val fxPhasePeriodMs = beatPeriodMs * beatFraction
+        // Keep division handoffs short relative to the selected FX cycle.
+        // A fixed 12 ms handoff consumes too much of a 1/16 or 1/8 beat and
+        // audibly smears its onset. Update only between handoffs so an active
+        // transition never changes duration halfway through.
+        if (!delayDivisionSwitch) {
+            delayTransitionLength = (sampleRate * (fxPhasePeriodMs / 1000f * 0.08f))
+                .coerceIn(sampleRate * 0.002f, sampleRate * 0.012f)
+                .toInt().coerceAtLeast(1)
+        }
         val targetFxPhaseOffsetSamples = (
             fxPhaseOffsetMs.coerceIn(-fxPhasePeriodMs * 0.49f, fxPhasePeriodMs * 0.49f) *
                 sampleRate / 1000f
