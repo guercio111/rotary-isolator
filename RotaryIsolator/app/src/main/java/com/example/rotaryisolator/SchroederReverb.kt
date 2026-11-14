@@ -438,8 +438,22 @@ internal class SchroederReverb(private val sampleRate: Int) {
 
         // A large FX phase jump must not glide a read head through hundreds of
         // milliseconds of audio. Fade the send down, change phase, and fade it up.
-        if (!phaseDelaySwitch &&
-            abs(targetFxPhaseDelaySamples - smoothedFxPhaseDelaySamples) > sampleRate * 0.03f) {
+        if (phaseDelaySwitch) {
+            // If a newer phase command arrives during the 12 ms handoff,
+            // retarget the transition instead of completing an obsolete move.
+            // Keep the currently audible side as the new transition origin.
+            val halfLength = (phaseDelaySwitchLength / 2).coerceAtLeast(1)
+            if (abs(targetFxPhaseDelaySamples - phaseDelaySwitchToSamples) > sampleRate * 0.002f) {
+                val currentTap = if (phaseDelaySwitchPosition < halfLength) {
+                    phaseDelaySwitchFromSamples
+                } else {
+                    phaseDelaySwitchToSamples
+                }
+                phaseDelaySwitchFromSamples = currentTap
+                phaseDelaySwitchToSamples = targetFxPhaseDelaySamples
+                phaseDelaySwitchPosition = 0
+            }
+        } else if (abs(targetFxPhaseDelaySamples - smoothedFxPhaseDelaySamples) > sampleRate * 0.03f) {
             phaseDelaySwitch = true
             phaseDelaySwitchPosition = 0
             phaseDelaySwitchFromSamples = smoothedFxPhaseDelaySamples
