@@ -340,7 +340,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // LONG: several open repeats, clearly audible but controlled.
             1 -> (0.38f + feedbackControl * 0.30f).coerceIn(0.38f, 0.68f)
             // DUB: dense, darker feedback trail with progressively softer repeats.
-            else -> (0.64f + feedbackControl * 0.22f).coerceIn(0.64f, 0.86f)
+            else -> (0.28f + feedbackControl * 0.48f).coerceIn(0.28f, 0.76f)
         }
         val tone = delayTonePercent.coerceIn(0, 100) / 100f
         val delayToneHz = when (mode) {
@@ -349,12 +349,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // Long repeats retain body but stay more open than the dub voicing.
             1 -> 5500f + tone * 8000f
             // Dub progressively rolls off the top for a darker tape-echo character.
-            else -> 650f + tone * 3800f
+            else -> 700f + tone * 6000f
         }
         val targetModeOutputGain = when (mode) {
             0 -> 1.00f
             1 -> 1.08f
-            else -> 1.14f
+            else -> 1.00f
         }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
         // Phase trim from the clock arrows is applied to the audible delay
