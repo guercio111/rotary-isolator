@@ -189,6 +189,11 @@ class MainActivity : Activity() {
     private var captureStatusView: TextView? = null
     private val captureDiagLock = Any()
     private val captureDiagnostics = ArrayDeque<String>()
+    private fun captureConfigSummary(): String {
+        val c = resources.configuration
+        return "orientation=${c.orientation} screen=${c.screenWidthDp}x${c.screenHeightDp}dp smallest=${c.smallestScreenWidthDp} density=${c.densityDpi} uiMode=${c.uiMode} screenLayout=${c.screenLayout} keyboard=${c.keyboard}/${c.keyboardHidden}/${c.hardKeyboardHidden} navigation=${c.navigation}/${c.navigationHidden} touch=${c.touchscreen} layoutDir=${c.layoutDirection} fontScale=${c.fontScale}"
+    }
+
     private fun captureDiag(message: String) {
         val line = "t+${android.os.SystemClock.elapsedRealtime()}ms $message"
         synchronized(captureDiagLock) {
@@ -281,6 +286,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        captureDiag("ACTIVITY onCreate; changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         // Explicitly follow the physical sensor in both portrait and landscape.
         // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
@@ -466,7 +472,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         if (captureProjection != null || captureNeeded()) {
-            captureDiag("ACTIVITY onPause; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId")
+            captureDiag("ACTIVITY onPause; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         }
         // Persist the live mixer and mark the session as backgrounded. If Android
         // later reclaims the process for battery/memory management, the next
@@ -478,13 +484,14 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         if (captureProjection != null || captureNeeded()) {
-            captureDiag("ACTIVITY onStop; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId")
+            captureDiag("ACTIVITY onStop; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         }
         super.onStop()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        captureDiag("ACTIVITY onConfigurationChanged; config=${captureConfigSummary()}")
         val w = newConfig.screenWidthDp
         val h = newConfig.screenHeightDp
         if (w > 0 && h > 0) {
@@ -3052,7 +3059,7 @@ class MainActivity : Activity() {
     private fun fmt(v:Float)="%.1f".format(v)
     override fun onDestroy(){
         if (captureProjection != null || captureNeeded()) {
-            captureDiag("ACTIVITY onDestroy; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId")
+            captureDiag("ACTIVITY onDestroy; projectionPresent=${captureProjection != null} captureRunning=$captureRunning needed=${captureNeeded()} finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         }
         // An intentional close starts a fresh session next time; background
         // process reclamation and configuration changes keep the saved state.
