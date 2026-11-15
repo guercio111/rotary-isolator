@@ -194,6 +194,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // Smooth mode/feedback/tone changes so coefficient jumps cannot excite the loop.
     private var smoothedDelayFeedback = 0f
     private var smoothedDelayToneAlpha = 0f
+    private var smoothedDelayOutputGain = 1f
     private val delayParameterSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.03))).toFloat()
     // A clock re-sync must discard repeats created under the previous phase.
     // The request is consumed only by the audio thread, never by the UI thread.
@@ -263,6 +264,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayTargetStableSamples = 0
         smoothedDelayFeedback = 0f
         smoothedDelayToneAlpha = 0f
+        smoothedDelayOutputGain = 1f
         fxLowMidSplit.clear()
         fxMidHighSplit.clear()
         smoothedFxLow = 1f
@@ -349,7 +351,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // Dub progressively rolls off the top for a darker tape-echo character.
             else -> 650f + tone * 3800f
         }
-        val modeOutputGain = when (mode) {
+        val targetModeOutputGain = when (mode) {
             0 -> 1.00f
             1 -> 1.08f
             else -> 1.14f
@@ -509,6 +511,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 (modeFeedback - smoothedDelayFeedback) * delayParameterSmoothing
             smoothedDelayToneAlpha +=
                 (delayToneAlpha - smoothedDelayToneAlpha) * delayParameterSmoothing
+            smoothedDelayOutputGain +=
+                (targetModeOutputGain - smoothedDelayOutputGain) * delayParameterSmoothing
             val safePreDelayWrite = Math.floorMod(reverbPreDelayWriteIndex, reverbPreDelayBuffer.size)
             reverbPreDelayBuffer[safePreDelayWrite] = if (freeze || !inputEnabled) 0f else lpY
             var preDelayRead = (safePreDelayWrite.toDouble() - smoothedReverbPreDelaySamples.toDouble()) % reverbPreDelayBuffer.size.toDouble()
@@ -621,7 +625,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 delayResetFadeInRemaining--
             }
             val reverbReturn = wet * smoothedMix
-            val delayReturn = delayToneState * smoothedDelayMix * 1.28f * modeOutputGain * delayResetGain
+            val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
             // Frequency selection is upstream on the FX send. The wet return
             // remains untouched so reverb tails and delay feedback are natural.
             val raw = reverbReturn + delayReturn
