@@ -27,8 +27,8 @@ import android.widget.*
 import kotlin.math.*
 
 class MainActivity : Activity() {
-    // MASTER is the detected musical phase. FX is drawn from the measured
-    // capture-to-playback latency plus the phase delay actually applied by the DSP.
+    // MASTER is the detected musical phase. FX is drawn from measured
+    // capture-to-playback latency plus the requested FX jog position.
     private inner class PhaseMarkerSeekBar : SeekBar(this@MainActivity) {
         private val masterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(45, 235, 105)
