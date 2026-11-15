@@ -379,6 +379,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
             .coerceIn(0.0015f, 0.025f)
         val fxPhaseDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * fxPhaseSmoothingSeconds))).toFloat()
         val requestedDivision = delayDivision.coerceIn(0, 9)
+        // The 16-beat tap is very long: tiny BPM-estimate fluctuations become
+        // several milliseconds of target movement and continually restart the
+        // stability timer. Give only this longest division a wider jitter window;
+        // all shorter divisions retain the original 2 ms threshold.
+        val targetJitterToleranceSamples = if (requestedDivision == 9) {
+            sampleRate * 0.020f
+        } else {
+            delayTargetJitterSamples
+        }
         if (requestedDivision != activeDelayDivision) {
             // Beat-division changes are discrete. If another handoff is already
             // running, queue the newest target instead of restarting mid-fade:
@@ -403,7 +412,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         } else {
             // Do not restart the fade for every small BPM/TIME update. Wait until
             // the target has been stable for 75 ms, then perform one clean handoff.
-            if (abs(targetDelaySamples - delayTargetCandidateSamples) > delayTargetJitterSamples) {
+            if (abs(targetDelaySamples - delayTargetCandidateSamples) > targetJitterToleranceSamples) {
                 delayTargetCandidateSamples = targetDelaySamples
                 delayTargetStableSamples = 0
             } else {
