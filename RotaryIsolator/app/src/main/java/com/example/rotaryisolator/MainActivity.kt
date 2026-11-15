@@ -116,6 +116,8 @@ class MainActivity : Activity() {
     @Volatile private var delaySyncOffsetMs = 0f
     // Independent FX-only phase trim. It never touches the master BeatEngine or BPM.
     @Volatile private var fxPhaseOffsetMs = 0f
+    // Musical bar jog in quarter-note beats; independent from the fine FX phase trim.
+    @Volatile private var barOffsetBeats = 0
     // Real capture-to-playback latency, measured from AudioRecord/AudioTrack monotonic timestamps.
     @Volatile private var fxOutputLatencyMs = Float.NaN
     // One-shot startup alignment, applied after the first valid output-latency timestamp.
@@ -126,11 +128,17 @@ class MainActivity : Activity() {
         val fraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         return (60000f / delayBpm.coerceIn(60f, 180f) * fraction).coerceAtLeast(1f)
     }
+    private fun currentBarOffsetMs(): Float {
+        val beatPeriodMs = 60000f / delayBpm.coerceIn(60f, 180f)
+        val periodMs = currentFxPeriodMs()
+        val offset = (barOffsetBeats.toFloat() * beatPeriodMs) % periodMs
+        return if (offset < 0f) offset + periodMs else offset
+    }
     private fun currentFxPhaseErrorMs(): Float {
         val latency = fxOutputLatencyMs
         if (!latency.isFinite()) return Float.NaN
         val period = currentFxPeriodMs()
-        var error = (latency + fxAppliedPhaseDelayMs + delaySyncOffsetMs) % period
+        var error = (latency + fxAppliedPhaseDelayMs + delaySyncOffsetMs + currentBarOffsetMs()) % period
         if (error > period * 0.5f) error -= period
         if (error < -period * 0.5f) error += period
         return error
@@ -1395,9 +1403,9 @@ class MainActivity : Activity() {
             val fxBeatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
             val fxPeriodMs = (60000f / delayBpm.coerceIn(60f,180f) * fxBeatFraction).coerceAtLeast(1f)
             val fxPhaseDelay = if (fxOutputLatencyMs.isFinite()) {
-                fxOutputLatencyMs + fxAppliedPhaseDelayMs + delaySyncOffsetMs
+                fxOutputLatencyMs + fxAppliedPhaseDelayMs + delaySyncOffsetMs + currentBarOffsetMs()
             } else {
-                fxPhaseOffsetMs
+                fxPhaseOffsetMs + currentBarOffsetMs()
             }
             val fxPhase = phase + fxPhaseDelay.roundToLong()
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
@@ -1848,6 +1856,19 @@ class MainActivity : Activity() {
                 scheduleUpdate()
             }
         }
+        fun nudgeBar(direction: Int, button: TextView) {
+            if (validatedBeatEngine.getPeriodMs() <= 0.0) return
+            // One press moves exactly one 4/4 bar. The DSP wraps this musical
+            // offset to the selected FX cycle, so 8/16-beat cycles move audibly;
+            // shorter cycles correctly remain phase-equivalent after four beats.
+            barOffsetBeats = (barOffsetBeats + direction * 4) % 64
+            fxBpmLastBeatIndex = Long.MIN_VALUE
+            refreshFxPhaseUi()
+            syncFxPhaseSeekToMeasuredPhase()
+            scheduleUpdate()
+            paintClockButton(button, true)
+            button.postDelayed({ paintClockButton(button, false) }, 250L)
+        }
         fun phaseNudge(direction: Float) {
             if (validatedBeatEngine.getPeriodMs() <= 0.0) return
             // Arrows and FX PHASE JOG use the same FX period as the DSP/marker.
@@ -1937,6 +1958,30 @@ class MainActivity : Activity() {
             paintClockButton(this, false)
             setOnClickListener { phaseNudge(1f) }
         }
+        val barBackButton = TextView(this).apply {
+            text = "◀"
+            textSize = 9f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            contentDescription = "Previous musical bar, minus four beats"
+            paintClockButton(this, false)
+            setOnClickListener { nudgeBar(-1, this) }
+        }
+        val barForwardButton = TextView(this).apply {
+            text = "▶"
+            textSize = 9f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            contentDescription = "Next musical bar, plus four beats"
+            paintClockButton(this, false)
+            setOnClickListener { nudgeBar(1, this) }
+        }
+        val barArrowRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(barBackButton, LinearLayout.LayoutParams(0, -1, 1f).apply { rightMargin = dp(1) })
+            addView(barForwardButton, LinearLayout.LayoutParams(0, -1, 1f).apply { leftMargin = dp(1) })
+        }
         val skipBeatButton = TextView(this).apply {
             text = "SKIP"
             textSize = 8f
@@ -1965,6 +2010,12 @@ class MainActivity : Activity() {
                     bpmReadout?.text = "ATTENDI BPM STABILE"
                 }
             }
+        }
+        val skipColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(barArrowRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = dp(1) })
+            addView(skipBeatButton, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(1) })
         }
         val resetButton = TextView(this).apply {
             text = "RST"
@@ -2042,7 +2093,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        listOf(autoButton, lockButton, syncButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
+        listOf(autoButton, lockButton, syncButton, phaseBackButton, phaseForwardButton, skipColumn, resetButton).forEachIndexed { index, control ->
             clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 if (index > 0) leftMargin = dp(3)
             })
@@ -2577,7 +2628,7 @@ class MainActivity : Activity() {
                                 delayOn, delayFadeMs, delayDivision, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxLowEnabled, fxMidEnabled, fxHighEnabled,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
-                                delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
+                                delaySyncOffsetMs, fxPhaseOffsetMs + currentBarOffsetMs(), reverbBeatPercent
                             )
                             fxAppliedPhaseDelayMs = processor.getFxPhaseDelayMs()
                             var written = 0
