@@ -1976,30 +1976,22 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             paintClockButton(this, false)
             setOnClickListener {
-                // DEEP RST: discard every tempo/phase estimate accumulated before
-                // this press. Do not immediately SYNC against the stale onset ring.
+                // RST also clears the old delay feedback history; otherwise
+                // long repeats from the previous phase keep playing against the new clock.
                 parallelReverbProcessor?.requestDelayReset()
-                validatedBeatEngine.reset()
-                autoBpmHistory.clear()
-                autoBpmPreviousBass = 0f
-                autoBpmLowpassState = 0f
-                autoBpmLastAnalysisMs = 0L
-                autoBpmNextBeatMs = 0L
-                bpmLastBeatIndex = Long.MIN_VALUE
-                fxBpmLastBeatIndex = Long.MIN_VALUE
-                autoPhaseSynced = false
-
-                // Return the tempo engine to a neutral reference. AUTO, if enabled,
-                // stays enabled and must build a fresh history before reacquiring.
                 delayBpmCorrection = 0f
-                delayBpm = 120f
-                delayTapBpm = 120f
                 validatedBeatEngine.setPitchPercent(0f)
                 delayClockLocked = false
                 validatedBeatEngine.setClockLocked(false)
-
-                // Preserve measured capture/playback latency compensation; clear
-                // only the user's old phase trim and the previous sync offset.
+                val resetNow = android.os.SystemClock.elapsedRealtime()
+                // Re-acquire only when the tempo estimate is already stable.
+                // Otherwise AUTO remains free to acquire phase when confidence recovers.
+                val resetSynced = validatedBeatEngine.getConfidence() >= 0.30f &&
+                    validatedBeatEngine.sync(resetNow)
+                // Keep the measured capture/playback latency compensated when RST
+                // clears the FX phase. Zeroing this trim would put the return late
+                // by the full output latency and can sound like counter-beat.
+                delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
                 val resetPeriod = currentFxPeriodMs().coerceAtLeast(1f)
                 var resetFxOffset = if (fxOutputLatencyMs.isFinite()) -fxOutputLatencyMs else 0f
                 resetFxOffset %= resetPeriod
@@ -2007,13 +1999,20 @@ class MainActivity : Activity() {
                 if (resetFxOffset < -resetPeriod * 0.5f) resetFxOffset += resetPeriod
                 delaySyncOffsetMs = 0f
                 fxPhaseOffsetMs = resetFxOffset
-
+                fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
                 phaseJogLastProgress = 100
                 fxPhaseSeek?.invalidate()
+                val resetPhase = validatedBeatEngine.getPhaseMs()
+                autoPhaseSynced = resetSynced && resetPhase > 0L
+                if (autoPhaseSynced) {
+                    autoBpmNextBeatMs = resetPhase + validatedBeatEngine.getPeriodMs().toLong()
+                    bpmLastBeatIndex = Long.MIN_VALUE
+                } else {
+                    bpmReadout?.text = "ATTENDI BPM STABILE"
+                }
                 bpmFineSeek?.progress = 100
-                bpmReadout?.text = if (autoBpmEnabled || bpmAnalyzerOn) "RICERCA BPM…" else "— BPM"
                 lockButton.text = "LOCK"
                 paintClockButton(lockButton, false)
                 save(); scheduleUpdate()
