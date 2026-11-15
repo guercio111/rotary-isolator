@@ -27,8 +27,8 @@ import android.widget.*
 import kotlin.math.*
 
 class MainActivity : Activity() {
-    // MASTER is the detected musical phase. FX is drawn from the measured
-    // capture-to-playback latency plus the phase delay actually applied by the DSP.
+    // MASTER is the detected musical phase. FX is drawn from measured
+    // capture-to-playback latency plus the requested FX jog position.
     private inner class PhaseMarkerSeekBar : SeekBar(this@MainActivity) {
         private val masterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(45, 235, 105)
@@ -130,7 +130,10 @@ class MainActivity : Activity() {
         val latency = fxOutputLatencyMs
         if (!latency.isFinite()) return Float.NaN
         val period = currentFxPeriodMs()
-        var error = (latency + fxAppliedPhaseDelayMs + delaySyncOffsetMs) % period
+        // Display the requested jog position immediately. The DSP applies the
+        // same offset with a short smoothing ramp, so using its lagging value
+        // here made the arrows/jog appear frozen while the audible phase moved.
+        var error = (latency + fxPhaseOffsetMs + delaySyncOffsetMs) % period
         if (error > period * 0.5f) error -= period
         if (error < -period * 0.5f) error += period
         return error
