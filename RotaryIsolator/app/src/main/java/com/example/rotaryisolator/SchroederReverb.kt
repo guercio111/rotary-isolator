@@ -184,12 +184,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var delayDivisionSwitch = false
     private var delayToneState = 0f
     private var delayFeedbackToneState = 0f
-    // DUB echo is voiced around the kick: remove sub rumble and excess low-mid
-    // buildup from the recirculating repeats while retaining the kick body.
-    private val dubFeedbackHighPass = Biquad(sampleRate, 85f, true)
-    private val dubFeedbackLowPass = Biquad(sampleRate, 210f, false)
-    private val dubOutputHighPass = Biquad(sampleRate, 55f, true)
-    private val dubOutputLowPass = Biquad(sampleRate, 320f, false)
     // Coalesce continuous BPM/TIME/phase adjustments. A delay tap is moved only
     // after the requested time has settled, avoiding repeated 120 ms mute ramps
     // while the user is turning a control or the clock is making small corrections.
@@ -343,8 +337,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             0 -> 0f
             // LONG: several open repeats, clearly audible but controlled.
             1 -> (0.38f + feedbackControl * 0.30f).coerceIn(0.38f, 0.68f)
-            // DUB: controlled kick repeats; lower feedback prevents low-mid buildup.
-            else -> (0.42f + feedbackControl * 0.20f).coerceIn(0.42f, 0.62f)
+            // DUB: dense, darker feedback trail with progressively softer repeats.
+            else -> (0.64f + feedbackControl * 0.22f).coerceIn(0.64f, 0.86f)
         }
         val tone = delayTonePercent.coerceIn(0, 100) / 100f
         val delayToneHz = when (mode) {
@@ -578,19 +572,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 oldTapGain = 1f - transitionBlend
                 newTapGain = transitionBlend
             }
-            val delayedForFeedbackRaw =
+            val delayedForFeedback =
                 oldFeedbackTap * oldTapGain + newFeedbackTap * newTapGain
-            val delayedRaw = oldOutputTap * oldTapGain + newOutputTap * newTapGain
-            // Keep DUB focused on the kick fundamental/body instead of letting
-            // resonant low-mid energy circulate and accumulate between beats.
-            val dubFeedbackFiltered = dubFeedbackLowPass.process(
-                dubFeedbackHighPass.process(delayedForFeedbackRaw)
-            )
-            val dubOutputFiltered = dubOutputLowPass.process(
-                dubOutputHighPass.process(delayedRaw)
-            )
-            val delayedForFeedback = if (mode == 2) dubFeedbackFiltered else delayedForFeedbackRaw
-            val delayed = if (mode == 2) dubOutputFiltered else delayedRaw
+            val delayed = oldOutputTap * oldTapGain + newOutputTap * newTapGain
             if (delayTransitionPosition < delayTransitionLength) {
                 delayTransitionPosition++
             } else {
