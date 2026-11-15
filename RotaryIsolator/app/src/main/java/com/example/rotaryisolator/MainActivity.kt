@@ -131,8 +131,10 @@ class MainActivity : Activity() {
     private fun currentBarOffsetMs(): Float {
         val beatPeriodMs = 60000f / delayBpm.coerceIn(60f, 180f)
         val periodMs = currentFxPeriodMs()
-        val offset = (barOffsetBeats.toFloat() * beatPeriodMs) % periodMs
-        return if (offset < 0f) offset + periodMs else offset
+        var offset = (barOffsetBeats.toFloat() * beatPeriodMs) % periodMs
+        if (offset > periodMs * 0.5f) offset -= periodMs
+        if (offset < -periodMs * 0.5f) offset += periodMs
+        return offset
     }
     private fun currentFxPhaseErrorMs(): Float {
         val latency = fxOutputLatencyMs
