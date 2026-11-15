@@ -444,10 +444,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
 
         // TIME controls the diffuse tail; BEAT adds a tempo-related pre-delay.
         // DRY/WET is the independent return level and FILTER is the X-PAD high cut.
-        // Keep the longest normal tail below the near-freeze region. The previous
-        // 0.955 maximum could make individual FDN modes linger as audible ringing.
+        // Keep the FDN tail controlled: excessive feedback lets individual
+        // network modes ring audibly and creates a metallic, resonant character.
+        // This first cleanup pass shortens the decay without darkening the tone.
         val feedback = if (freeze) 0.965f else
-            (0.78f + size * 0.16f).coerceIn(0.78f, 0.94f)
+            (0.72f + size * 0.15f).coerceIn(0.72f, 0.87f)
         // FILTER is now a true high-cut inside the feedback loop. A one-pole
         // coefficient of exp(-2*pi*fc/fs) gives progressively darker, less resonant
         // repeats as the cutoff is lowered, while remaining stable at both extremes.
