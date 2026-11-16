@@ -341,7 +341,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             1 -> (0.42f + feedbackControl * 0.25f).coerceIn(0.42f, 0.67f)
             // DUB: restore the lower, tape-like regeneration used by the proven
             // earlier voicing; excessive feedback was making MID+HIGH sound metallic.
-            else -> (0.28f + feedbackControl * 0.48f).coerceIn(0.28f, 0.76f)
+            else -> (0.24f + feedbackControl * 0.38f).coerceIn(0.24f, 0.62f)
         }
         val tone = delayTonePercent.coerceIn(0, 100) / 100f
         val delayToneHz = when (mode) {
@@ -351,7 +351,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             1 -> 6500f + tone * 8000f
             // DUB uses the earlier, darker tape-style roll-off to soften metallic
             // upper-mid/high feedback, especially with MID and HIGH send selected.
-            else -> 700f + tone * 6000f
+            else -> 2200f + tone * 6500f
         }
         val targetModeOutputGain = when (mode) {
             0 -> 1.00f
