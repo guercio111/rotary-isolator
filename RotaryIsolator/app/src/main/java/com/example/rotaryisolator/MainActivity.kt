@@ -2427,6 +2427,14 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent) else startService(serviceIntent)
             captureDiag("FOREGROUND SERVICE richiesto; SDK=${Build.VERSION.SDK_INT}")
             handler.postDelayed({
+                // The user may turn the last capture consumer OFF during the
+                // foreground-service startup delay. Do not consume the one-shot
+                // MediaProjection consent token for a session that is no longer needed.
+                if (!captureNeeded()) {
+                    captureDiag("AVVIO SESSIONE ANNULLATO: nessun consumer audio attivo durante attesa servizio")
+                    stopAudioCaptureTest()
+                    return@postDelayed
+                }
                 try {
                     captureDiag("CREAZIONE MediaProjection dopo promozione servizio; taskId=$taskId finishing=$isFinishing")
                     val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
