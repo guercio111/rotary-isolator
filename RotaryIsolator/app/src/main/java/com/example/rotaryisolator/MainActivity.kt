@@ -708,8 +708,7 @@ class MainActivity : Activity() {
         bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
         bpmReadout = label("— BPM", if (compactPhone) 8f else 10f, Color.WHITE)
         bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
-        bpmBeat = label("●", if (compactPhone) 15f else 19f, Color.rgb(75,85,95))
-        bpmPanel.addView(bpmBeat, LinearLayout.LayoutParams(dp(24), -1))
+        bpmBeat = label("●", if (compactPhone) 30f else 38f, Color.rgb(75,85,95))
         titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
         titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         root.addView(titleBar)
@@ -2036,7 +2035,7 @@ class MainActivity : Activity() {
         }
         val fxBeatLamp = TextView(this).apply {
             text = "●"
-            textSize = 12f
+            textSize = 24f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(75,85,95))
             contentDescription = "FX beat indicator, shared with main BPM clock"
@@ -2046,13 +2045,19 @@ class MainActivity : Activity() {
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(2) })
         delayTop.addView(autoCenterButton, LinearLayout.LayoutParams(dp(48), dp(40)).apply { rightMargin = dp(4) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayTop.addView(fxBeatLamp, LinearLayout.LayoutParams(dp(22), dp(40)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.25f))
+        val syncIndicatorGroup = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        syncIndicatorGroup.addView(syncButton, LinearLayout.LayoutParams(0, dp(34), 1f))
+        syncIndicatorGroup.addView(bpmBeat, LinearLayout.LayoutParams(dp(40), dp(44)))
+        syncIndicatorGroup.addView(fxBeatLamp, LinearLayout.LayoutParams(dp(40), dp(44)))
         val clockControlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        listOf(autoButton, lockButton, syncButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
+        listOf(autoButton, lockButton, syncIndicatorGroup, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
             clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 if (index > 0) leftMargin = dp(3)
             })
