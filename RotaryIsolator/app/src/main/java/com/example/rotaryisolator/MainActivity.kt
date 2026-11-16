@@ -1581,9 +1581,20 @@ class MainActivity : Activity() {
     }
 
     private fun updateEffectsCapture(allowNewConsent: Boolean = false) {
+        // Reconcile both edges of the capture lifecycle. Previously this helper
+        // only started capture; turning off the last consumer could leave the
+        // MediaProjection/AudioRecord session alive indefinitely.
+        if (!captureNeeded()) {
+            if (captureProjection != null || captureRunning || captureRestartPending || captureCleanupPending) {
+                captureDiag("STOP automatico: nessun consumer audio attivo; projectionPresent=${captureProjection != null} running=$captureRunning restartPending=$captureRestartPending cleanupPending=$captureCleanupPending")
+                stopAudioCaptureTest()
+            }
+            return
+        }
+
         // Only an explicit ON action can start a new Android consent flow.
         // Temporary stream errors reuse the current MediaProjection token.
-        if (!captureNeeded() || captureRunning || captureRestartPending) return
+        if (captureRunning || captureRestartPending) return
         if (captureProjection != null) startAudioCaptureTest()
         else if (allowNewConsent) {
             captureConsentLocked = false
@@ -1649,7 +1660,7 @@ class MainActivity : Activity() {
                 reverbOn = !reverbOn
                 styleToggle(this, reverbOn, colorReverb)
                 save(); scheduleUpdate()
-                if (reverbOn) updateEffectsCapture(true)
+                updateEffectsCapture(reverbOn)
             }
         }
         val reverbTitle = label("REVERB", 13f, colorReverb)
@@ -1709,7 +1720,11 @@ class MainActivity : Activity() {
         val delayDial = RotaryControl(
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorDelay,
             { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
+            { "$delayMix%" }, onEnd = {
+                save()
+                // Reconcile after the gesture, not on every dial movement.
+                updateEffectsCapture(delayOn && delayMix > 0)
+            }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val delayControls = LinearLayout(this).apply {
@@ -1742,6 +1757,7 @@ class MainActivity : Activity() {
             setOnClickListener {
                 autoBpmEnabled = false
                 paintAutoBpmButton()
+                updateEffectsCapture()
                 delayBpm = registerDelayTap()
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
@@ -1779,7 +1795,7 @@ class MainActivity : Activity() {
                 text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
                 paintClockButton(this, autoBpmEnabled)
                 save()
-                if (autoBpmEnabled) updateEffectsCapture(true)
+                updateEffectsCapture(autoBpmEnabled)
             }
         }
         autoBpmButton = autoButton
@@ -2031,7 +2047,7 @@ class MainActivity : Activity() {
                 delayOn = !delayOn
                 styleToggle(this, delayOn, colorDelay)
                 save(); scheduleUpdate()
-                if (delayOn) updateEffectsCapture(true)
+                updateEffectsCapture(delayOn && delayMix > 0)
             }
         }
         val fxBeatLamp = TextView(this).apply {
