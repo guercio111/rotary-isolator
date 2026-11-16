@@ -2038,33 +2038,25 @@ class MainActivity : Activity() {
         }
         delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(46), dp(40)))
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(2) })
-        delayTop.addView(autoCenterButton, LinearLayout.LayoutParams(dp(48), dp(40)).apply { rightMargin = dp(4) })
-        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.15f))
+        delayTop.addView(autoCenterButton, LinearLayout.LayoutParams(dp(48), dp(40)).apply { rightMargin = dp(3) })
 
-        // Minimal MASTER and FX reference dots in the SYNC area; controls keep their original size.
+        // Two beat-reference lamps beside ALIGN. Keep the rest of the Build 785 layout unchanged.
         fun makeBeatLamp(idleColor: Int): TextView = TextView(this).apply {
             text = "●"
-            textSize = 10f
+            textSize = 18f
             gravity = Gravity.CENTER
             setTextColor(idleColor)
             setPadding(0, 0, 0, 0)
         }
         bpmBeat = makeBeatLamp(Color.rgb(65,105,75))
         fxBpmBeat = makeBeatLamp(Color.rgb(125,100,48))
-        val beatIndicatorRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(dp(18), dp(20)).apply {
-            rightMargin = dp(7)
+        delayTop.addView(bpmBeat, LinearLayout.LayoutParams(dp(19), dp(40)))
+        delayTop.addView(fxBpmBeat, LinearLayout.LayoutParams(dp(19), dp(40)).apply {
+            leftMargin = dp(2)
+            rightMargin = dp(2)
         })
-        beatIndicatorRow.addView(fxBpmBeat, LinearLayout.LayoutParams(dp(18), dp(20)).apply {
-            leftMargin = dp(7)
-        })
-        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(22)).apply {
-            bottomMargin = dp(2)
-        })
+        delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.15f))
 
         val clockControlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
