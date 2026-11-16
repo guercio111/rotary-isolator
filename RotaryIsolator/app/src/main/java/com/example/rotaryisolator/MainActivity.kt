@@ -2058,7 +2058,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         listOf(autoButton, lockButton, syncIndicatorGroup, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
-            clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
+            clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), if (control === syncIndicatorGroup) 1.8f else 1f).apply {
                 if (index > 0) leftMargin = dp(3)
             })
         }
