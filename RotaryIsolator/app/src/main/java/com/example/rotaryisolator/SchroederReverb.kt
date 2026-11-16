@@ -339,9 +339,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
             0 -> 0f
             // LONG: clearly separated repeats with a moderate, controlled decay.
             1 -> (0.42f + feedbackControl * 0.25f).coerceIn(0.42f, 0.67f)
-            // DUB: restore the lower, tape-like regeneration used by the proven
-            // earlier voicing; excessive feedback was making MID+HIGH sound metallic.
-            else -> (0.28f + feedbackControl * 0.48f).coerceIn(0.28f, 0.76f)
+            // DUB: slightly reduce regeneration to soften metallic buildup while
+            // retaining a clearly audible, musical dub tail.
+            else -> (0.24f + feedbackControl * 0.40f).coerceIn(0.24f, 0.64f)
         }
         val tone = delayTonePercent.coerceIn(0, 100) / 100f
         val delayToneHz = when (mode) {
@@ -349,9 +349,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
             0 -> 14000f + tone * 4000f
             // LONG stays bright and articulate, so each repeat remains easy to hear.
             1 -> 6500f + tone * 8000f
-            // DUB uses the earlier, darker tape-style roll-off to soften metallic
-            // upper-mid/high feedback, especially with MID and HIGH send selected.
-            else -> 700f + tone * 6000f
+            // DUB: open the repeat spectrum so MID+HIGH does not sound muffled;
+            // the moderated feedback above limits harsh metallic accumulation.
+            else -> 1800f + tone * 7500f
         }
         val targetModeOutputGain = when (mode) {
             0 -> 1.00f
