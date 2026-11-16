@@ -349,7 +349,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // LONG stays bright and articulate, so each repeat remains easy to hear.
             1 -> 6500f + tone * 8000f
             // DUB is deliberately much darker, with a tape-like high-frequency roll-off.
-            else -> 450f + tone * 3200f
+            else -> 5500f + tone * 5500f
         }
         val targetModeOutputGain = when (mode) {
             0 -> 1.00f
