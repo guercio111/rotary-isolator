@@ -161,6 +161,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // above is left unchanged so a zero delay setting is bit-for-bit equivalent.
     private val delayBuffer = FloatArray(sampleRate * 34)
     private var delayWriteIndex = 0
+    // Number of samples written since the most recent long-division handoff.
+    // Prevents a newly selected long interval from replaying stale audio already
+    // stored in the circular buffer under the previous division.
+    private var delayHistorySamples = 0
     // FX phase trim is applied to the incoming send before it enters the
     // feedback loop. The feedback tap itself keeps its exact beat period.
     // Signed trim is applied to the audible delay tap, not as a pre-delay.
@@ -182,6 +186,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // switch read heads at silence, then fade the new tap up. This avoids the
     // metallic/comb sweep caused by mixing two unrelated beat taps together.
     private var delayDivisionSwitch = false
+    private var clearDelayHistoryOnSwitch = false
     private var delayToneState = 0f
     private var delayFeedbackToneState = 0f
     // Coalesce continuous BPM/TIME/phase adjustments. A delay tap is moved only
@@ -208,6 +213,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
     }
 
     private fun readDelayTap(delaySamples: Float): Float {
+        // Do not expose samples left by the previous division after a long-note
+        // change. The new repeat becomes audible only after its own full interval.
+        if (delaySamples >= delayHistorySamples.toFloat()) return 0f
         // Use Double for circular-buffer position math. Float loses sub-sample
         // precision near this 1,632,000-sample buffer boundary and can round a
         // negative wrapped position up to exactly size, causing index == size.
@@ -252,6 +260,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         smoothedReverbDamping = exp((-2.0 * PI * 14000.0 / sampleRate).toFloat())
         delayBuffer.fill(0f)
         delayWriteIndex = 0
+        delayHistorySamples = 0
+        clearDelayHistoryOnSwitch = false
         smoothedFxPhaseOffsetSamples = 0f
         smoothedDelayMix = 0f
         delayTransitionFromSamples = sampleRate * 0.5f
@@ -337,10 +347,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val modeFeedback = when (mode) {
             // SHORT: exactly one clean, bright repeat.
             0 -> 0f
-            // LONG: clearly separated, open repeats with a controlled decay.
+            // LONG: clearly separated repeats with a moderate, controlled decay.
             1 -> (0.42f + feedbackControl * 0.25f).coerceIn(0.42f, 0.67f)
-            // DUB: distinctly denser regeneration, capped to avoid runaway build-up.
-            else -> (0.62f + feedbackControl * 0.25f).coerceIn(0.62f, 0.82f)
+            // DUB: restore the lower, tape-like regeneration used by the proven
+            // earlier voicing; excessive feedback was making MID+HIGH sound metallic.
+            else -> (0.28f + feedbackControl * 0.48f).coerceIn(0.28f, 0.76f)
         }
         val tone = delayTonePercent.coerceIn(0, 100) / 100f
         val delayToneHz = when (mode) {
@@ -348,13 +359,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
             0 -> 14000f + tone * 4000f
             // LONG stays bright and articulate, so each repeat remains easy to hear.
             1 -> 6500f + tone * 8000f
-            // DUB is deliberately much darker, with a tape-like high-frequency roll-off.
-            else -> 5500f + tone * 5500f
+            // DUB uses the earlier, darker tape-style roll-off to soften metallic
+            // upper-mid/high feedback, especially with MID and HIGH send selected.
+            else -> 700f + tone * 6000f
         }
         val targetModeOutputGain = when (mode) {
             0 -> 1.00f
             1 -> 1.16f
-            else -> 1.10f
+            else -> 1.00f
         }
         val delayToneAlpha = (1f - exp((-2.0 * PI * delayToneHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
         // Phase trim from the clock arrows is applied to the audible delay
@@ -404,6 +416,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 delayTransitionFromSamples = currentTap
                 delayTransitionToSamples = targetDelaySamples
                 delayTransitionPosition = 0
+                // Only changes involving 1, 2, 4, 8 or 16 beats discard the
+                // previous tail. Short divisions (1/4, 1/2, 3/4) retain their
+                // existing handoff behavior when switching among themselves.
+                clearDelayHistoryOnSwitch = activeDelayDivision >= 5 || requestedDivision >= 5
                 delayDivisionSwitch = true
             }
             activeDelayDivision = requestedDivision
@@ -576,6 +592,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 oldTapGain = 1f - transitionBlend
                 newTapGain = transitionBlend
             }
+            if (delayDivisionSwitch && clearDelayHistoryOnSwitch &&
+                delayTransitionPosition == (delayTransitionLength / 2).coerceAtLeast(1)) {
+                // The old tap has faded to silence. Mark the circular history
+                // empty without clearing a multi-megabyte array on the audio thread.
+                delayHistorySamples = 0
+                delayToneState = 0f
+                delayFeedbackToneState = 0f
+                clearDelayHistoryOnSwitch = false
+            }
             val delayedForFeedback =
                 oldFeedbackTap * oldTapGain + newFeedbackTap * newTapGain
             val delayed = oldOutputTap * oldTapGain + newOutputTap * newTapGain
@@ -594,6 +619,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val safeWriteIndex = Math.floorMod(delayWriteIndex, delayBuffer.size)
             delayBuffer[safeWriteIndex] = (x * 0.68f + delayFeedbackToneState * smoothedDelayFeedback).coerceIn(-0.88f, 0.88f)
             delayWriteIndex = if (safeWriteIndex + 1 >= delayBuffer.size) 0 else safeWriteIndex + 1
+            delayHistorySamples = (delayHistorySamples + 1).coerceAtMost(delayBuffer.size)
             // Effect switches use the existing smoothed send levels as a short
             // output fade. A hard gate here creates an abrupt waveform discontinuity
             // exactly when the user toggles an effect.
@@ -606,6 +632,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     // at silence. Reverb state and the selected FX settings stay intact.
                     delayBuffer.fill(0f)
                     delayWriteIndex = 0
+                    delayHistorySamples = 0
+                    clearDelayHistoryOnSwitch = false
                     delayToneState = 0f
                     delayFeedbackToneState = 0f
                     // Snap the signed trim at silence so no previous clock phase
