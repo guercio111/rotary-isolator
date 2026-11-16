@@ -1391,30 +1391,19 @@ class MainActivity : Activity() {
         }
         if (detected > 0f && period > 0.0 && phase > 0L) {
             val beatIndex = kotlin.math.floor((nowMs - phase).toDouble() / period).toLong()
-            if (bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex) {
+            // Both lamps are a single visual 1:1 reference to the master beat.
+            // FX subdivisions and FX phase/latency trims must never separate them.
+            val isNewMasterBeat = bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex
+            if (isNewMasterBeat) {
                 handler.post {
                     bpmBeat?.setTextColor(Color.rgb(45,235,105))
-                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(65,105,75)) }, 140L)
-                }
-            }
-            bpmLastBeatIndex = beatIndex
-            // The FX lamp is a visual beat reference, not a subdivision meter.
-            // Keep it at the master beat rate (1:1) for every selected FX division,
-            // while retaining the FX phase/latency offset so its alignment remains visible.
-            val fxPhaseDelay = if (fxOutputLatencyMs.isFinite()) {
-                fxOutputLatencyMs + fxAppliedPhaseDelayMs + delaySyncOffsetMs
-            } else {
-                fxPhaseOffsetMs
-            }
-            val fxPhase = phase + fxPhaseDelay.roundToLong()
-            val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / period).toLong()
-            if (fxBpmLastBeatIndex == Long.MIN_VALUE || fxBeatIndex != fxBpmLastBeatIndex) {
-                handler.post {
                     fxBpmBeat?.setTextColor(Color.rgb(255,205,55))
+                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(65,105,75)) }, 140L)
                     fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(125,100,48)) }, 140L)
                 }
             }
-            fxBpmLastBeatIndex = fxBeatIndex
+            bpmLastBeatIndex = beatIndex
+            fxBpmLastBeatIndex = beatIndex
             autoBpmNextBeatMs = phase + ((beatIndex + 1).coerceAtLeast(0) * period).toLong()
             // LOCK owns the tempo supplied to every beat effect. The analyser
             // may keep observing the track, but it must never retune the locked
