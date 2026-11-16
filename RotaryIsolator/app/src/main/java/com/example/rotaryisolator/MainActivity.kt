@@ -1398,18 +1398,16 @@ class MainActivity : Activity() {
                 }
             }
             bpmLastBeatIndex = beatIndex
-            // The FX lamp follows its own phase reference. The master phase and
-            // period remain untouched; only this visual FX phase includes the
-            // independent manual trim.
-            val fxBeatFraction = floatArrayOf(1f/16f,1f/8f,1f/4f,1f/2f,3f/4f,1f,2f,4f,8f,16f)[delayDivision.coerceIn(0,9)]
-            val fxPeriodMs = (60000f / delayBpm.coerceIn(60f,180f) * fxBeatFraction).coerceAtLeast(1f)
+            // The FX lamp is a visual beat reference, not a subdivision meter.
+            // Keep it at the master beat rate (1:1) for every selected FX division,
+            // while retaining the FX phase/latency offset so its alignment remains visible.
             val fxPhaseDelay = if (fxOutputLatencyMs.isFinite()) {
                 fxOutputLatencyMs + fxAppliedPhaseDelayMs + delaySyncOffsetMs
             } else {
                 fxPhaseOffsetMs
             }
             val fxPhase = phase + fxPhaseDelay.roundToLong()
-            val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
+            val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / period).toLong()
             if (fxBpmLastBeatIndex == Long.MIN_VALUE || fxBeatIndex != fxBpmLastBeatIndex) {
                 handler.post {
                     fxBpmBeat?.setTextColor(Color.rgb(255,205,55))
