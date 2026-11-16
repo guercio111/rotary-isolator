@@ -708,8 +708,11 @@ class MainActivity : Activity() {
         bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
         bpmReadout = label("— BPM", if (compactPhone) 8f else 10f, Color.WHITE)
         bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
-        bpmBeat = label("●", if (compactPhone) 15f else 19f, Color.rgb(75,85,95))
-        bpmPanel.addView(bpmBeat, LinearLayout.LayoutParams(dp(24), -1))
+        // Keep the two beat references together in the BPM panel for an immediate comparison.
+        bpmBeat = label("M ●", if (compactPhone) 7f else 9f, Color.rgb(65,105,75))
+        bpmPanel.addView(bpmBeat, LinearLayout.LayoutParams(dp(if (compactPhone) 34 else 48), -1))
+        fxBpmBeat = label("FX ●", if (compactPhone) 7f else 9f, Color.rgb(125,100,48))
+        bpmPanel.addView(fxBpmBeat, LinearLayout.LayoutParams(dp(if (compactPhone) 36 else 44), -1))
         titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
         titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         root.addView(titleBar)
@@ -1358,7 +1361,8 @@ class MainActivity : Activity() {
         bpmButton?.text = "BPM START"
         bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), colorDelay) }
         bpmReadout?.text = "— BPM"
-        bpmBeat?.setTextColor(Color.rgb(75,85,95))
+        bpmBeat?.setTextColor(Color.rgb(65,105,75))
+        fxBpmBeat?.setTextColor(Color.rgb(125,100,48))
         if (!captureNeeded()) stopAudioCaptureTest()
     }
 
@@ -1413,8 +1417,8 @@ class MainActivity : Activity() {
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
             if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
                 handler.post {
-                    fxBpmBeat?.setTextColor(Color.rgb(45,235,105))
-                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                    fxBpmBeat?.setTextColor(Color.rgb(255,205,55))
+                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(125,100,48)) }, 110L)
                 }
             }
             fxBpmLastBeatIndex = fxBeatIndex
@@ -2034,19 +2038,10 @@ class MainActivity : Activity() {
                 if (delayOn) updateEffectsCapture(true)
             }
         }
-        val fxBeatLamp = TextView(this).apply {
-            text = "●"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(75,85,95))
-            contentDescription = "FX beat indicator, shared with main BPM clock"
-        }
-        fxBpmBeat = fxBeatLamp
         delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(46), dp(40)))
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(2) })
         delayTop.addView(autoCenterButton, LinearLayout.LayoutParams(dp(48), dp(40)).apply { rightMargin = dp(4) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayTop.addView(fxBeatLamp, LinearLayout.LayoutParams(dp(22), dp(40)))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.25f))
         val clockControlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
