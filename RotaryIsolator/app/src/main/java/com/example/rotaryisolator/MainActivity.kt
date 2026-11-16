@@ -2048,6 +2048,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
+        // Ensure the MASTER lamp is detached from any previous/header parent before moving it beside ALIGN.
+        bpmBeat?.let { (it.parent as? ViewGroup)?.removeView(it) }
         beatIndicatorGroup.addView(bpmBeat, LinearLayout.LayoutParams(dp(40), dp(44)))
         beatIndicatorGroup.addView(fxBeatLamp, LinearLayout.LayoutParams(dp(40), dp(44)))
         delayTop.addView(beatIndicatorGroup, LinearLayout.LayoutParams(dp(80), dp(44)))
