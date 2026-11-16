@@ -306,8 +306,7 @@ class MainActivity : Activity() {
         fxLowEnabled = prefs.getBoolean("beat_fx_low_enabled", false)
         fxMidEnabled = prefs.getBoolean("beat_fx_mid_enabled", false)
         fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", false)
-        // Never start with all three Beat FX bands disabled: MID is the fallback.
-        if (!fxLowEnabled && !fxMidEnabled && !fxHighEnabled) fxMidEnabled = true
+        // No selected band means full-spectrum Beat FX. LOW / MID / HIGH are optional filters.
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         val storedDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 9)
@@ -2250,11 +2249,7 @@ class MainActivity : Activity() {
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
                 setOnClickListener {
-                    // Do not allow the last active band to be switched off.
-                    val selectedCount = (if (fxLowEnabled) 1 else 0) +
-                        (if (fxMidEnabled) 1 else 0) +
-                        (if (fxHighEnabled) 1 else 0)
-                    if (isSelected() && selectedCount <= 1) return@setOnClickListener
+                    // All bands OFF is the full-spectrum mode; selected bands are optional filters.
                     toggle()
                     background = android.graphics.drawable.GradientDrawable().apply {
                         cornerRadius = dp(4).toFloat()
