@@ -708,11 +708,6 @@ class MainActivity : Activity() {
         bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
         bpmReadout = label("— BPM", if (compactPhone) 8f else 10f, Color.WHITE)
         bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
-        // Keep the two beat references together in the BPM panel for an immediate comparison.
-        bpmBeat = label("M ●", if (compactPhone) 7f else 9f, Color.rgb(65,105,75))
-        bpmPanel.addView(bpmBeat, LinearLayout.LayoutParams(dp(if (compactPhone) 34 else 48), -1))
-        fxBpmBeat = label("FX ●", if (compactPhone) 7f else 9f, Color.rgb(125,100,48))
-        bpmPanel.addView(fxBpmBeat, LinearLayout.LayoutParams(dp(if (compactPhone) 36 else 44), -1))
         titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
         titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         root.addView(titleBar)
@@ -1399,7 +1394,7 @@ class MainActivity : Activity() {
             if (bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex) {
                 handler.post {
                     bpmBeat?.setTextColor(Color.rgb(45,235,105))
-                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(65,105,75)) }, 140L)
                 }
             }
             bpmLastBeatIndex = beatIndex
@@ -1415,10 +1410,10 @@ class MainActivity : Activity() {
             }
             val fxPhase = phase + fxPhaseDelay.roundToLong()
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
-            if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
+            if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex != fxBpmLastBeatIndex) {
                 handler.post {
                     fxBpmBeat?.setTextColor(Color.rgb(255,205,55))
-                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(125,100,48)) }, 110L)
+                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(125,100,48)) }, 140L)
                 }
             }
             fxBpmLastBeatIndex = fxBeatIndex
@@ -2042,7 +2037,38 @@ class MainActivity : Activity() {
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(2) })
         delayTop.addView(autoCenterButton, LinearLayout.LayoutParams(dp(48), dp(40)).apply { rightMargin = dp(4) })
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
-        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.25f))
+        delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.15f))
+
+        // Large, clearly separated MASTER and FX beat lamps, placed in the SYNC area.
+        fun makeBeatLamp(title: String, idleColor: Int): TextView = TextView(this).apply {
+            text = "$title  ●"
+            textSize = if (compactPhone) 13f else 17f
+            setTypeface(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setTextColor(idleColor)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(7).toFloat()
+                setColor(Color.rgb(35,40,47))
+                setStroke(dp(1), idleColor)
+            }
+            setPadding(dp(4), 0, dp(4), 0)
+        }
+        bpmBeat = makeBeatLamp("MASTER TEMPO", Color.rgb(65,105,75))
+        fxBpmBeat = makeBeatLamp("FX", Color.rgb(125,100,48))
+        val beatIndicatorRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(0, dp(if (compactPhone) 36 else 42), 1f).apply {
+            rightMargin = dp(4)
+        })
+        beatIndicatorRow.addView(fxBpmBeat, LinearLayout.LayoutParams(0, dp(if (compactPhone) 36 else 42), 1f).apply {
+            leftMargin = dp(4)
+        })
+        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(if (compactPhone) 38 else 44)).apply {
+            bottomMargin = dp(2)
+        })
+
         val clockControlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
