@@ -1410,7 +1410,7 @@ class MainActivity : Activity() {
             }
             val fxPhase = phase + fxPhaseDelay.roundToLong()
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
-            if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex != fxBpmLastBeatIndex) {
+            if (fxBpmLastBeatIndex == Long.MIN_VALUE || fxBeatIndex != fxBpmLastBeatIndex) {
                 handler.post {
                     fxBpmBeat?.setTextColor(Color.rgb(255,205,55))
                     fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(125,100,48)) }, 140L)
