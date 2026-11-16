@@ -2042,10 +2042,10 @@ class MainActivity : Activity() {
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.15f))
 
-        // Minimal MASTER and FX reference dots in the SYNC area; controls keep their original size.
+        // MASTER and FX reference lamps: three times the previous diameter.
         fun makeBeatLamp(idleColor: Int): TextView = TextView(this).apply {
             text = "●"
-            textSize = 10f
+            textSize = 30f
             gravity = Gravity.CENTER
             setTextColor(idleColor)
             setPadding(0, 0, 0, 0)
@@ -2056,26 +2056,43 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(dp(18), dp(20)).apply {
+        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(dp(54), dp(60)).apply {
             rightMargin = dp(7)
         })
-        beatIndicatorRow.addView(fxBpmBeat, LinearLayout.LayoutParams(dp(18), dp(20)).apply {
+        beatIndicatorRow.addView(fxBpmBeat, LinearLayout.LayoutParams(dp(54), dp(60)).apply {
             leftMargin = dp(7)
         })
-        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(22)).apply {
+        // Keep the lamps directly between the BPM readout and AUTO / LOCK / SYNC.
+        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(66)).apply {
             bottomMargin = dp(2)
         })
 
-        val clockControlRow = LinearLayout(this).apply {
+        val primaryClockControlRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        listOf(autoButton, lockButton, syncButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
-            clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
+        listOf(autoButton, lockButton, syncButton).forEachIndexed { index, control ->
+            primaryClockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 if (index > 0) leftMargin = dp(3)
             })
         }
-        delayControls.addView(clockControlRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
+        delayControls.addView(primaryClockControlRow, LinearLayout.LayoutParams(-1, 0, 0.62f).apply {
+            topMargin = dp(2)
+        })
+
+        // Keep the phase and beat utility controls available in their own row.
+        val secondaryClockControlRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        listOf(phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
+            secondaryClockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
+                if (index > 0) leftMargin = dp(3)
+            })
+        }
+        delayControls.addView(secondaryClockControlRow, LinearLayout.LayoutParams(-1, 0, 0.62f).apply {
+            topMargin = dp(2)
+        })
         val bpmFineCaption = label("PITCH  −10%  |  0  |  +10%", 8f, colorDelay).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
