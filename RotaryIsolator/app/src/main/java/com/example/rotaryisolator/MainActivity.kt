@@ -2039,33 +2039,27 @@ class MainActivity : Activity() {
         delayTop.addView(bpmLabel, LinearLayout.LayoutParams(0, dp(46), 1f))
         delayControls.addView(delayTop, LinearLayout.LayoutParams(-1, 0, 1.15f))
 
-        // Large, clearly separated MASTER and FX beat lamps, placed in the SYNC area.
-        fun makeBeatLamp(title: String, idleColor: Int): TextView = TextView(this).apply {
-            text = "$title  ●"
-            textSize = 17f
-            setTypeface(typeface, Typeface.BOLD)
+        // Minimal MASTER and FX reference dots in the SYNC area; controls keep their original size.
+        fun makeBeatLamp(idleColor: Int): TextView = TextView(this).apply {
+            text = "●"
+            textSize = 10f
             gravity = Gravity.CENTER
             setTextColor(idleColor)
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(7).toFloat()
-                setColor(Color.rgb(35,40,47))
-                setStroke(dp(1), idleColor)
-            }
-            setPadding(dp(4), 0, dp(4), 0)
+            setPadding(0, 0, 0, 0)
         }
-        bpmBeat = makeBeatLamp("MASTER TEMPO", Color.rgb(65,105,75))
-        fxBpmBeat = makeBeatLamp("FX", Color.rgb(125,100,48))
+        bpmBeat = makeBeatLamp(Color.rgb(65,105,75))
+        fxBpmBeat = makeBeatLamp(Color.rgb(125,100,48))
         val beatIndicatorRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
-            rightMargin = dp(4)
+        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(dp(18), dp(20)).apply {
+            rightMargin = dp(7)
         })
-        beatIndicatorRow.addView(fxBpmBeat, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
-            leftMargin = dp(4)
+        beatIndicatorRow.addView(fxBpmBeat, LinearLayout.LayoutParams(dp(18), dp(20)).apply {
+            leftMargin = dp(7)
         })
-        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(44)).apply {
+        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(22)).apply {
             bottomMargin = dp(2)
         })
 
