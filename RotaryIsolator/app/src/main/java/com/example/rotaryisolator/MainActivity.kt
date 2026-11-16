@@ -2042,7 +2042,7 @@ class MainActivity : Activity() {
         // Large, clearly separated MASTER and FX beat lamps, placed in the SYNC area.
         fun makeBeatLamp(title: String, idleColor: Int): TextView = TextView(this).apply {
             text = "$title  ●"
-            textSize = if (compactPhone) 13f else 17f
+            textSize = 17f
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
             setTextColor(idleColor)
@@ -2059,13 +2059,13 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(0, dp(if (compactPhone) 36 else 42), 1f).apply {
+        beatIndicatorRow.addView(bpmBeat, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
             rightMargin = dp(4)
         })
         beatIndicatorRow.addView(fxBpmBeat, LinearLayout.LayoutParams(0, dp(if (compactPhone) 36 else 42), 1f).apply {
             leftMargin = dp(4)
         })
-        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(if (compactPhone) 38 else 44)).apply {
+        delayControls.addView(beatIndicatorRow, LinearLayout.LayoutParams(-1, dp(44)).apply {
             bottomMargin = dp(2)
         })
 
