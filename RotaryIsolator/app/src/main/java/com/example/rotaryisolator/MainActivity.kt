@@ -306,7 +306,18 @@ class MainActivity : Activity() {
         fxLowEnabled = prefs.getBoolean("beat_fx_low_enabled", false)
         fxMidEnabled = prefs.getBoolean("beat_fx_mid_enabled", false)
         fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", false)
-        // No selected band means full-spectrum Beat FX. LOW / MID / HIGH are optional filters.
+        // At least one FX band must always be selected. If an older session
+        // saved all three OFF, restore the neutral full-spectrum state (all ON).
+        if (!fxLowEnabled && !fxMidEnabled && !fxHighEnabled) {
+            fxLowEnabled = true
+            fxMidEnabled = true
+            fxHighEnabled = true
+            prefs.edit()
+                .putBoolean("beat_fx_low_enabled", true)
+                .putBoolean("beat_fx_mid_enabled", true)
+                .putBoolean("beat_fx_high_enabled", true)
+                .apply()
+        }
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         val storedDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 9)
@@ -2237,7 +2248,7 @@ class MainActivity : Activity() {
         delayControls.addView(divisions, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         // Three independent V10-style Beat FX frequency selectors.
-        // Selecting no band is the full-spectrum mode.
+        // At least one band must remain selected; all three ON is full spectrum.
         val frequencyRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -2249,7 +2260,12 @@ class MainActivity : Activity() {
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
                 setOnClickListener {
-                    // All bands OFF is the full-spectrum mode; selected bands are optional filters.
+                    // Never allow the final selected FX band to be switched OFF.
+                    val selectedCount = listOf(fxLowEnabled, fxMidEnabled, fxHighEnabled).count { it }
+                    if (isSelected() && selectedCount <= 1) {
+                        Toast.makeText(this@MainActivity, "Seleziona almeno una banda FX", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
                     toggle()
                     background = android.graphics.drawable.GradientDrawable().apply {
                         cornerRadius = dp(4).toFloat()
