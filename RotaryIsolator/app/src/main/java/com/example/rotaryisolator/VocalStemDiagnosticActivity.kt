@@ -88,7 +88,7 @@ class VocalStemDiagnosticActivity : Activity() {
 
     private fun runDiagnostic() {
         runButton.isEnabled = false
-        status.text = "Verifica modello e inizializzazione ONNX Runtime…"
+        status.text = "Verifica modello e inizializzazione ONNX Runtime (CPU 2 thread)…"
         Thread {
             val report = try {
                 performDiagnostic()
@@ -116,7 +116,7 @@ class VocalStemDiagnosticActivity : Activity() {
         val loadStart = System.nanoTime()
         val env = OrtEnvironment.getEnvironment()
         val options = OrtSession.SessionOptions()
-        options.setIntraOpNumThreads(1)
+        options.setIntraOpNumThreads(2)
         options.setInterOpNumThreads(1)
         val session = try {
             env.createSession(model.absolutePath, options)
@@ -216,7 +216,7 @@ class VocalStemDiagnosticActivity : Activity() {
                     MODELLO: OK
                     SHA-256: verificato
                     Input/output: nomi verificati
-                    Inferenza: $measuredHops hop misurati dopo $warmupHops hop di riscaldamento
+                    Inferenza: $measuredHops hop misurati dopo $warmupHops hop di riscaldamento\nConfigurazione CPU: 2 thread intra-op, 1 thread inter-op
                     Caricamento sessione: ${"%.1f".format(loadMs)} ms
                     Tempo medio per hop: ${"%.3f".format(meanMs)} ms
                     P95 per hop: ${"%.3f".format(p95Ms)} ms
