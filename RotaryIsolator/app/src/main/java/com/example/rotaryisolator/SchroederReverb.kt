@@ -308,6 +308,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         delayEnabled: Boolean = false,
         delayFadeMs: Int = 1400,
         delayDivision: Int = 2,
+        delayManualTimeMs: Float = 500f,
+        delayManualMode: Boolean = false,
         delayMode: Int = 2,
         delayFeedbackPercent: Int = 52,
         delayTonePercent: Int = 50,
@@ -362,9 +364,13 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // Phase trim from the clock arrows is applied to the audible delay
         // read head as well as the beat lamps; the transition below crossfades it.
         val beatPeriodMs = 60000f / delayBpm.coerceIn(60f, 180f)
-        val targetDelaySamples = (sampleRate *
-            (beatPeriodMs / 1000f * beatFraction + delaySyncOffsetMs.coerceIn(-250f,250f) / 1000f)
-        ).coerceIn(1f, (delayBuffer.size - 2).toFloat())
+        val requestedDelayMs = if (delayManualMode) {
+            delayManualTimeMs.coerceIn(30f, 8000f)
+        } else {
+            beatPeriodMs * beatFraction + delaySyncOffsetMs.coerceIn(-250f,250f)
+        }
+        val targetDelaySamples = (sampleRate * requestedDelayMs / 1000f)
+            .coerceIn(1f, (delayBuffer.size - 2).toFloat())
         // Keep the jog as a signed time correction. The audible read tap moves
         // earlier/later by this amount; a separate unshifted tap feeds feedback.
         val fxPhasePeriodMs = beatPeriodMs * beatFraction
