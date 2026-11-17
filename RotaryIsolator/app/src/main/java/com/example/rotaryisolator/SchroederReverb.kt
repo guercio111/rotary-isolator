@@ -228,7 +228,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // LOW + MID + HIGH therefore reconstruct the original full-band signal.
     private val fxLowMidSplit = LinkwitzRileySplit(sampleRate, 250f)
     private val fxMidHighSplit = LinkwitzRileySplit(sampleRate, 2500f)
-    private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.035))).toFloat()
+    // Shorter FX-band handoff reduces transient smearing when selecting LOW/MID/HIGH.
+    // Only send-level smoothing changes; crossover filters and BPM/clock remain untouched.
+    private val fxBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.008))).toFloat()
     private var smoothedFxLow = 1f
     private var smoothedFxMid = 1f
     private var smoothedFxHigh = 1f
