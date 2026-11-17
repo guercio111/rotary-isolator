@@ -2176,7 +2176,9 @@ class MainActivity : Activity() {
         fun paintDivisionButtons() {
             divisionViews.forEachIndexed { index, button ->
                 val selected = !delayManualMode && delayDivision == index
-                button.isEnabled = !delayManualMode
+                // Keep inactive BEAT buttons touchable: tapping one is the
+                // explicit way to switch ownership back from manual TIME.
+                button.isEnabled = true
                 button.alpha = if (delayManualMode) 0.38f else 1f
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
