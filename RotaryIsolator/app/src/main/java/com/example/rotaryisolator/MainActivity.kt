@@ -106,6 +106,14 @@ class MainActivity : Activity() {
     private fun manualDelayTimeMs(): Float =
         if (delayManualTimePercent <= 0f) 30f
         else 30f * (8000f / 30f).pow(delayManualTimePercent.coerceIn(0f,100f) / 100f)
+    private fun manualDelayDivisionLabel(): String {
+        val quarterMs = 60000f / delayBpm.coerceIn(60f,180f)
+        val ratio = manualDelayTimeMs() / quarterMs
+        val divisions = floatArrayOf(1f/16f, 1f/8f, 1f/4f, 1f/2f, 3f/4f, 1f, 2f, 4f, 8f, 16f)
+        val labels = arrayOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
+        val nearest = divisions.indices.minByOrNull { abs(ln((ratio / divisions[it]).coerceAtLeast(0.000001f))) } ?: 5
+        return labels[nearest]
+    }
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
     @Volatile private var selectedBeatFx = 2 // 0 SHORT, 1 LONG, 2 DUB ECHO, 3 REVERB
     @Volatile private var delayMix = 0
@@ -2221,11 +2229,7 @@ class MainActivity : Activity() {
         delayTimeDial = RotaryControl(
             this, "TIME", delayManualTimePercent, 0f, 100f, colorDelay,
             { value -> delayManualTimePercent = value.coerceIn(0f,100f); scheduleUpdate() },
-            {
-                val ms = manualDelayTimeMs()
-                if (ms < 1000f) "${ms.roundToInt()} ms"
-                else String.format(java.util.Locale.US, "%.2f s", ms / 1000f)
-            },
+            { manualDelayDivisionLabel() },
             onStart = {
                 // The first touch transfers ownership to TIME immediately:
                 // all BEAT selections are cleared visually and logically.
