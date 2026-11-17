@@ -1,6 +1,9 @@
 package com.example.rotaryisolator
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
@@ -9,6 +12,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
@@ -28,6 +32,7 @@ import kotlin.math.sin
 class VocalStemDiagnosticActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var runButton: Button
+    private lateinit var copyButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,11 +64,22 @@ class VocalStemDiagnosticActivity : Activity() {
             text = "Pronto. Premi il pulsante per iniziare."
             textSize = 15f
             setTextColor(Color.WHITE)
+            setTextIsSelectable(true)
             setPadding(0, 24, 0, 0)
+        }
+        copyButton = Button(this).apply {
+            text = "COPIA RISULTATO"
+            isEnabled = false
+            setOnClickListener {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Vocal Protect test", status.text))
+                Toast.makeText(this@VocalStemDiagnosticActivity, "Risultato copiato. Incollalo qui in chat.", Toast.LENGTH_LONG).show()
+            }
         }
         root.addView(title)
         root.addView(note)
         root.addView(runButton)
+        root.addView(copyButton)
         root.addView(status)
         val scroll = ScrollView(this)
         scroll.addView(root)
@@ -81,6 +97,7 @@ class VocalStemDiagnosticActivity : Activity() {
             }
             runOnUiThread {
                 status.text = report
+                copyButton.isEnabled = true
                 runButton.isEnabled = true
             }
         }.start()
