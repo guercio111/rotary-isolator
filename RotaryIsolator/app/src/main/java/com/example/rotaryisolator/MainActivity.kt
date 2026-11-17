@@ -146,7 +146,10 @@ class MainActivity : Activity() {
         // Display the requested jog position immediately. The DSP applies the
         // same offset with a short smoothing ramp, so using its lagging value
         // here made the arrows/jog appear frozen while the audible phase moved.
-        var error = (latency + fxPhaseOffsetMs + delaySyncOffsetMs) % period
+        // Follow the phase actually applied by the DSP, not the requested target.
+        // This keeps the yellow marker consistent with the audible read-head while
+        // the DSP's smoothing ramp is still converging after an arrow/jog input.
+        var error = (latency + fxAppliedPhaseDelayMs + delaySyncOffsetMs) % period
         if (error > period * 0.5f) error -= period
         if (error < -period * 0.5f) error += period
         return error
