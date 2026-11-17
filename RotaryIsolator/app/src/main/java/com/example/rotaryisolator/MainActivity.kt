@@ -1843,7 +1843,8 @@ class MainActivity : Activity() {
         }
         lockBpmButton = lockButton
         fun phaseNudge(direction: Float) {
-            if (validatedBeatEngine.getPeriodMs() <= 0.0) return
+            // FX phase jog is based on the selected FX BPM/division and does not
+            // require the master detector to expose a valid period at this instant.
             // Arrows and FX PHASE JOG use the same FX period as the DSP/marker.
             // Do not derive the step from the MASTER detector: AUTO/LOCK can
             // hold a slightly different effective FX BPM, amplified at the extremes.
