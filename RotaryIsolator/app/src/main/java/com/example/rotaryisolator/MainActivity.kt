@@ -1827,47 +1827,6 @@ class MainActivity : Activity() {
             }
         }
         lockBpmButton = lockButton
-        val syncButton = TextView(this).apply {
-            text = "SYNC"
-            textSize = 8f
-            setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            paintClockButton(this, false)
-            setOnClickListener {
-                val now = android.os.SystemClock.elapsedRealtime()
-                // Re-anchor the shared phase only; keep the detector and clock running.
-                val beforePhase = validatedBeatEngine.getPhaseMs()
-                val syncAcquired = validatedBeatEngine.sync(now)
-                val afterPhase = validatedBeatEngine.getPhaseMs()
-                if (!syncAcquired || afterPhase <= 0L || validatedBeatEngine.getPeriodMs() <= 0.0) {
-                    bpmReadout?.text = "ATTENDI BPM STABILE"
-                } else {
-                    // Keep the live delay feedback history. Clearing it here
-                    // makes the effect disappear until a fresh repeat is generated.
-                    autoBpmNextBeatMs = afterPhase + validatedBeatEngine.getPeriodMs().toLong()
-                    bpmLastBeatIndex = Long.MIN_VALUE
-                    // MASTER SYNC changes only the master clock anchor.
-                    // Never rewrite the user's independent FX phase trim here:
-                    // that manual correction must survive every later SYNC.
-                    autoPhaseSynced = true
-                    fxBpmLastBeatIndex = Long.MIN_VALUE
-                    phaseJogLastProgress = 100
-                    fxPhaseSeek?.let { seek ->
-                        android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
-                            duration = 180L
-                            addUpdateListener { animation -> seek.progress = animation.animatedValue as Int }
-                            start()
-                        }
-                    }
-                    refreshFxPhaseUi()
-                    scheduleUpdate()
-                    fxPhaseSeek?.postDelayed({ refreshFxPhaseUi() }, 220L)
-                }
-                paintClockButton(this, true)
-                postDelayed({ paintClockButton(this, false) }, 500L)
-                scheduleUpdate()
-            }
-        }
         fun phaseNudge(direction: Float) {
             if (validatedBeatEngine.getPeriodMs() <= 0.0) return
             // Arrows and FX PHASE JOG use the same FX period as the DSP/marker.
@@ -2063,7 +2022,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        listOf(autoButton, lockButton, syncButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
+        listOf(autoButton, lockButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
             clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
                 if (index > 0) leftMargin = dp(3)
             })
