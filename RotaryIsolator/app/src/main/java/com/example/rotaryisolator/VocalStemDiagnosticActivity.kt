@@ -88,7 +88,7 @@ class VocalStemDiagnosticActivity : Activity() {
 
     private fun runDiagnostic() {
         runButton.isEnabled = false
-        status.text = "Verifica modello e inizializzazione ONNX Runtime (CPU 4 thread)…"
+        status.text = "Verifica modello e inizializzazione ONNX Runtime (NNAPI + CPU fallback)…"
         Thread {
             val report = try {
                 performDiagnostic()
@@ -118,6 +118,8 @@ class VocalStemDiagnosticActivity : Activity() {
         val options = OrtSession.SessionOptions()
         options.setIntraOpNumThreads(4)
         options.setInterOpNumThreads(1)
+        // Try Android NNAPI first; ONNX Runtime keeps its CPU provider as fallback.
+        options.addNnapi()
         val session = try {
             env.createSession(model.absolutePath, options)
         } finally {
@@ -216,7 +218,7 @@ class VocalStemDiagnosticActivity : Activity() {
                     MODELLO: OK
                     SHA-256: verificato
                     Input/output: nomi verificati
-                    Inferenza: $measuredHops hop misurati dopo $warmupHops hop di riscaldamento\nConfigurazione CPU: 4 thread intra-op, 1 thread inter-op
+                    Inferenza: $measuredHops hop misurati dopo $warmupHops hop di riscaldamento\nProvider: NNAPI prioritario + CPU fallback\nConfigurazione CPU fallback: 4 thread intra-op, 1 thread inter-op
                     Caricamento sessione: ${"%.1f".format(loadMs)} ms
                     Tempo medio per hop: ${"%.3f".format(meanMs)} ms
                     P95 per hop: ${"%.3f".format(p95Ms)} ms
@@ -228,7 +230,7 @@ class VocalStemDiagnosticActivity : Activity() {
                     
                     ESITO: $verdict
                     
-                    NOTA: è un test CPU con segnale sintetico, non una prova di qualità musicale né ancora l'integrazione negli effetti. La cattura, il BPM e il DSP di FREQUALIZER non vengono usati o modificati.
+                    NOTA: test NNAPI con segnale sintetico. La registrazione NNAPI non garantisce che ogni operazione sia stata eseguita su GPU/NPU: i nodi non supportati possono ricadere su CPU. Non è una prova di qualità musicale né l'integrazione negli effetti. Cattura, BPM e DSP di FREQUALIZER non vengono usati o modificati.
                 """.trimIndent()
             } finally {
                 tensors.values.forEach { it.close() }
