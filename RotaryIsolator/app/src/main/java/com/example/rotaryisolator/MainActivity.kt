@@ -1833,7 +1833,7 @@ class MainActivity : Activity() {
             // Do not derive the step from the MASTER detector: AUTO/LOCK can
             // hold a slightly different effective FX BPM, amplified at the extremes.
             val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
-            val stepMs = -fxPeriodMs * direction / 64f
+            val stepMs = -fxPeriodMs * direction / 128f
             fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
             refreshFxPhaseUi()
             // Keep the jog handle locked to the same measured phase used by
