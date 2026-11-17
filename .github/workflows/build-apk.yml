@@ -34,6 +34,23 @@ jobs:
       - name: Extract project
         run: unzip RotaryIsolator-build-package.zip -d extracted
 
+      - name: Download and verify VOCALS-only model
+        run: |
+          MODEL_DIR="extracted/RotaryIsolator/app/src/main/assets"
+          mkdir -p "$MODEL_DIR"
+          curl -fL --retry 3 --retry-delay 2 "https://media.githubusercontent.com/media/sweetspotsoundsystem/stemgen-rt/main/model/parallel/vocals.onnx" -o "$MODEL_DIR/vocals.onnx"
+          echo "f29a3d8fa596ce4672dd4dc77ccf224f2538389940264aad46ab8168311c2148  $MODEL_DIR/vocals.onnx" | sha256sum -c -
+          test "$(stat -c%s "$MODEL_DIR/vocals.onnx")" = "11019332"
+          cat > "$MODEL_DIR/VOICE_MODEL_NOTICE.txt" <<'EOF'
+          VOCALS model from StemgenRT by Axel Delafosse.
+          Model weights are licensed CC BY-NC-SA 4.0, subject to the notice and
+          third-party dataset rights described by the publisher. Non-commercial use only.
+          Changes: bundled unchanged in this diagnostic APK; used only for local CPU testing.
+          Project: https://github.com/sweetspotsoundsystem/stemgen-rt
+          License: https://creativecommons.org/licenses/by-nc-sa/4.0/
+          Dataset creators and additional terms: see the publisher MODEL_CARD.md.
+          EOF
+
       - name: Rename app to FREQUALIZER
         run: |
           python3 - <<'PY'
@@ -65,6 +82,7 @@ jobs:
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/VocalStemDiagnosticActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/VocalStemDiagnosticActivity.kt
 
       - name: Configure internal audio capture and preserve popup through rotation
         run: |
@@ -129,6 +147,32 @@ jobs:
           s = s.replace("defaultConfig {", app_id_suffix, 1)
           s = s.replace("android {", "android {\n" + block, 1)
           p.write_text(s)
+          PY
+
+      - name: Add ONNX Runtime and diagnostic launcher
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          app = Path("extracted/RotaryIsolator/app")
+          gradle = app / "build.gradle"
+          content = gradle.read_text()
+          if "onnxruntime-android" not in content:
+              content += "\n\ndependencies {\n    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.26.0'\n}\n"
+              gradle.write_text(content)
+          manifest = app / "src/main/AndroidManifest.xml"
+          xml = manifest.read_text()
+          activity = '''        <activity android:name=".VocalStemDiagnosticActivity" android:label="Vocal Protect Test" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+          '''
+          if "VocalStemDiagnosticActivity" not in xml:
+              xml = xml.replace("</application>", activity + "\n    </application>", 1)
+          import xml.etree.ElementTree as ET
+          ET.fromstring(xml)
+          manifest.write_text(xml)
           PY
 
       - name: Build APK
