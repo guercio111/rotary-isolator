@@ -101,6 +101,11 @@ class MainActivity : Activity() {
     @Volatile private var captureConsentLocked = false
     @Volatile private var delayFadeMs = 1400
     @Volatile private var delayDivision = 2 // V10 divisions: 1/16 .. 16 beats; default quarter note
+    @Volatile private var delayManualMode = false
+    @Volatile private var delayManualTimePercent = 50f
+    private fun manualDelayTimeMs(): Float =
+        if (delayManualTimePercent <= 0f) 30f
+        else 30f * (8000f / 30f).pow(delayManualTimePercent.coerceIn(0f,100f) / 100f)
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
     @Volatile private var selectedBeatFx = 2 // 0 SHORT, 1 LONG, 2 DUB ECHO, 3 REVERB
     @Volatile private var delayMix = 0
@@ -326,6 +331,8 @@ class MainActivity : Activity() {
         } else {
             intArrayOf(2, 3, 4, 5, 6, 7, 8)[storedDelayDivision.coerceIn(0, 6)]
         }
+        delayManualMode = prefs.getBoolean("dub_delay_manual_mode", false)
+        delayManualTimePercent = prefs.getFloat("dub_delay_manual_time_percent", 50f).coerceIn(0f,100f)
         prefs.edit().putBoolean("dub_delay_division_v10", true).apply()
         delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
         delayBpmCorrection = prefs.getFloat("reverb_delay_bpm_correction", 0f).coerceIn(-10f,10f)
@@ -676,7 +683,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_reverb",colorReverb).putInt("color_delay",colorDelay).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx).putBoolean("dub_delay_manual_mode",delayManualMode).putFloat("dub_delay_manual_time_percent",delayManualTimePercent)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -2158,6 +2165,7 @@ class MainActivity : Activity() {
         paintModeButtons()
         delayControls.addView(modeRow, LinearLayout.LayoutParams(-1, 0, 1.1f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
+        var delayTimeDial: RotaryControl? = null
         val divisions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -2167,7 +2175,9 @@ class MainActivity : Activity() {
         val divisionViews = ArrayList<TextView>()
         fun paintDivisionButtons() {
             divisionViews.forEachIndexed { index, button ->
-                val selected = delayDivision == index
+                val selected = !delayManualMode && delayDivision == index
+                button.isEnabled = !delayManualMode
+                button.alpha = if (delayManualMode) 0.38f else 1f
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
                     setColor(if (selected) colorDelay else Color.rgb(55,62,72))
@@ -2184,9 +2194,11 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(dp(1), 0, dp(1), 0)
                 setOnClickListener {
-                    // A division change alters the echo interval, not the
-                    // user's absolute manual phase correction. Keep that value
-                    // untouched; the DSP wraps it to the new FX cycle itself.
+                    // A BEAT touch immediately takes ownership of delay time:
+                    // disable manual TIME and zero its dial before selecting this division.
+                    delayManualMode = false
+                    delayManualTimePercent = 0f
+                    delayTimeDial?.setValueExternally(0f)
                     delayDivision = index
                     phaseJogLastProgress = 100
                     fxPhaseSeek?.progress = 100
@@ -2204,6 +2216,25 @@ class MainActivity : Activity() {
             })
         }
         paintDivisionButtons()
+        delayTimeDial = RotaryControl(
+            this, "TIME", delayManualTimePercent, 0f, 100f, colorDelay,
+            { value -> delayManualTimePercent = value.coerceIn(0f,100f); scheduleUpdate() },
+            {
+                val ms = manualDelayTimeMs()
+                if (ms < 1000f) "${ms.roundToInt()} ms"
+                else String.format(java.util.Locale.US, "%.2f s", ms / 1000f)
+            },
+            onStart = {
+                // The first touch transfers ownership to TIME immediately:
+                // all BEAT selections are cleared visually and logically.
+                delayManualMode = true
+                delayDivision = 5
+                paintDivisionButtons()
+                save(); scheduleUpdate()
+            },
+            onEnd = { save() }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
         delayControls.addView(divisions, LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         // Three independent V10-style Beat FX frequency selectors.
@@ -2270,6 +2301,7 @@ class MainActivity : Activity() {
         delayRow.addView(delayDial, LinearLayout.LayoutParams(0, -1, 1f))
         delayRow.addView(delayFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
         delayRow.addView(delayToneDial, LinearLayout.LayoutParams(0, -1, 1f))
+        delayTimeDial?.let { delayRow.addView(it, LinearLayout.LayoutParams(0, -1, 1f)) }
         val reverbColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -2556,7 +2588,7 @@ class MainActivity : Activity() {
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision, delayMode, delayFeedbackPercent, delayTonePercent,
+                                delayOn, delayFadeMs, delayDivision, manualDelayTimeMs(), delayManualMode, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxLowEnabled, fxMidEnabled, fxHighEnabled,
                                 reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
                                 delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
@@ -3123,6 +3155,10 @@ private class RotaryControl(
         if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)25f else 17f)+bottomTextLift),p)}
         val value=valueText()
         p.color=accent;p.textSize=min(dp(10f*labelScale),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
+    }
+    fun setValueExternally(value:Float) {
+        v = quantize(value)
+        invalidate()
     }
     private fun quantize(value:Float):Float {
         if (step <= 0f) return value.coerceIn(minV,maxV)
