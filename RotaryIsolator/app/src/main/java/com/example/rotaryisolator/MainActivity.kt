@@ -1720,8 +1720,9 @@ class MainActivity : Activity() {
         }
         reverbTopRow.addView(sendDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbTopRow.addView(toneDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
         reverbBottomRow.addView(tailDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
         reverbRow.addView(reverbTopRow, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(reverbBottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
         // Reverb tail is now allowed to decay naturally after switching OFF.
