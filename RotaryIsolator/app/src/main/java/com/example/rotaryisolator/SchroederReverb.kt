@@ -332,7 +332,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         }
         val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.94f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.36f else 0f
-        val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
+        val beatFraction = floatArrayOf(1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f, 32f)[delayDivision.coerceIn(0, 9)]
         // Three deliberately contrasting Beat FX voicings. The beat division
         // and clock remain shared, while feedback, spectral character and return
         // level make each mode audibly distinct.
