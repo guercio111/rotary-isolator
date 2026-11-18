@@ -1706,6 +1706,12 @@ class MainActivity : Activity() {
             { "${reverbColorPercent}%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
+        val reverbFeedbackDial = RotaryControl(
+            this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorReverb,
+            { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "${reverbFeedbackPercent}%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
+        )
         val reverbRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -1720,9 +1726,8 @@ class MainActivity : Activity() {
         }
         reverbTopRow.addView(sendDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbTopRow.addView(toneDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
         reverbBottomRow.addView(tailDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
+        reverbBottomRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbRow.addView(reverbTopRow, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(reverbBottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
         // Reverb tail is now allowed to decay naturally after switching OFF.
