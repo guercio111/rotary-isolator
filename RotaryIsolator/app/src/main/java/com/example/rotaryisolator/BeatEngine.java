@@ -269,7 +269,22 @@ public final class BeatEngine {
             return;
         }
 
-        float rawBpm = 60000f / (chosenLag * HOP_MS);
+        // Refine the integer-hop autocorrelation peak with a parabolic
+        // interpolation. Without this, the 5.333 ms onset grid quantizes BPM
+        // noticeably around short beat divisions (especially 1/16 and 1/8).
+        double lagOffset = 0.0;
+        if (chosenLag > 0 && chosenLag < maxLag) {
+            double leftScore = scores[chosenLag - 1];
+            double centerScore = scores[chosenLag];
+            double rightScore = scores[chosenLag + 1];
+            double curvature = leftScore - 2.0 * centerScore + rightScore;
+            if (Math.abs(curvature) > 1e-9) {
+                lagOffset = 0.5 * (leftScore - rightScore) / curvature;
+                lagOffset = Math.max(-0.5, Math.min(0.5, lagOffset));
+            }
+        }
+        double refinedLag = chosenLag + lagOffset;
+        float rawBpm = (float)(60000.0 / (refinedLag * HOP_MS));
         float quality = (float)Math.max(0.0, Math.min(1.0,
                 (scores[chosenLag] - 0.05) / 0.42));
 
@@ -296,7 +311,9 @@ public final class BeatEngine {
             detectedBpm = candidateBpm;
         } else {
             float delta = candidateBpm - detectedBpm;
-            detectedBpm += Math.max(-0.35f, Math.min(0.35f, delta)) * 0.18f;
+            // Follow genuine tempo changes several times faster while retaining
+            // bounded per-analysis movement to reject isolated onset mistakes.
+            detectedBpm += Math.max(-0.75f, Math.min(0.75f, delta)) * 0.30f;
         }
 
         float stability = Math.min(1f, candidateStreak / 8f);

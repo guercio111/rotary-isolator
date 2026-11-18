@@ -431,7 +431,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             }
             if (!delayDivisionSwitch &&
                 delayTargetStableSamples >= delayTargetStabilitySamples &&
-                abs(targetDelaySamples - delayTransitionToSamples) > sampleRate * 0.005f) {
+                abs(targetDelaySamples - delayTransitionToSamples) >
+                    (targetDelaySamples * 0.015f).coerceIn(sampleRate * 0.0005f, sampleRate * 0.005f)) {
                 delayTransitionFromSamples = delayTransitionToSamples
                 delayTransitionToSamples = targetDelaySamples
                 delayTransitionPosition = 0
