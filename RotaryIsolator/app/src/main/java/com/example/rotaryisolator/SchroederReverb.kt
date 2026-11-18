@@ -332,7 +332,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         }
         // SEND controls the signal entering the reverb. When switched OFF,
         // only the input is closed; the existing FDN return remains audible.
-        val sendTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.94f) else 0f
+        val sendTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.36f else 0f
         val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // Three deliberately contrasting Beat FX voicings. The beat division
@@ -463,7 +463,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // The range stays below unity to prevent runaway feedback while allowing
         // a long, spacious club-style tail at the upper end.
         val feedback = if (freeze) 0.965f else
-            (0.60f + reverbDecayPercent.coerceIn(0, 100) / 100f * 0.32f).coerceIn(0.60f, 0.92f)
+            (0.78f + reverbDecayPercent.coerceIn(0, 100) / 100f * 0.18f).coerceIn(0.78f, 0.96f)
         // TONE is a true high-cut inside the feedback loop, keeping the tail bright.
         val targetReverbDamping = exp((-2.0 * PI * requestedLp / sampleRate).toFloat())
 
@@ -534,7 +534,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val delayedExcitation = reverbPreDelayBuffer[preDelayIndex] +
                 (reverbPreDelayBuffer[preDelayNext] - reverbPreDelayBuffer[preDelayIndex]) * preDelayFraction
             reverbPreDelayWriteIndex = if (safePreDelayWrite + 1 >= reverbPreDelayBuffer.size) 0 else safePreDelayWrite + 1
-            var excitation = delayedExcitation * 0.53f
+            var excitation = delayedExcitation * 0.70f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -637,15 +637,15 @@ internal class SchroederReverb(private val sampleRate: Int) {
             }
             // Keep the return open after SEND is closed: the feedback network
             // naturally releases its remaining energy instead of being faded out.
-            val reverbReturn = wet * 0.94f
+            val reverbReturn = wet * 1.88f
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
             // Frequency selection is upstream on the FX send. The wet return
             // remains untouched so reverb tails and delay feedback are natural.
             val raw = reverbReturn + delayReturn
             val magnitude = abs(raw)
-            val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
+            val target = if (magnitude > 0.90f) 0.90f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
-            val safe = (raw * limiter).coerceIn(-0.84f, 0.84f)
+            val safe = (raw * limiter).coerceIn(-0.90f, 0.90f)
             output[i] = (safe * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
     }
