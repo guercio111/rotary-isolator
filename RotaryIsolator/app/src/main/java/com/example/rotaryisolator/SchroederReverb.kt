@@ -462,8 +462,17 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // TAIL controls the feedback decay independently of the shared BPM clock.
         // The range stays below unity to prevent runaway feedback while allowing
         // a long, spacious club-style tail at the upper end.
-        val feedback = if (freeze) 0.965f else
-            (0.78f + reverbDecayPercent.coerceIn(0, 100) / 100f * 0.18f).coerceIn(0.78f, 0.96f)
+        // TAIL controls the normal reverb decay while the effect is ON.
+        // FEEDBACK takes over only after SEND is closed, exactly like the
+        // regeneration control on Echo/Delay: it determines how long the
+        // remaining reverb return keeps circulating after switch-off.
+        val feedback = when {
+            freeze -> 0.965f
+            !inputEnabled -> (0.70f +
+                reverbFeedbackPercent.coerceIn(0, 100) / 100f * 0.285f).coerceIn(0.70f, 0.985f)
+            else -> (0.78f +
+                reverbDecayPercent.coerceIn(0, 100) / 100f * 0.18f).coerceIn(0.78f, 0.96f)
+        }
         // TONE is a true high-cut inside the feedback loop, keeping the tail bright.
         val targetReverbDamping = exp((-2.0 * PI * requestedLp / sampleRate).toFloat())
 
@@ -534,7 +543,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val delayedExcitation = reverbPreDelayBuffer[preDelayIndex] +
                 (reverbPreDelayBuffer[preDelayNext] - reverbPreDelayBuffer[preDelayIndex]) * preDelayFraction
             reverbPreDelayWriteIndex = if (safePreDelayWrite + 1 >= reverbPreDelayBuffer.size) 0 else safePreDelayWrite + 1
-            var excitation = delayedExcitation * 0.70f
+            var excitation = delayedExcitation * 0.56f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
