@@ -337,14 +337,18 @@ class MainActivity : Activity() {
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         val storedDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 9)
-        val previousDelayDivision = if (prefs.getBoolean("dub_delay_division_v10", false)) {
-            storedDelayDivision
+        delayDivision = if (prefs.getBoolean("dub_delay_division_v11", false)) {
+            storedDelayDivision.coerceIn(0, 9)
         } else {
-            intArrayOf(2, 3, 4, 5, 6, 7, 8)[storedDelayDivision.coerceIn(0, 6)]
+            val previousDelayDivision = if (prefs.getBoolean("dub_delay_division_v10", false)) {
+                storedDelayDivision
+            } else {
+                intArrayOf(2, 3, 4, 5, 6, 7, 8)[storedDelayDivision.coerceIn(0, 6)]
+            }
+            // New scale removes 1/16: shift previous V10 indices left by one.
+            // Previous 16-beat selection stays at index 8; the new 32-beat option is index 9.
+            (previousDelayDivision - 1).coerceIn(0, 8)
         }
-        // New scale removes 1/16: shift every previous V10 index left by one.
-        // Previous 16-beat selection stays at index 8; the new 32-beat option is index 9.
-        delayDivision = (previousDelayDivision - 1).coerceIn(0, 8)
         delayManualMode = prefs.getBoolean("dub_delay_manual_mode", false)
         delayManualTimePercent = prefs.getFloat("dub_delay_manual_time_percent", 50f).coerceIn(0f,100f)
         prefs.edit().putBoolean("dub_delay_division_v10", true).putBoolean("dub_delay_division_v11", true).apply()
