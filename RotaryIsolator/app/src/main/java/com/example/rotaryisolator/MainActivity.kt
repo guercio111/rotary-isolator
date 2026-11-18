@@ -2106,7 +2106,7 @@ class MainActivity : Activity() {
                     if (fxPeriodMs > 0f && delta != 0) {
                         // Use the exact period used by the DSP and phase markers.
                         // Deriving it from the MASTER detector instead can diverge
-                        // from the locked FX BPM, especially at 1/16 and 16 beats.
+                        // from the locked FX BPM, especially at the shortest and longest beat divisions.
                         // One full fader travel corresponds to half an FX beat.
                         val stepMs = -delta * fxPeriodMs / 400f
                         fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs)
@@ -2188,7 +2188,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        // Full V10 division scale, including the restored 1/16 and 1/8 options.
+        // Experimental scale based on Build 833: remove 1/16 and add 32 after 16.
         val divisionLabels = arrayOf("1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16", "32")
         val divisionViews = ArrayList<TextView>()
         fun paintDivisionButtons() {
