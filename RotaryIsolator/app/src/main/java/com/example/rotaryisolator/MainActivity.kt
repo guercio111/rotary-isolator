@@ -100,7 +100,7 @@ class MainActivity : Activity() {
     @Volatile private var delayOn = false
     @Volatile private var captureConsentLocked = false
     @Volatile private var delayFadeMs = 1400
-    @Volatile private var delayDivision = 2 // V10 divisions: 1/16 .. 16 beats; default quarter note
+    @Volatile private var delayDivision = 1 // V11 divisions: 1/8 .. 32 beats; default quarter note
     @Volatile private var delayManualMode = false
     @Volatile private var delayManualTimePercent = 50f
     private fun manualDelayTimeMs(): Float =
@@ -109,8 +109,8 @@ class MainActivity : Activity() {
     private fun manualDelayDivisionLabel(): String {
         val quarterMs = 60000f / delayBpm.coerceIn(60f,180f)
         val ratio = manualDelayTimeMs() / quarterMs
-        val divisions = floatArrayOf(1f/16f, 1f/8f, 1f/4f, 1f/2f, 3f/4f, 1f, 2f, 4f, 8f, 16f)
-        val labels = arrayOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
+        val divisions = floatArrayOf(1f/8f, 1f/4f, 1f/2f, 3f/4f, 1f, 2f, 4f, 8f, 16f, 32f)
+        val labels = arrayOf("1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16", "32")
         val nearest = divisions.indices.minByOrNull { abs(ln((ratio / divisions[it]).coerceAtLeast(0.000001f))) } ?: 5
         return labels[nearest]
     }
@@ -136,7 +136,7 @@ class MainActivity : Activity() {
     // Smoothed phase delay currently applied inside the DSP, not merely requested by the UI.
     @Volatile private var fxAppliedPhaseDelayMs = 0f
     private fun currentFxPeriodMs(): Float {
-        val fraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
+        val fraction = floatArrayOf(1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f, 32f)[delayDivision.coerceIn(0, 9)]
         return (60000f / delayBpm.coerceIn(60f, 180f) * fraction).coerceAtLeast(1f)
     }
     private fun currentFxPhaseErrorMs(): Float {
@@ -337,14 +337,20 @@ class MainActivity : Activity() {
         delayOn = prefs.getBoolean("dub_delay_on", false)
         delayFadeMs = prefs.getInt("dub_delay_fade_ms", 1400).coerceIn(300,6000)
         val storedDelayDivision = prefs.getInt("dub_delay_division", 3).coerceIn(0, 9)
-        delayDivision = if (prefs.getBoolean("dub_delay_division_v10", false)) {
-            storedDelayDivision
+        delayDivision = if (prefs.getBoolean("dub_delay_division_v11", false)) {
+            storedDelayDivision.coerceIn(0, 9)
         } else {
-            intArrayOf(2, 3, 4, 5, 6, 7, 8)[storedDelayDivision.coerceIn(0, 6)]
+            val previousDelayDivision = if (prefs.getBoolean("dub_delay_division_v10", false)) {
+                storedDelayDivision
+            } else {
+                intArrayOf(2, 3, 4, 5, 6, 7, 8)[storedDelayDivision.coerceIn(0, 6)]
+            }
+            // Remove 1/16 while preserving the previous 16-beat selection.
+            (previousDelayDivision - 1).coerceIn(0, 8)
         }
         delayManualMode = prefs.getBoolean("dub_delay_manual_mode", false)
         delayManualTimePercent = prefs.getFloat("dub_delay_manual_time_percent", 50f).coerceIn(0f,100f)
-        prefs.edit().putBoolean("dub_delay_division_v10", true).apply()
+        prefs.edit().putBoolean("dub_delay_division_v10", true).putBoolean("dub_delay_division_v11", true).apply()
         delayMode = prefs.getInt("dub_delay_mode", 2).coerceIn(0,2)
         delayBpmCorrection = prefs.getFloat("reverb_delay_bpm_correction", 0f).coerceIn(-10f,10f)
         autoBpmEnabled = prefs.getBoolean("auto_bpm_enabled", false)
@@ -2183,7 +2189,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         // Full V10 division scale, including the restored 1/16 and 1/8 options.
-        val divisionLabels = arrayOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
+        val divisionLabels = arrayOf("1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16", "32")
         val divisionViews = ArrayList<TextView>()
         fun paintDivisionButtons() {
             divisionViews.forEachIndexed { index, button ->
@@ -2238,7 +2244,7 @@ class MainActivity : Activity() {
                 // The first touch transfers ownership to TIME immediately:
                 // all BEAT selections are cleared visually and logically.
                 delayManualMode = true
-                delayDivision = 5
+                delayDivision = 4
                 paintDivisionButtons()
                 save(); scheduleUpdate()
             },
