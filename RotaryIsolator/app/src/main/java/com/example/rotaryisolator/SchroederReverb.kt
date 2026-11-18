@@ -448,9 +448,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val delayMixSmoothing = (1.0 - exp(-3.0 / (sampleRate * delayFadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
         // TONE keeps kick/sub energy out while opening the upper spectrum.
         // 0% is warmer; 100% is brighter and more open.
-        val tone = reverbColorPercent.coerceIn(0, 100) / 100f
-        val hp = 320f + tone * 360f
-        val requestedLp = 8500f + tone * 9500f
+        val reverbTone = reverbColorPercent.coerceIn(0, 100) / 100f
+        val hp = 320f + reverbTone * 360f
+        val requestedLp = 8500f + reverbTone * 9500f
         val filterSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
         // A short fixed pre-delay preserves immediacy. The T3-style reverb itself
         // is free-running and does not chase the Delay/Echo BPM clock.
