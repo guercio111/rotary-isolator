@@ -330,18 +330,28 @@ class MainActivity : Activity() {
         delayMix = 0 // Il livello Delay parte sempre chiuso all’avvio dell’app.
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
         delayTonePercent = prefs.getInt("beat_fx_delay_tone", 50).coerceIn(0,100)
-        // Keep the previous HIGH preference and restore the new independent bands.
-        fxLowEnabled = prefs.getBoolean("beat_fx_low_enabled", false)
+        // Keep the previous independent band preferences. On the first launch
+        // after this update, establish FX LOW as OFF by default; later manual
+        // user choices remain persistent.
+        val fxLowDefaultApplied = prefs.getBoolean("beat_fx_low_default_applied", false)
+        fxLowEnabled = if (fxLowDefaultApplied) {
+            prefs.getBoolean("beat_fx_low_enabled", false)
+        } else {
+            prefs.edit()
+                .putBoolean("beat_fx_low_enabled", false)
+                .putBoolean("beat_fx_low_default_applied", true)
+                .apply()
+            false
+        }
         fxMidEnabled = prefs.getBoolean("beat_fx_mid_enabled", false)
         fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", false)
-        // At least one FX band must always be selected. If an older session
-        // saved all three OFF, restore the neutral full-spectrum state (all ON).
+        // If an older session saved every band OFF, restore a neutral
+        // mid/high pass while keeping the requested FX LOW default OFF.
         if (!fxLowEnabled && !fxMidEnabled && !fxHighEnabled) {
-            fxLowEnabled = true
             fxMidEnabled = true
             fxHighEnabled = true
             prefs.edit()
-                .putBoolean("beat_fx_low_enabled", true)
+                .putBoolean("beat_fx_low_enabled", false)
                 .putBoolean("beat_fx_mid_enabled", true)
                 .putBoolean("beat_fx_high_enabled", true)
                 .apply()
@@ -2224,7 +2234,12 @@ class MainActivity : Activity() {
                 isClickable = false
                 isFocusable = false
             }
-            effectsBody.addView(beatFxMasterDivider, LinearLayout.LayoutParams(dp(1), -1))
+            // The divider sits in the exact center of a balanced 16dp gutter
+            // between the BEAT FX keyboard and MASTER controls.
+            effectsBody.addView(beatFxMasterDivider, LinearLayout.LayoutParams(dp(1), -1).apply {
+                leftMargin = dp(8)
+                rightMargin = dp(8)
+            })
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.20f))
         } else {
             delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
