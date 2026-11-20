@@ -2162,7 +2162,15 @@ class MainActivity : Activity() {
             // Add a small visual gutter after REVERB: its four dials sit
             // slightly farther left, clearly separated from the DELAY dials.
             effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.23f).apply {
-                rightMargin = dp(12)
+                rightMargin = dp(6)
+            })
+            val effectsDivider = View(this).apply {
+                setBackgroundColor(Color.rgb(92, 102, 112))
+                alpha = 0.85f
+            }
+            effectsBody.addView(effectsDivider, LinearLayout.LayoutParams(dp(1), -1).apply {
+                leftMargin = dp(5)
+                rightMargin = dp(5)
             })
             effectsBody.addView(delayRow,LinearLayout.LayoutParams(0,-1,0.23f))
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.36f))
@@ -2171,6 +2179,14 @@ class MainActivity : Activity() {
             delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
             delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
             effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.37f else 0.43f))
+            val effectsDivider = View(this).apply {
+                setBackgroundColor(Color.rgb(92, 102, 112))
+                alpha = 0.85f
+            }
+            effectsBody.addView(effectsDivider, LinearLayout.LayoutParams(dp(1), -1).apply {
+                leftMargin = dp(5)
+                rightMargin = dp(5)
+            })
             effectsBody.addView(delayColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.63f else 0.57f))
         }
         panel.addView(effectsBody,LinearLayout.LayoutParams(-1,0,1f))
