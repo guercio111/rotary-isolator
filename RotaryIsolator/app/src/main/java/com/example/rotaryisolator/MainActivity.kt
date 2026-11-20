@@ -2159,7 +2159,11 @@ class MainActivity : Activity() {
             val compKnob=RotaryControl(this,"COMP",compMakeup,0f,100f,colorMaster,{v->compMakeup=v.coerceIn(0f,100f);compressorOn=compMakeup>0f;scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val loudKnob=RotaryControl(this,"LOUDNESS",loudness,0f,100f,colorMaster,{v->loudness=v.coerceIn(0f,100f);loudnessOn=loudness>0f;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             listOf(gainKnob,compKnob,loudKnob).forEach{masterColumn.addView(it,LinearLayout.LayoutParams(-1,0,1f))}
-            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.23f))
+            // Add a small visual gutter after REVERB: its four dials sit
+            // slightly farther left, clearly separated from the DELAY dials.
+            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.23f).apply {
+                rightMargin = dp(12)
+            })
             effectsBody.addView(delayRow,LinearLayout.LayoutParams(0,-1,0.23f))
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.36f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.18f))
