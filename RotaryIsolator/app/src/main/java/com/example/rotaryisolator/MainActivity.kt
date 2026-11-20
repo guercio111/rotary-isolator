@@ -2165,7 +2165,17 @@ class MainActivity : Activity() {
                 rightMargin = dp(12)
             })
             effectsBody.addView(delayRow,LinearLayout.LayoutParams(0,-1,0.23f))
-            effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.36f))
+            // Keep the Beat FX button/control bank visually centered in the
+            // available lane between the DELAY dials and the MASTER column.
+            val centeredControlsSlot = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(8), 0, dp(8), 0)
+                clipChildren = false
+                clipToPadding = false
+            }
+            centeredControlsSlot.addView(delayControls, LinearLayout.LayoutParams(-1, -1))
+            effectsBody.addView(centeredControlsSlot,LinearLayout.LayoutParams(0,-1,0.36f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.18f))
         } else {
             delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
