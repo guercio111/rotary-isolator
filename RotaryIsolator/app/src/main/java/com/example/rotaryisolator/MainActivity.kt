@@ -2192,12 +2192,12 @@ class MainActivity : Activity() {
                 leftMargin = dp(5)
                 rightMargin = dp(5)
             })
-            // Place the Beat FX keyboard bank in the middle, between the
-            // REVERB rotary group and the DELAY rotary group.
+            // Keep the four Echo/Delay dials together, then center the
+            // Beat FX keyboard bank between those dials and MASTER.
+            effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.25f))
             delayControls.gravity = Gravity.CENTER
             delayControls.setPadding(0, dp(36), 0, 0)
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.25f))
-            effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.25f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.25f))
         } else {
             delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
