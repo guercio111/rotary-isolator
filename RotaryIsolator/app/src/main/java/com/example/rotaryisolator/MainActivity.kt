@@ -440,6 +440,14 @@ class MainActivity : Activity() {
         compAttack = prefs.getFloat("comp_attack", 10f).coerceIn(1f, 100f)
         compRelease = prefs.getFloat("comp_release", 150f).coerceIn(20f, 500f)
         compMakeup = prefs.getFloat("comp_makeup", 0f).coerceIn(0f,100f)
+        // First launch after the dedicated MASTER bypass controls: both processors start OFF.
+        val masterSwitchDefaultsApplied = prefs.getBoolean("master_fx_switches_default_off_v1", false)
+        if (!masterSwitchDefaultsApplied) {
+            compressorOn = false
+            loudnessOn = false
+            prefs.edit().putBoolean("compressor_on", false).putBoolean("loudness_on", false)
+                .putBoolean("master_fx_switches_default_off_v1", true).apply()
+        }
         if (!limiterDefaultApplied) prefs.edit().putBoolean("limiter_default_v1", true).putBoolean("limiter", true).apply()
         eqOn = prefs.getBoolean("eq_on", true); isoOn = prefs.getBoolean("iso_on", true)
         val doubleMidDefaultApplied = prefs.getBoolean("double_mid_default_v1", false)
@@ -1091,8 +1099,8 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(b:SeekBar?){save()}
             })
         }else RotaryControl(this,"GAIN",gain,-12f,12f,accent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-        val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accent,{v->compMakeup=v.coerceIn(0f,100f);compressorOn=compMakeup>0f;scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-        val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,accent,{v->loudness=v.coerceIn(0f,100f);loudnessOn=loudness>0f;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+        val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+        val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,accent,{v->loudness=v.coerceIn(0f,100f);scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
         listOf(gainDial,compDial,loudDial).forEachIndexed{index,dial->row.addView(dial,LinearLayout.LayoutParams(0,if(compact)dp(110) else -1,1f).apply{leftMargin=if(index==0)0 else dp(4);rightMargin=if(index==2)0 else dp(4)})}
         box.addView(row,LinearLayout.LayoutParams(-1,0,1f))
         parent.addView(box,if(parent===content)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,-1,1f))
@@ -2201,9 +2209,39 @@ class MainActivity : Activity() {
             val masterColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(2),dp(4),dp(2),dp(2))}
             masterColumn.addView(sectionLabel("MASTER",13f,titleTint(colorMaster)),LinearLayout.LayoutParams(-1,dp(32)))
             val gainKnob=RotaryControl(this,"GAIN",gain,-12f,12f,colorMaster,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-            val compKnob=RotaryControl(this,"COMP",compMakeup,0f,100f,colorMaster,{v->compMakeup=v.coerceIn(0f,100f);compressorOn=compMakeup>0f;scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-            val loudKnob=RotaryControl(this,"LOUDNESS",loudness,0f,100f,colorMaster,{v->loudness=v.coerceIn(0f,100f);loudnessOn=loudness>0f;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-            listOf(gainKnob,compKnob,loudKnob).forEach{masterColumn.addView(it,LinearLayout.LayoutParams(-1,0,1f))}
+            val compKnob=RotaryControl(this,"COMP",compMakeup,0f,100f,colorMaster,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            val loudKnob=RotaryControl(this,"LOUDNESS",loudness,0f,100f,colorMaster,{v->loudness=v.coerceIn(0f,100f);scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+            fun masterKnobWithSwitch(knob: View, isOn: () -> Boolean, setOn: (Boolean) -> Unit): View {
+                val frame = FrameLayout(this)
+                frame.addView(knob, FrameLayout.LayoutParams(-1, -1))
+                val dot = View(this)
+                fun refreshDot() {
+                    dot.background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.OVAL
+                        setColor(if (isOn()) Color.rgb(40, 220, 90) else Color.rgb(225, 45, 45))
+                        setStroke(dp(1), Color.WHITE)
+                    }
+                }
+                refreshDot()
+                dot.contentDescription = if (isOn()) "COMPRESSOR ON" else "COMPRESSOR OFF"
+                dot.setOnClickListener {
+                    setOn(!isOn())
+                    refreshDot()
+                    dot.contentDescription = if (isOn()) "ON" else "OFF"
+                    save()
+                    scheduleUpdate()
+                }
+                frame.addView(dot, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                    leftMargin = dp(25)
+                    bottomMargin = dp(25)
+                })
+                return frame
+            }
+            val compSlot = masterKnobWithSwitch(compKnob, { compressorOn }) { compressorOn = it }
+            val loudSlot = masterKnobWithSwitch(loudKnob, { loudnessOn }) { loudnessOn = it }
+            masterColumn.addView(gainKnob, LinearLayout.LayoutParams(-1, 0, 1f))
+            masterColumn.addView(compSlot, LinearLayout.LayoutParams(-1, 0, 1f))
+            masterColumn.addView(loudSlot, LinearLayout.LayoutParams(-1, 0, 1f))
             // Add a small visual gutter after REVERB: its four dials sit
             // slightly farther left, clearly separated from the DELAY dials.
             effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.25f).apply {
@@ -2872,7 +2910,7 @@ class MainActivity : Activity() {
                 }
             }
             // LOUDNESS is bypassed at zero.
-            val loudnessLevel=loudness.coerceIn(0f,100f)/100f
+            val loudnessLevel=if(loudnessOn) loudness.coerceIn(0f,100f)/100f else 0f
             val masterLow=if(loudnessLevel>0f)loudnessLevel*12f else 0f
             val masterHigh=if(loudnessLevel>0f)loudnessLevel*8f else 0f
             for(ch in 0..1){
@@ -2891,7 +2929,7 @@ class MainActivity : Activity() {
             // continuously, reaching the tuned 3:1 / +12 dB setting at 100%.
             // Attack, release and threshold remain fixed for consistent behavior.
             val compLevel = (compMakeup.coerceIn(0f,100f) / 100f)
-            val compActive = compLevel > 0f
+            val compActive = compressorOn && compLevel > 0f
             val compRatioNow = 1f + 2f * compLevel
             val makeupDb = 12f * compLevel
             val compBand = DynamicsProcessing.MbcBand(
@@ -2906,7 +2944,7 @@ class MainActivity : Activity() {
                 val lim=DynamicsProcessing.Limiter(true,true,0,5f,80f,20f,-1f,0f)
                 fx.setLimiterAllChannelsTo(lim)
             }
-            fx.enabled=appEnabled && (eqOn||isoOn||filters[0]>.01f||resonance>.001f||abs(gain)>.01f||limiterOn||loudness>0.001f||compMakeup>0.001f)
+            fx.enabled=appEnabled && (eqOn||isoOn||filters[0]>.01f||resonance>.001f||abs(gain)>.01f||limiterOn||(loudnessOn && loudness>0.001f)||compActive)
 
             val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
             runOnUiThread { if(::status.isInitialized) status.text=message }
