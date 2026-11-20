@@ -2196,9 +2196,9 @@ class MainActivity : Activity() {
             // Beat FX keyboard bank between those dials and MASTER.
             effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.25f))
             delayControls.gravity = Gravity.CENTER
-            delayControls.setPadding(0, dp(36), 0, 0)
-            // Move only the BEAT FX keyboard bank 1 cm toward MASTER.
-            delayControls.translationX = dp(63).toFloat()
+            // Shift the BEAT FX controls inside their own column. Keep the
+            // parent bounds fixed so their touch targets cannot overlap MASTER.
+            delayControls.setPadding(dp(63), dp(36), 0, 0)
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.25f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.25f))
         } else {
