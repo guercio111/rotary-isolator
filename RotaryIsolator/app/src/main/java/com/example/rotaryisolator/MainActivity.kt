@@ -2192,8 +2192,9 @@ class MainActivity : Activity() {
                 leftMargin = dp(5)
                 rightMargin = dp(5)
             })
-            // Keep the four Echo/Delay dials together, then center the
-            // Beat FX keyboard bank between those dials and MASTER.
+            // Preserve the original full-width BEAT FX keyboard column.
+            // Do not translate the container or add horizontal padding:
+            // both would disturb its layout width or touch-target geometry.
             effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.25f))
             delayControls.gravity = Gravity.CENTER
             delayControls.setPadding(0, dp(36), 0, 0)
