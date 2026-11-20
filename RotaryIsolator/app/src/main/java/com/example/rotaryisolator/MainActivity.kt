@@ -152,9 +152,24 @@ class MainActivity : Activity() {
         return error
     }
     private fun syncFxPhaseSeekToMeasuredPhase() {
-        val error = currentFxPhaseErrorMs()
+        // Prefer the measured capture-to-playback phase whenever Android has
+        // supplied valid monotonic timestamps. If that measurement is not yet
+        // available, still move the jog handle from the requested FX trim so
+        // the arrow controls never appear frozen while the DSP is responding.
+        // The phase marker/caption continue to use currentFxPhaseErrorMs(),
+        // which deliberately remains unavailable until a real measurement exists.
+        val measuredError = currentFxPhaseErrorMs()
+        val period = currentFxPeriodMs().coerceAtLeast(1f)
+        val error = if (measuredError.isFinite()) {
+            measuredError
+        } else {
+            var requestedError = (fxPhaseOffsetMs + delaySyncOffsetMs) % period
+            if (requestedError > period * 0.5f) requestedError -= period
+            if (requestedError < -period * 0.5f) requestedError += period
+            requestedError
+        }
         if (!error.isFinite()) return
-        val halfRange = (currentFxPeriodMs() * 0.5f).coerceAtLeast(1f)
+        val halfRange = (period * 0.5f).coerceAtLeast(1f)
         fxPhaseSeek?.let { seek ->
             if (!seek.isPressed) {
                 seek.progress = (100f - error / halfRange * 100f).roundToInt().coerceIn(0, 200)
