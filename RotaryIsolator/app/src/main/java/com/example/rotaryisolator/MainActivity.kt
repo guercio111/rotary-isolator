@@ -2198,8 +2198,19 @@ class MainActivity : Activity() {
             effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.25f))
             delayControls.gravity = Gravity.CENTER
             delayControls.setPadding(0, dp(36), 0, 0)
-            effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.25f))
-            effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.25f))
+            // Give BEAT FX the previously unused visual gap before MASTER.
+            // The MASTER dials remain height-limited, preserving their drawn diameter.
+            delayControls.setPadding(0, dp(36), 0, 0)
+            effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.30f))
+            // Dedicated non-interactive divider keeps every touch target on its own side.
+            val beatFxMasterDivider = View(this).apply {
+                setBackgroundColor(Color.rgb(92, 102, 112))
+                alpha = 0.9f
+                isClickable = false
+                isFocusable = false
+            }
+            effectsBody.addView(beatFxMasterDivider, LinearLayout.LayoutParams(dp(1), -1))
+            effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.20f))
         } else {
             delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
             delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
