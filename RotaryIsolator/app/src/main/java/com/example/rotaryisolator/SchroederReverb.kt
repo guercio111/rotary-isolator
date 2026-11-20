@@ -149,7 +149,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var hp2Y = 0f
     private var lpY = 0f
     private var limiter = 1f
-    private var smoothedMix = 0f
+    private var smoothedSend = 0f
     private val reverbPreDelayBuffer = FloatArray(sampleRate * 2)
     private var reverbPreDelayWriteIndex = 0
     private var smoothedReverbPreDelaySamples = 0f
@@ -244,7 +244,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         hp2Y = 0f
         lpY = 0f
         limiter = 1f
-        smoothedMix = 0f
+        smoothedSend = 0f
         reverbPreDelayBuffer.fill(0f)
         reverbPreDelayWriteIndex = 0
         smoothedReverbPreDelaySamples = 0f
@@ -328,7 +328,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
             delayResetFadeOutRemaining = delayResetFadeSamples
             delayResetFadeInRemaining = 0
         }
-        val mixTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f * 0.94f) else 0f
+        // Build 861: SEND controls the signal entering the FDN; closing SEND leaves the existing tail audible.
+        val sendTarget = if (inputEnabled) (mixPercent.coerceIn(0, 100) / 100f) else 0f
         val delayTarget = if (delayEnabled) delayMixPercent.coerceIn(0, 100) / 100f * 1.36f else 0f
         val beatFraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         // Three deliberately contrasting Beat FX voicings. The beat division
@@ -438,27 +439,29 @@ internal class SchroederReverb(private val sampleRate: Int) {
             }
         }
 
-        val fadeSeconds = fadeMs.coerceIn(300, 6000) / 1000f
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
-        val mixSmoothing = (1.0 - exp(-3.0 / (sampleRate * fadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
+        // Build 861 send response: fast DJ-style 12 ms smoothing, independent of the tail.
+        val sendSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.012))).toFloat().coerceIn(0.000001f, 1f)
         val delayMixSmoothing = (1.0 - exp(-3.0 / (sampleRate * delayFadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
-        val size = roomSize.coerceIn(0, 1000) / 1000f
-        val hp = hpHz.coerceIn(20, 1200).toFloat()
-        val requestedLp = lpHz.coerceIn(1500, 18000).toFloat()
-        val filterSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.035))).toFloat()
-        val reverbBeatFraction = (1.0 / 32.0 * Math.pow(16.0, reverbBeatPercent.coerceIn(0,100) / 100.0)).toFloat()
-        val targetPreDelaySamples = (sampleRate * (60000f / delayBpm.coerceIn(60f,180f) / 1000f) * reverbBeatFraction)
+        // Build 861 T3 voicing: TONE sets the input high-pass and feedback-loop high-cut.
+        val reverbTone = reverbColorPercent.coerceIn(0, 100) / 100f
+        val hp = 320f + reverbTone * 360f
+        val requestedLp = 8500f + reverbTone * 9500f
+        val filterSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
+        // Fixed 8 ms pre-delay: the T3 reverb runs independently of the Delay/Echo BPM clock.
+        val targetPreDelaySamples = (sampleRate * 0.008f)
             .coerceIn(1f, (reverbPreDelayBuffer.size - 2).toFloat())
-        val preDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.08))).toFloat()
+        val preDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
 
-        // TIME controls the diffuse tail; BEAT adds a tempo-related pre-delay.
-        // DRY/WET is the independent return level and FILTER is the X-PAD high cut.
-        // Keep the FDN tail controlled: excessive feedback lets individual
-        // network modes ring audibly and creates a metallic, resonant character.
-        // This first cleanup pass shortens the decay without darkening the tone.
-        val feedback = if (freeze) 0.965f else
-            (0.72f + size * 0.15f).coerceIn(0.72f, 0.87f)
+        // Build 861: TAIL controls decay while SEND is open; FEEDBACK takes over after SEND closes.
+        val feedback = when {
+            freeze -> 0.965f
+            !inputEnabled -> (0.70f +
+                reverbFeedbackPercent.coerceIn(0, 100) / 100f * 0.285f).coerceIn(0.70f, 0.985f)
+            else -> (0.78f +
+                reverbDecayPercent.coerceIn(0, 100) / 100f * 0.18f).coerceIn(0.78f, 0.96f)
+        }
         // FILTER is now a true high-cut inside the feedback loop. A one-pole
         // coefficient of exp(-2*pi*fc/fs) gives progressively darker, less resonant
         // repeats as the cutoff is lowered, while remaining stable at both extremes.
@@ -512,7 +515,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val lpA = (1f - exp((-2.0 * PI * smoothedReverbFilterHz / sampleRate).toFloat())).coerceIn(0.001f, 1f)
             lpY += lpA * (hpOut2 - lpY)
 
-            smoothedMix += (mixTarget - smoothedMix) * mixSmoothing
+            smoothedSend += (sendTarget - smoothedSend) * sendSmoothing
             smoothedReverbPreDelaySamples += (targetPreDelaySamples - smoothedReverbPreDelaySamples) * preDelaySmoothing
             smoothedDelayMix += (delayTarget - smoothedDelayMix) * delayMixSmoothing
             smoothedDelayFeedback +=
@@ -522,7 +525,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             smoothedDelayOutputGain +=
                 (targetModeOutputGain - smoothedDelayOutputGain) * delayParameterSmoothing
             val safePreDelayWrite = Math.floorMod(reverbPreDelayWriteIndex, reverbPreDelayBuffer.size)
-            reverbPreDelayBuffer[safePreDelayWrite] = if (freeze || !inputEnabled) 0f else lpY
+            reverbPreDelayBuffer[safePreDelayWrite] = if (freeze || !inputEnabled) 0f else lpY * smoothedSend
             var preDelayRead = (safePreDelayWrite.toDouble() - smoothedReverbPreDelaySamples.toDouble()) % reverbPreDelayBuffer.size.toDouble()
             if (preDelayRead < 0.0) preDelayRead += reverbPreDelayBuffer.size.toDouble()
             val preDelayIndex = preDelayRead.toInt().coerceIn(0, reverbPreDelayBuffer.size - 1)
@@ -531,7 +534,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val delayedExcitation = reverbPreDelayBuffer[preDelayIndex] +
                 (reverbPreDelayBuffer[preDelayNext] - reverbPreDelayBuffer[preDelayIndex]) * preDelayFraction
             reverbPreDelayWriteIndex = if (safePreDelayWrite + 1 >= reverbPreDelayBuffer.size) 0 else safePreDelayWrite + 1
-            var excitation = delayedExcitation * 0.53f
+            var excitation = delayedExcitation * 0.56f
             for (diffuser in inputDiffusers) excitation = diffuser.tick(excitation)
 
             var wet = 0f
@@ -632,15 +635,16 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 delayResetGain = 1f - delayResetFadeInRemaining.toFloat() / delayResetFadeSamples
                 delayResetFadeInRemaining--
             }
-            val reverbReturn = wet * smoothedMix
+            // Build 861 return gain restores the original strong, full-bodied wet level.
+            val reverbReturn = wet * 1.88f
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
             // Frequency selection is upstream on the FX send. The wet return
             // remains untouched so reverb tails and delay feedback are natural.
             val raw = reverbReturn + delayReturn
             val magnitude = abs(raw)
-            val target = if (magnitude > 0.84f) 0.84f / magnitude else 1f
+            val target = if (magnitude > 0.90f) 0.90f / magnitude else 1f
             limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
-            val safe = (raw * limiter).coerceIn(-0.84f, 0.84f)
+            val safe = (raw * limiter).coerceIn(-0.90f, 0.90f)
             output[i] = (safe * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
     }
