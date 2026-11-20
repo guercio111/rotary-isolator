@@ -2087,9 +2087,9 @@ class MainActivity : Activity() {
             val compKnob=RotaryControl(this,"COMP",compMakeup,0f,100f,colorMaster,{v->compMakeup=v.coerceIn(0f,100f);compressorOn=compMakeup>0f;scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val loudKnob=RotaryControl(this,"LOUDNESS",loudness,0f,100f,colorMaster,{v->loudness=v.coerceIn(0f,100f);loudnessOn=loudness>0f;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             listOf(gainKnob,compKnob,loudKnob).forEach{masterColumn.addView(it,LinearLayout.LayoutParams(-1,0,1f))}
-            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.26f))
-            effectsBody.addView(delayRow,LinearLayout.LayoutParams(0,-1,0.25f))
-            effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.31f))
+            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.23f))
+            effectsBody.addView(delayRow,LinearLayout.LayoutParams(0,-1,0.23f))
+            effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.36f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.18f))
         } else {
             effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.37f else 0.43f))
