@@ -1862,7 +1862,7 @@ class MainActivity : Activity() {
         }
         listOf(autoButton, lockButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
             clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(34), 1f).apply {
-                if (index > 0) leftMargin = dp(3)
+                if (index > 0) leftMargin = dp(2)
             })
         }
         delayControls.addView(clockControlRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
@@ -2199,6 +2199,15 @@ class MainActivity : Activity() {
             delayControls.gravity = Gravity.CENTER
             delayControls.setPadding(0, dp(36), 0, 0)
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.25f))
+            // Clear visual and touch-safe boundary between BEAT FX and MASTER.
+            // The divider stays inside the column flow; no translated controls.
+            val beatFxMasterDivider = View(this).apply {
+                setBackgroundColor(Color.rgb(92, 102, 112))
+                alpha = 0.9f
+                isClickable = false
+                isFocusable = false
+            }
+            effectsBody.addView(beatFxMasterDivider, LinearLayout.LayoutParams(dp(1), -1))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.25f))
         } else {
             delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
