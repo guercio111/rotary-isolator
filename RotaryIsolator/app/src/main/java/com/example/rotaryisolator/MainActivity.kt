@@ -491,8 +491,25 @@ class MainActivity : Activity() {
             save()
         }
         prefs.edit().putInt("session_task_id", taskId).putBoolean("session_in_background", false).apply()
-        buildUi()
-        connectAudio()
+        try {
+            buildUi()
+            connectAudio()
+        } catch (t: Throwable) {
+            android.util.Log.e("FREQUALIZER_STARTUP", "Startup failed", t)
+            val detail = buildString {
+                append(t.javaClass.name)
+                append(": ")
+                append(t.message ?: "(nessun messaggio)")
+                append("\n\n")
+                append(t.stackTrace.take(12).joinToString("\n"))
+            }
+            android.app.AlertDialog.Builder(this)
+                .setTitle("ERRORE AVVIO FREQUALIZER")
+                .setMessage(detail)
+                .setPositiveButton("OK", null)
+                .setCancelable(false)
+                .show()
+        }
     }
 
     override fun onPause() {
