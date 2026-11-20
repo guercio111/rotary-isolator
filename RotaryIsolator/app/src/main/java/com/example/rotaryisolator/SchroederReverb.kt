@@ -148,7 +148,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var hp2X = 0f
     private var hp2Y = 0f
     private var lpY = 0f
-    private var limiter = 1f
+    // Separate peak envelopes: beat-synchronous Delay/Echo transients must never duck the Reverb return.
+    private var reverbLimiter = 1f
+    private var delayLimiter = 1f
     private var smoothedSend = 0f
     private val reverbPreDelayBuffer = FloatArray(sampleRate * 2)
     private var reverbPreDelayWriteIndex = 0
@@ -243,7 +245,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
         hp2X = 0f
         hp2Y = 0f
         lpY = 0f
-        limiter = 1f
+        reverbLimiter = 1f
+        delayLimiter = 1f
         smoothedSend = 0f
         reverbPreDelayBuffer.fill(0f)
         reverbPreDelayWriteIndex = 0
@@ -638,13 +641,25 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // Build 861 return gain restores the original strong, full-bodied wet level.
             val reverbReturn = wet * 1.88f
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
-            // Frequency selection is upstream on the FX send. The wet return
-            // remains untouched so reverb tails and delay feedback are natural.
-            val raw = reverbReturn + delayReturn
-            val magnitude = abs(raw)
-            val target = if (magnitude > 0.90f) 0.90f / magnitude else 1f
-            limiter = if (target < limiter) target else limiter + (1f - limiter) * 0.002f
-            val safe = (raw * limiter).coerceIn(-0.90f, 0.90f)
+
+            // Keep the two return dynamics independent. The old shared limiter
+            // reacted to beat-synchronous Delay/Echo peaks and reduced BOTH paths,
+            // making the continuous Reverb audibly pump down on every beat.
+            // Each effect now controls only its own peak envelope.
+            val reverbMagnitude = abs(reverbReturn)
+            val reverbTarget = if (reverbMagnitude > 0.90f) 0.90f / reverbMagnitude else 1f
+            reverbLimiter = if (reverbTarget < reverbLimiter) reverbTarget
+                else reverbLimiter + (1f - reverbLimiter) * 0.002f
+
+            val delayMagnitude = abs(delayReturn)
+            val delayTargetGain = if (delayMagnitude > 0.90f) 0.90f / delayMagnitude else 1f
+            delayLimiter = if (delayTargetGain < delayLimiter) delayTargetGain
+                else delayLimiter + (1f - delayLimiter) * 0.002f
+
+            // Final sum is only hard-bounded; it has no beat-following gain
+            // envelope, so Delay/Echo cannot modulate the Reverb level.
+            val safe = (reverbReturn * reverbLimiter + delayReturn * delayLimiter)
+                .coerceIn(-0.90f, 0.90f)
             output[i] = (safe * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
     }
