@@ -1114,7 +1114,7 @@ class MainActivity : Activity() {
         return col
     }
 
-    private fun refreshUi(){    private fun refreshUi(){ buildUi() }
+    private fun refreshUi(){ buildUi() }
 
     private fun resetAllControls(){
         for(i in 0..3){eq[i]=0f;previousEq[i]=0f;sectionPreviousEq[i]=0f}
