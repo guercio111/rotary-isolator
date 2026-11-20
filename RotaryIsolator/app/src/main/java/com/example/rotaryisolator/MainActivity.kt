@@ -1057,6 +1057,63 @@ class MainActivity : Activity() {
         sections["GAIN"]=box
     }
 
+    private fun masterToneControl(
+        title:String,value:Float,enabled:Boolean,setValue:(Float)->Unit,setEnabled:(Boolean)->Unit,
+        remember:()->Unit,restore:()->Unit,compactActions:Boolean=false
+    ):View{
+        val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+        // Percentage label removed; master values remain adjustable.
+        val actions=LinearLayout(this).apply{orientation=if(compactActions)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        val onAction=roundAction("",if(enabled)"ON" else "OFF",enabled){
+            setEnabled(!enabled);save();refreshUi();scheduleUpdate()
+        }
+        val returnAction=roundAction("↶","RETURN",true){
+            restore();save();refreshUi();scheduleUpdate()
+        }
+        if(compactActions){
+            actions.addView(onAction,LinearLayout.LayoutParams(-1,dp(24)).apply{bottomMargin=dp(5)})
+            actions.addView(returnAction,LinearLayout.LayoutParams(-1,dp(24)))
+        }else{
+            actions.addView(onAction,LinearLayout.LayoutParams(-2,dp(24)).apply{rightMargin=dp(8)})
+            actions.addView(returnAction,LinearLayout.LayoutParams(-2,dp(24)).apply{leftMargin=dp(8)})
+        }
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)56 else 28)))
+        col.addView(RotaryControl(this,title,value,0f,100f,accentFor("MASTER"),{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
+            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
+        return col
+    }
+
+    private fun masterDialHeight():Int {
+        if(phonePortrait && wideLayout) return dialHeight()
+        if(phonePortrait && !wideLayout){
+            val section=(windowHeightDp()-64f)/2f
+            val row=(section-18f)/2f
+            return dp((row-64f).roundToInt().coerceIn(24,88))
+        }
+        // Give MASTER dials a little more vertical room so their faces sit
+        // centrally in each control column without changing the four-column layout.
+        return (dialHeight()*0.94f).roundToInt()
+    }
+
+    private fun masterCompControl():View{
+        val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+        // Percentage label removed; COMP remains adjustable.
+        val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+        actions.addView(roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
+            compressorOn=!compressorOn
+            save()
+            refreshUi()
+            scheduleUpdate()
+        })
+        col.addView(actions,LinearLayout.LayoutParams(-1,dp(24)))
+        col.addView(RotaryControl(this,"COMP",compMakeup,0f,100f,accentFor("MASTER"),{v->
+            compMakeup=v.coerceIn(0f,100f)
+            scheduleUpdate()
+        },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
+            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
+        return col
+    }
+
     private fun refreshUi(){    private fun refreshUi(){ buildUi() }
 
     private fun resetAllControls(){
