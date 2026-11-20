@@ -1500,30 +1500,29 @@ class MainActivity : Activity() {
         header.addView(reverbPower, LinearLayout.LayoutParams(dp(42), dp(20)))
         panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
-        val beatDial = RotaryControl(
-            this, "BEAT", reverbBeatPercent.toFloat(), 0f, 100f, colorReverb,
-            { value -> reverbBeatPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { String.format(java.util.Locale.US, "%.3f", 1f / 32f * Math.pow(16.0, reverbBeatPercent / 100.0)) + " BT" },
-            onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
-        )
-        val timeDial = RotaryControl(
-            this, "TIME", reverbSize / 10f, 0f, 100f, colorReverb,
-            { value -> reverbSize = (value * 10f).roundToInt().coerceIn(0,1000); scheduleUpdate() },
-            { "${(reverbSize / 10f).roundToInt()}%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
-        )
-        val depthDial = RotaryControl(
-            this, "DRY/WET", reverbMix.toFloat(), 0f, 100f, colorReverb,
+        // Restore the original four Reverb controls and their original parameter mappings.
+        val sendDial = RotaryControl(
+            this, "SEND", reverbMix.toFloat(), 0f, 100f, colorReverb,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "$reverbMix%" }, onEnd = { save() }, titleInside = false,
+            { "${reverbMix}%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
-        val filterDial = RotaryControl(
-            this, "FILTER", ((ln(reverbLpHz.coerceIn(1500,18000) / 1500f) / ln(12f)) * 100f).coerceIn(0f,100f), 0f, 100f, colorReverb,
-            { value -> reverbLpHz = (1500f * 12f.pow(value / 100f)).roundToInt().coerceIn(1500,18000); scheduleUpdate() },
-            { if (reverbLpHz >= 1000) "${(reverbLpHz / 1000f).let { String.format(java.util.Locale.US, "%.1f", it) }} kHz" else "$reverbLpHz Hz" },
-            onEnd = { save() }, titleInside = false,
+        val toneDial = RotaryControl(
+            this, "TONE", reverbColorPercent.toFloat(), 0f, 100f, colorReverb,
+            { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "${reverbColorPercent}%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
+        )
+        val tailDial = RotaryControl(
+            this, "TAIL", reverbDecayPercent.toFloat(), 0f, 100f, colorReverb,
+            { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "${reverbDecayPercent}%" }, onEnd = { save() }, titleInside = false,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
+        )
+        val reverbFeedbackDial = RotaryControl(
+            this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorReverb,
+            { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { "${reverbFeedbackPercent}%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
         val reverbRow = LinearLayout(this).apply {
@@ -1538,11 +1537,11 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        // Larger 2x2 layout: BEAT / TIME above, DRY-WET / FILTER below.
-        reverbTopRow.addView(beatDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbTopRow.addView(timeDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbBottomRow.addView(depthDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbBottomRow.addView(filterDial, LinearLayout.LayoutParams(0, -1, 1f))
+        // Original 2x2 layout: SEND / TONE above, TAIL / FEEDBACK below.
+        reverbTopRow.addView(sendDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbTopRow.addView(toneDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(tailDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbRow.addView(reverbTopRow, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(reverbBottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
