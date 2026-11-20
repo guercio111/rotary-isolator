@@ -1850,7 +1850,6 @@ class MainActivity : Activity() {
             contentDescription = "FX beat indicator, one flash per full master beat"
         }
         fxBpmBeat = fxBeatLamp
-        delayTop.addView(delayPower, LinearLayout.LayoutParams(dp(46), dp(40)))
         delayTop.addView(tapButton, LinearLayout.LayoutParams(dp(48), dp(46)).apply { leftMargin = dp(4); rightMargin = dp(2) })
         delayTop.addView(autoCenterButton, LinearLayout.LayoutParams(dp(48), dp(40)).apply { rightMargin = dp(4) })
         delayTop.addView(bpmBeat, LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(2) })
@@ -2160,8 +2159,6 @@ class MainActivity : Activity() {
             clipChildren = false
             clipToPadding = false
         }
-        delaySection.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
-        delaySection.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2170,6 +2167,8 @@ class MainActivity : Activity() {
             clipToPadding = false
         }
         if (!phonePortrait && wideLayout) {
+            delaySection.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
+            delaySection.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 1f))
             val masterColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(2),dp(2),dp(2),dp(2))}
             masterColumn.addView(sectionLabel("MASTER",11f,titleTint(colorMaster)),LinearLayout.LayoutParams(-1,dp(25)))
             val gainKnob=RotaryControl(this,"GAIN",gain,-12f,12f,colorMaster,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
