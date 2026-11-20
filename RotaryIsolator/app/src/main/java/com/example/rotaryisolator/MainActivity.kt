@@ -2197,6 +2197,8 @@ class MainActivity : Activity() {
             effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.25f))
             delayControls.gravity = Gravity.CENTER
             delayControls.setPadding(0, dp(36), 0, 0)
+            // Move only the BEAT FX keyboard bank 1 cm toward MASTER.
+            delayControls.translationX = dp(63).toFloat()
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.25f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.25f))
         } else {
