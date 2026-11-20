@@ -2146,8 +2146,6 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(3), dp(2), dp(3), dp(2))
         }
-        delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
-        delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2166,6 +2164,8 @@ class MainActivity : Activity() {
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.36f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.18f))
         } else {
+            delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
+            delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
             effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.37f else 0.43f))
             effectsBody.addView(delayColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.63f else 0.57f))
         }
