@@ -2232,7 +2232,7 @@ class MainActivity : Activity() {
                     scheduleUpdate()
                 }
                 frame.addView(dot, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                    leftMargin = dp(25)
+                    leftMargin = dp(44)
                     bottomMargin = dp(25)
                 })
                 return frame
