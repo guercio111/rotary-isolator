@@ -639,8 +639,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 delayResetFadeInRemaining--
             }
             // Build 861 return gain restores the original strong, full-bodied wet level.
-            val reverbReturn = wet * 1.88f
-            val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
+            val reverbReturn = wet * 2.35f
+            val delayReturn = delayToneState * smoothedDelayMix * 1.60f * smoothedDelayOutputGain * delayResetGain
 
             // Keep the two return dynamics independent. The old shared limiter
             // reacted to beat-synchronous Delay/Echo peaks and reduced BOTH paths,
