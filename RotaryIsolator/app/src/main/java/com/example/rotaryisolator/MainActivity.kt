@@ -798,7 +798,7 @@ class MainActivity : Activity() {
             addSection("EQ","EQ",eq,-14f..14f,{eqOn},upper)
             addSection("ISOLATOR","ISOLATOR",iso,-24f..24f,{isoOn},upper)
             val filterHost=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;clipChildren=false;clipToPadding=false}
-            lower.addView(filterHost,LinearLayout.LayoutParams(0,-1,0.23f))
+            lower.addView(filterHost,LinearLayout.LayoutParams(0,-1,0.20f))
             addFilterSection(filterHost)
             addEffectsSection(lower)
         } else {
@@ -1498,7 +1498,7 @@ class MainActivity : Activity() {
         header.gravity = Gravity.CENTER_VERTICAL
         header.addView(reverbTitle, LinearLayout.LayoutParams(-2, -1).apply { rightMargin = dp(8) })
         header.addView(reverbPower, LinearLayout.LayoutParams(dp(42), dp(20)))
-        panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
+        if (phonePortrait || !wideLayout) panel.addView(header, LinearLayout.LayoutParams(-1, dp(24)))
 
         // Restore the original four Reverb controls and their original parameter mappings.
         val sendDial = RotaryControl(
@@ -2145,7 +2145,10 @@ class MainActivity : Activity() {
         val reverbColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(2), dp(2), dp(2), dp(2))
+            setPadding(dp(2), dp(if (!phonePortrait && wideLayout) 4 else 2), dp(2), dp(2))
+        }
+        if (!phonePortrait && wideLayout) {
+            reverbColumn.addView(header, LinearLayout.LayoutParams(-1, dp(32)))
         }
         reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, 0, 1f))
         val delayColumn = LinearLayout(this).apply {
@@ -2167,17 +2170,18 @@ class MainActivity : Activity() {
             clipToPadding = false
         }
         if (!phonePortrait && wideLayout) {
-            delaySection.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
+            delaySection.setPadding(0, dp(4), 0, 0)
+            delaySection.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(32)))
             delaySection.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 1f))
-            val masterColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(2),dp(2),dp(2),dp(2))}
-            masterColumn.addView(sectionLabel("MASTER",11f,titleTint(colorMaster)),LinearLayout.LayoutParams(-1,dp(25)))
+            val masterColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(2),dp(4),dp(2),dp(2))}
+            masterColumn.addView(sectionLabel("MASTER",13f,titleTint(colorMaster)),LinearLayout.LayoutParams(-1,dp(32)))
             val gainKnob=RotaryControl(this,"GAIN",gain,-12f,12f,colorMaster,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compKnob=RotaryControl(this,"COMP",compMakeup,0f,100f,colorMaster,{v->compMakeup=v.coerceIn(0f,100f);compressorOn=compMakeup>0f;scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val loudKnob=RotaryControl(this,"LOUDNESS",loudness,0f,100f,colorMaster,{v->loudness=v.coerceIn(0f,100f);loudnessOn=loudness>0f;scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             listOf(gainKnob,compKnob,loudKnob).forEach{masterColumn.addView(it,LinearLayout.LayoutParams(-1,0,1f))}
             // Add a small visual gutter after REVERB: its four dials sit
             // slightly farther left, clearly separated from the DELAY dials.
-            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.23f).apply {
+            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,0.25f).apply {
                 rightMargin = dp(6)
             })
             val effectsDivider = View(this).apply {
@@ -2188,12 +2192,13 @@ class MainActivity : Activity() {
                 leftMargin = dp(5)
                 rightMargin = dp(5)
             })
-            effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.23f))
+            effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.25f))
             // Keep the complete Beat FX button/control bank centered in the
             // dedicated space between the Delay dials and the MASTER column.
             delayControls.gravity = Gravity.CENTER
-            effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.36f))
-            effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.18f))
+            delayControls.setPadding(0, dp(36), 0, 0)
+            effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.25f))
+            effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.25f))
         } else {
             delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
             delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
