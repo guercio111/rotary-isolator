@@ -1,1 +1,0 @@
-Build 907: COMP/LOUDNESS dots +0.5 cm; Delay return 1.28.
