@@ -1833,6 +1833,15 @@ class MainActivity : Activity() {
                 if (delayOn) updateEffectsCapture(true)
             }
         }
+        val delayHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val delayTitle = label("BEAT EFFECTS", 13f, colorDelay)
+        delayTitle.gravity = Gravity.CENTER_VERTICAL
+        delayHeader.addView(delayTitle, LinearLayout.LayoutParams(-2, -1).apply { rightMargin = dp(8) })
+        delayHeader.addView(delayPower, LinearLayout.LayoutParams(dp(42), dp(20)))
+        
         val fxBeatLamp = TextView(this).apply {
             text = "●"
             textSize = 30f
@@ -2145,6 +2154,15 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(dp(3), dp(2), dp(3), dp(2))
         }
+        val delaySection = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            clipChildren = false
+            clipToPadding = false
+        }
+        delaySection.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
+        delaySection.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 1f))
+
         val effectsBody = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -2171,10 +2189,14 @@ class MainActivity : Activity() {
                 leftMargin = dp(5)
                 rightMargin = dp(5)
             })
-            effectsBody.addView(delayRow,LinearLayout.LayoutParams(0,-1,0.23f))
+            effectsBody.addView(delaySection,LinearLayout.LayoutParams(0,-1,0.23f))
+            // Keep the complete Beat FX button/control bank centered in the
+            // dedicated space between the Delay dials and the MASTER column.
+            delayControls.gravity = Gravity.CENTER
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.36f))
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.18f))
         } else {
+            delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
             delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
             delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
             effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.37f else 0.43f))
