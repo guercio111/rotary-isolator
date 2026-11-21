@@ -2371,7 +2371,14 @@ class MainActivity : Activity() {
         if (!phonePortrait && wideLayout) {
             reverbColumn.addView(header, LinearLayout.LayoutParams(-1, dp(32)))
         }
-        reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        if (phonePortrait) {
+            // Smartphone FX page: keep the original Reverb controls together in
+            // the lower half of their column, leaving the upper half clear.
+            reverbColumn.addView(View(this), LinearLayout.LayoutParams(-1, 0, 1f))
+            reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        } else {
+            reverbColumn.addView(reverbRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        }
         val delayColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -2469,8 +2476,9 @@ class MainActivity : Activity() {
             effectsBody.addView(masterColumn,LinearLayout.LayoutParams(0,-1,0.20f))
         } else {
             delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
-            delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
-            delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
+            // Give the four original Dub Delay rotaries more vertical room.
+            delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, if (phonePortrait) 0.50f else 0.36f))
+            delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, if (phonePortrait) 0.50f else 0.64f))
             effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,if(!wideLayout)0.37f else 0.43f))
             val effectsDivider = View(this).apply {
                 setBackgroundColor(Color.rgb(92, 102, 112))
