@@ -868,7 +868,7 @@ class MainActivity : Activity() {
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
-        container.addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        container.addView(root,FrameLayout.LayoutParams(if (phonePortrait && wideLayout) dp(1280) else -1,-1,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         setContentView(container)
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
             if (view.width > 0 && view.height > 0) {
