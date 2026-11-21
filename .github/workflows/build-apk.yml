@@ -110,6 +110,11 @@ jobs:
           manifest.write_text(xml)
           PY
 
+      - name: Apply repository source changes
+        run: |
+          mkdir -p extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
+
       - name: Set Java compatibility to 17
         run: |
           python3 - <<'PY'
