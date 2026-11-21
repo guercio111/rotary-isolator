@@ -274,6 +274,7 @@ class MainActivity : Activity() {
     private var resonance = 0f
     private var phonePortrait = false
     private var wideLayout = false
+    private var phoneLandscapeAdaptation = false
     private var layoutRebuildPending = false
     private var lastWindowWidthPx = 0
     private var lastWindowHeightPx = 0
@@ -410,9 +411,11 @@ class MainActivity : Activity() {
         val cfg = resources.configuration
         val windowWidthDp = if (cfg.screenWidthDp > 0) cfg.screenWidthDp else (dm.widthPixels / dm.density).roundToInt()
         val windowHeightDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else (dm.heightPixels / dm.density).roundToInt()
-        phonePortrait = min(windowWidthDp, windowHeightDp) < 600
-        wideLayout = windowWidthDp > windowHeightDp
-        phoneUiScale = if (phonePortrait && wideLayout) min(windowWidthDp / 1280f, windowHeightDp / 800f).coerceIn(0.42f, 1f) else 1f
+        phoneLandscapeAdaptation = min(windowWidthDp, windowHeightDp) < 600 && windowWidthDp > windowHeightDp
+        phonePortrait = if (phoneLandscapeAdaptation) false else min(windowWidthDp, windowHeightDp) < 600
+        wideLayout = if (phoneLandscapeAdaptation) true else windowWidthDp > windowHeightDp
+        // Keep all controls at the tablet's native dimensions; scale the fixed canvas as one unit.
+        phoneUiScale = 1f
         colorEq = prefs.getInt("color_eq", Color.rgb(70,190,120))
         colorIso = prefs.getInt("color_iso", Color.rgb(70,190,120))
         colorFilters = prefs.getInt("color_filters", Color.rgb(70,190,120))
@@ -586,8 +589,10 @@ class MainActivity : Activity() {
         val w = newConfig.screenWidthDp
         val h = newConfig.screenHeightDp
         if (w > 0 && h > 0) {
-            phonePortrait = min(w, h) < 600
-            wideLayout = w > h
+            phoneLandscapeAdaptation = min(w, h) < 600 && w > h
+            phonePortrait = if (phoneLandscapeAdaptation) false else min(w, h) < 600
+            wideLayout = if (phoneLandscapeAdaptation) true else w > h
+            phoneUiScale = 1f
         }
         lastWindowWidthPx = 0
         buildUi()
@@ -663,12 +668,20 @@ class MainActivity : Activity() {
             }
             scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         }
+        // S25 uses the exact 1280x800 tablet-landscape canvas, scaled uniformly as one unit.
+        val viewportScale = if (phoneLandscapeAdaptation) {
+            min(
+                container.width.toFloat() / root.width.coerceAtLeast(1),
+                container.height.toFloat() / root.height.coerceAtLeast(1)
+            ).coerceAtMost(1f)
+        } else 1f
+        val finalScale = scale * viewportScale
         root.pivotX = 0f
         root.pivotY = 0f
-        root.scaleX = scale
-        root.scaleY = scale
-        root.translationX = (container.width - root.width * scale) / 2f
-        root.translationY = 0f
+        root.scaleX = finalScale
+        root.scaleY = finalScale
+        root.translationX = (container.width - root.width * finalScale) / 2f
+        root.translationY = if (phoneLandscapeAdaptation) (container.height - root.height * finalScale) / 2f else 0f
     }
 
     private fun label(t:String, size:Float=11f, color:Int=Color.LTGRAY)=TextView(this).apply {
@@ -867,23 +880,33 @@ class MainActivity : Activity() {
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
-        container.addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        val rootParams = if (phoneLandscapeAdaptation) {
+            FrameLayout.LayoutParams(dp(1280), dp(800), Gravity.CENTER)
+        } else {
+            FrameLayout.LayoutParams(-1, -1, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+        }
+        container.addView(root, rootParams)
         setContentView(container)
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
             if (view.width > 0 && view.height > 0) {
                 val newWide = view.width > view.height
                 val density = resources.displayMetrics.density
                 val newPhone = min(view.width,view.height) / density < 600f
-                val newPhoneScale = if(newPhone && newWide) min((view.width/density)/1280f,(view.height/density)/800f).coerceIn(0.42f,1f) else 1f
+                val newPhoneLandscape = newPhone && newWide
+                val newPhonePortrait = newPhone && !newWide
+                // Landscape phones use the tablet composition, not the compact-phone composition.
+                val newPhoneScale = 1f
                 val scaleChanged = abs(newPhoneScale-phoneUiScale) > 0.01f
                 val resized = lastWindowWidthPx > 0 &&
                     (abs(view.width-lastWindowWidthPx) > dp(12) || abs(view.height-lastWindowHeightPx) > dp(12))
                 lastWindowWidthPx=view.width
                 lastWindowHeightPx=view.height
-                if (newWide != wideLayout || newPhone != phonePortrait || resized || scaleChanged) {
+                if (newWide != wideLayout || newPhonePortrait != phonePortrait ||
+                    newPhoneLandscape != phoneLandscapeAdaptation || resized || scaleChanged) {
+                    phoneLandscapeAdaptation = newPhoneLandscape
                     phoneUiScale = newPhoneScale
                     wideLayout = newWide
-                    phonePortrait = newPhone
+                    phonePortrait = newPhonePortrait
                     if (!layoutRebuildPending) {
                         layoutRebuildPending = true
                         handler.post {
