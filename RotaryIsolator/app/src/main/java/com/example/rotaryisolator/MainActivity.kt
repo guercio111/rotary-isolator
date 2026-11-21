@@ -858,7 +858,7 @@ class MainActivity : Activity() {
             addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, upper)
             addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
             addFilterSection(lower)
-            addGainSection(lower)
+            addPhoneMasterSection(lower)
         } else if (compactPhone && showingEffectsScreen) {
             val upper = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
             val lower = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
@@ -1182,6 +1182,69 @@ class MainActivity : Activity() {
         box.addView(row,LinearLayout.LayoutParams(-1,0,1f))
         parent.addView(box,if(parent===content)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,-1,1f))
         sections["GAIN"]=box
+    }
+
+    // Smartphone MAIN uses the same vertical MASTER column and ON/OFF switches
+    // as the confirmed tablet landscape layout. Parameter and DSP mappings are unchanged.
+    private fun addPhoneMasterSection(parent: LinearLayout) {
+        val accent = accentFor("MASTER")
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(2), dp(4), dp(2), dp(2))
+        }
+        box.addView(sectionLabel("MASTER", 11f, titleTint(colorMaster)), LinearLayout.LayoutParams(-1, dp(26)))
+        val gainKnob = RotaryControl(
+            this, "GAIN", gain, -12f, 12f, colorMaster,
+            { value -> gain = value; scheduleUpdate() },
+            { fmt(gain) + " dB" }, titleInside = false, spaciousText = true,
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val compKnob = RotaryControl(
+            this, "COMP", compMakeup, 0f, 100f, colorMaster,
+            { value -> compMakeup = value.coerceIn(0f, 100f); scheduleUpdate() },
+            { compMakeup.roundToInt().toString() + "%" }, titleInside = false, spaciousText = true,
+            onEnd = { save() }, wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        val loudKnob = RotaryControl(
+            this, "LOUDNESS", loudness, 0f, 100f, colorMaster,
+            { value -> loudness = value.coerceIn(0f, 100f); scheduleUpdate() },
+            { loudness.roundToInt().toString() + "%" }, titleInside = false, spaciousText = true,
+            onEnd = { save() }, wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
+        )
+        fun knobWithSwitch(knob: View, isOn: () -> Boolean, setOn: (Boolean) -> Unit): View {
+            val frame = FrameLayout(this)
+            frame.addView(knob, FrameLayout.LayoutParams(-1, -1))
+            val dot = View(this)
+            fun refreshDot() {
+                dot.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(if (isOn()) Color.rgb(40, 220, 90) else Color.rgb(225, 45, 45))
+                    setStroke(dp(1), Color.WHITE)
+                }
+            }
+            refreshDot()
+            dot.contentDescription = if (isOn()) "ON" else "OFF"
+            dot.setOnClickListener {
+                setOn(!isOn())
+                refreshDot()
+                dot.contentDescription = if (isOn()) "ON" else "OFF"
+                save()
+                scheduleUpdate()
+            }
+            frame.addView(dot, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                leftMargin = dp(44)
+                bottomMargin = dp(25)
+            })
+            return frame
+        }
+        val compSlot = knobWithSwitch(compKnob, { compressorOn }) { compressorOn = it }
+        val loudSlot = knobWithSwitch(loudKnob, { loudnessOn }) { loudnessOn = it }
+        box.addView(gainKnob, LinearLayout.LayoutParams(-1, 0, 1f))
+        box.addView(compSlot, LinearLayout.LayoutParams(-1, 0, 1f))
+        box.addView(loudSlot, LinearLayout.LayoutParams(-1, 0, 1f))
+        parent.addView(box, LinearLayout.LayoutParams(0, -1, 1f))
+        sections["GAIN"] = box
     }
 
     private fun masterToneControl(
