@@ -255,6 +255,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         smoothedReverbDamping = exp((-2.0 * PI * 14000.0 / sampleRate).toFloat())
         delayBuffer.fill(0f)
         delayWriteIndex = 0
+        delayResetRequested = false
+        delayResetFadeOutRemaining = 0
+        delayResetFadeInRemaining = 0
         smoothedFxPhaseOffsetSamples = 0f
         smoothedDelayMix = 0f
         delayTransitionFromSamples = sampleRate * 0.5f
@@ -505,10 +508,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     highBand * smoothedFxHigh
             }
 
+            // Reverb has its own full-band input path. FX LOW/MID/HIGH shape
+            // only the Beat Effects send (x) and must never recolor the Reverb.
             // Two gentle high-pass stages keep kick/sub energy out of the
             // reverb excitation while retaining a natural mid/high body.
-            val hpOut1 = hpA * (hpY + x - hpX)
-            hpX = x
+            val hpOut1 = hpA * (hpY + source - hpX)
+            hpX = source
             hpY = hpOut1
             val hpOut2 = hpA * (hp2Y + hpOut1 - hp2X)
             hp2X = hpOut1
@@ -606,7 +611,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 smoothedDelayToneAlpha * (delayedForFeedback - delayFeedbackToneState)
 
             val safeWriteIndex = Math.floorMod(delayWriteIndex, delayBuffer.size)
-            delayBuffer[safeWriteIndex] = (x * 0.68f + delayFeedbackToneState * smoothedDelayFeedback).coerceIn(-0.88f, 0.88f)
+            // When Delay is OFF, do not accept new input or feed the feedback
+            // loop. The OFF transition requests an 8 ms fade, then clears this
+            // history; while OFF the read clock may advance but the buffer is
+            // never rewritten or regenerated.
+            if (delayEnabled) {
+                delayBuffer[safeWriteIndex] =
+                    (x * 0.68f + delayFeedbackToneState * smoothedDelayFeedback).coerceIn(-0.88f, 0.88f)
+            }
             delayWriteIndex = if (safeWriteIndex + 1 >= delayBuffer.size) 0 else safeWriteIndex + 1
             // Effect switches use the existing smoothed send levels as a short
             // output fade. A hard gate here creates an abrupt waveform discontinuity
