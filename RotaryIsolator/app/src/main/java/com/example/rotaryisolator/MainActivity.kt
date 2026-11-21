@@ -2471,7 +2471,7 @@ class MainActivity : Activity() {
             delayColumn.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(24)))
             delayColumn.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 0.36f))
             delayColumn.addView(delayControls, LinearLayout.LayoutParams(-1, 0, 0.64f))
-            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.37f else 0.43f))
+            effectsBody.addView(reverbColumn,LinearLayout.LayoutParams(0,-1,if(!wideLayout)0.37f else 0.43f))
             val effectsDivider = View(this).apply {
                 setBackgroundColor(Color.rgb(92, 102, 112))
                 alpha = 0.85f
@@ -2480,7 +2480,7 @@ class MainActivity : Activity() {
                 leftMargin = dp(5)
                 rightMargin = dp(5)
             })
-            effectsBody.addView(delayColumn,LinearLayout.LayoutParams(0,-1,if(!phonePortrait && !wideLayout)0.63f else 0.57f))
+            effectsBody.addView(delayColumn,LinearLayout.LayoutParams(0,-1,if(!wideLayout)0.63f else 0.57f))
         }
         panel.addView(effectsBody,LinearLayout.LayoutParams(-1,0,1f))
 
