@@ -1581,7 +1581,14 @@ class MainActivity : Activity() {
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
             this, "DELAY LEVEL", delayMix.toFloat(), 0f, 100f, colorDelay,
-            { value -> delayMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
+            { value ->
+                val previousMix = delayMix
+                delayMix = value.roundToInt().coerceIn(0,100)
+                scheduleUpdate()
+                // DELAY may be switched ON at zero level; opening the send later
+                // must start capture from this direct user interaction.
+                if (delayOn && previousMix == 0 && delayMix > 0) updateEffectsCapture(true)
+            },
             { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
@@ -1863,7 +1870,13 @@ class MainActivity : Activity() {
                 delayOn = !delayOn
                 styleToggle(this, delayOn, colorDelay)
                 save(); scheduleUpdate()
-                if (delayOn) updateEffectsCapture(true)
+                if (delayOn) {
+                    if (delayMix > 0) updateEffectsCapture(true)
+                } else {
+                    // Flush the Delay/Echo history with its short DSP fade. The
+                    // Reverb and BPM capture paths remain untouched.
+                    parallelReverbProcessor?.requestDelayReset()
+                }
             }
         }
         val delayHeader = LinearLayout(this).apply {
