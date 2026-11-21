@@ -148,8 +148,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var hp2X = 0f
     private var hp2Y = 0f
     private var lpY = 0f
-    // Delay has its own peak protection. Reverb has no adaptive limiter or sidechain:
-    // its return level must never be changed by Delay/Echo transients.
+    // Restore the proven independent return envelopes from Build 907.
+    // Delay/Echo peaks must never duck the Reverb return.
+    private var reverbLimiter = 1f
     private var delayLimiter = 1f
     private var smoothedSend = 0f
     private val reverbPreDelayBuffer = FloatArray(sampleRate * 2)
@@ -245,6 +246,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         hp2X = 0f
         hp2Y = 0f
         lpY = 0f
+        reverbLimiter = 1f
         delayLimiter = 1f
         smoothedSend = 0f
         reverbPreDelayBuffer.fill(0f)
@@ -511,8 +513,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // only the Beat Effects send (x) and must never recolor the Reverb.
             // Two gentle high-pass stages keep kick/sub energy out of the
             // reverb excitation while retaining a natural mid/high body.
-            val hpOut1 = hpA * (hpY + source - hpX)
-            hpX = source
+            // Restore the Build 907 Reverb excitation path for this diagnostic test.
+            // It prevents full-band kick transients from changing the Reverb excitation.
+            val hpOut1 = hpA * (hpY + x - hpX)
+            hpX = x
             hpY = hpOut1
             val hpOut2 = hpA * (hp2Y + hpOut1 - hp2X)
             hp2X = hpOut1
@@ -653,22 +657,20 @@ internal class SchroederReverb(private val sampleRate: Int) {
             val reverbReturn = wet * 2.35f
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
 
-            // Keep the two return dynamics independent. The old shared limiter
-            // reacted to beat-synchronous Delay/Echo peaks and reduced BOTH paths,
-            // making the continuous Reverb audibly pump down on every beat.
-            // Each effect now controls only its own peak envelope.
-            // Reverb is a completely independent return: no peak detector,
-            // gain envelope, limiter, or sidechain can pull it down. Its level
-            // follows only the reverb network and its own SEND/DECAY settings.
-            // Delay retains separate peak protection and cannot alter Reverb gain.
+            // Restore Build 907's proven independent return limiters.
+            // Each limiter responds only to its own effect; Delay peaks cannot duck Reverb.
+            val reverbMagnitude = abs(reverbReturn)
+            val reverbTarget = if (reverbMagnitude > 0.90f) 0.90f / reverbMagnitude else 1f
+            reverbLimiter = if (reverbTarget < reverbLimiter) reverbTarget
+                else reverbLimiter + (1f - reverbLimiter) * 0.002f
+
             val delayMagnitude = abs(delayReturn)
             val delayTargetGain = if (delayMagnitude > 0.90f) 0.90f / delayMagnitude else 1f
             delayLimiter = if (delayTargetGain < delayLimiter) delayTargetGain
                 else delayLimiter + (1f - delayLimiter) * 0.002f
 
-            // The two independent returns meet only at the final PCM sum.
-            // No shared dynamic gain or ducking is applied to either return.
-            val safe = (reverbReturn + delayReturn * delayLimiter)
+            // Same final headroom boundary as Build 907.
+            val safe = (reverbReturn * reverbLimiter + delayReturn * delayLimiter)
                 .coerceIn(-0.90f, 0.90f)
             output[i] = (safe * 32767f).toInt().coerceIn(-32768, 32767).toShort()
         }
