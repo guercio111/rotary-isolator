@@ -246,6 +246,9 @@ class MainActivity : Activity() {
     private var uiScale = 1.0f
     // Uniform proportional scaling for the phone landscape layout; tablet geometry stays untouched.
     private var phoneUiScale = 1.0f
+    // S25 uses the exact tablet-landscape layout on a fixed 1280x800 canvas.
+    // Only the complete root view is uniformly scaled to fit the phone screen.
+    private var phoneLandscapeAdaptation = false
     private var colorEq = Color.rgb(70,190,120)
     private var colorIso = Color.rgb(70,190,120)
     private var colorFilters = Color.rgb(70,190,120)
@@ -317,9 +320,12 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         captureDiag("ACTIVITY onCreate; changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
-        // Explicitly follow the physical sensor in both portrait and landscape.
-        // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        // Phones use the tablet's landscape composition; tablets retain their original sensor behavior.
+        val initialConfig = resources.configuration
+        val initialWidthDp = initialConfig.screenWidthDp
+        val initialHeightDp = initialConfig.screenHeightDp
+        phoneLandscapeAdaptation = min(initialWidthDp, initialHeightDp) in 1 until 600
+        requestedOrientation = if (phoneLandscapeAdaptation) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
@@ -410,9 +416,10 @@ class MainActivity : Activity() {
         val cfg = resources.configuration
         val windowWidthDp = if (cfg.screenWidthDp > 0) cfg.screenWidthDp else (dm.widthPixels / dm.density).roundToInt()
         val windowHeightDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else (dm.heightPixels / dm.density).roundToInt()
-        phonePortrait = min(windowWidthDp, windowHeightDp) < 600
-        wideLayout = windowWidthDp > windowHeightDp
-        phoneUiScale = if (phonePortrait && wideLayout) min(windowWidthDp / 1280f, windowHeightDp / 800f).coerceIn(0.42f, 1f) else 1f
+        phonePortrait = if (phoneLandscapeAdaptation) false else min(windowWidthDp, windowHeightDp) < 600
+        wideLayout = if (phoneLandscapeAdaptation) true else windowWidthDp > windowHeightDp
+        // Do not resize individual controls: preserve the source layout at native dimensions.
+        phoneUiScale = 1f
         colorEq = prefs.getInt("color_eq", Color.rgb(70,190,120))
         colorIso = prefs.getInt("color_iso", Color.rgb(70,190,120))
         colorFilters = prefs.getInt("color_filters", Color.rgb(70,190,120))
@@ -586,8 +593,8 @@ class MainActivity : Activity() {
         val w = newConfig.screenWidthDp
         val h = newConfig.screenHeightDp
         if (w > 0 && h > 0) {
-            phonePortrait = min(w, h) < 600
-            wideLayout = w > h
+            phonePortrait = if (phoneLandscapeAdaptation) false else min(w, h) < 600
+            wideLayout = if (phoneLandscapeAdaptation) true else w > h
         }
         lastWindowWidthPx = 0
         buildUi()
@@ -663,12 +670,18 @@ class MainActivity : Activity() {
             }
             scale = scale.coerceAtMost(1f).coerceAtLeast(0.1f)
         }
+        // On S25 the root has the same fixed canvas as tablet landscape.
+        // Scale the whole view once, uniformly, and center it on both axes.
+        val viewportScale = if (phoneLandscapeAdaptation) {
+            min(container.width.toFloat() / root.width.coerceAtLeast(1), container.height.toFloat() / root.height.coerceAtLeast(1)).coerceAtMost(1f)
+        } else 1f
+        val finalScale = scale * viewportScale
         root.pivotX = 0f
         root.pivotY = 0f
-        root.scaleX = scale
-        root.scaleY = scale
-        root.translationX = (container.width - root.width * scale) / 2f
-        root.translationY = 0f
+        root.scaleX = finalScale
+        root.scaleY = finalScale
+        root.translationX = (container.width - root.width * finalScale) / 2f
+        root.translationY = if (phoneLandscapeAdaptation) (container.height - root.height * finalScale) / 2f else 0f
     }
 
     private fun label(t:String, size:Float=11f, color:Int=Color.LTGRAY)=TextView(this).apply {
@@ -867,7 +880,9 @@ class MainActivity : Activity() {
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
-        container.addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        val rootWidth = if (phoneLandscapeAdaptation) (1280f * resources.displayMetrics.density).roundToInt() else -1
+        val rootHeight = if (phoneLandscapeAdaptation) (800f * resources.displayMetrics.density).roundToInt() else -1
+        container.addView(root,FrameLayout.LayoutParams(rootWidth,rootHeight,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         setContentView(container)
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
             if (view.width > 0 && view.height > 0) {
@@ -3139,11 +3154,8 @@ private class RotaryControl(
     private var downV=initial
     private var dragged=false
     private val density get()=resources.displayMetrics.density
-    private val layoutScale:Float get() {
-        val cfg=resources.configuration
-        val w=cfg.screenWidthDp.toFloat(); val h=cfg.screenHeightDp.toFloat()
-        return if(min(w,h)<600f && w>h) min(w/1280f,h/800f).coerceIn(0.42f,1f) else 1f
-    }
+    // Geometry is always authored at native size; the Activity scales the whole UI once.
+    private val layoutScale:Float get() = 1f
     private fun dp(x:Float)=x*density*layoutScale
     private val rect get()={
         // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
