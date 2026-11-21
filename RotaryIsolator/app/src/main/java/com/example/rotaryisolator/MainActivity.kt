@@ -95,7 +95,6 @@ class MainActivity : Activity() {
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFadeMs = 1400
     @Volatile private var reverbFeedbackPercent = 50
-    @Volatile private var reverbDecayPercent = 50
     @Volatile private var reverbColorPercent = 50
     @Volatile private var delayOn = false
     @Volatile private var captureConsentLocked = false
@@ -325,7 +324,6 @@ class MainActivity : Activity() {
         reverbSize = prefs.getInt("reverb_size_t2", 950).coerceIn(0,1000)
         reverbBeatPercent = prefs.getInt("reverb_beat_percent", 50).coerceIn(0,100)
         reverbFeedbackPercent = prefs.getInt("reverb_feedback", 50).coerceIn(0,100)
-        reverbDecayPercent = prefs.getInt("reverb_decay", 50).coerceIn(0,100)
         reverbColorPercent = prefs.getInt("reverb_color", 50).coerceIn(0,100)
         delayMix = 0 // Il livello Delay parte sempre chiuso all’avvio dell’app.
         delayFeedbackPercent = prefs.getInt("beat_fx_delay_feedback", 52).coerceIn(0,90)
@@ -741,7 +739,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_reverb",colorReverb).putInt("color_delay",colorDelay).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_decay",reverbDecayPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx).putBoolean("dub_delay_manual_mode",delayManualMode).putFloat("dub_delay_manual_time_percent",delayManualTimePercent)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx).putBoolean("dub_delay_manual_mode",delayManualMode).putFloat("dub_delay_manual_time_percent",delayManualTimePercent)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1546,12 +1544,6 @@ class MainActivity : Activity() {
             { "${reverbColorPercent}%" }, onEnd = { save() }, titleInside = false,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
         )
-        val tailDial = RotaryControl(
-            this, "TAIL", reverbDecayPercent.toFloat(), 0f, 100f, colorReverb,
-            { value -> reverbDecayPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
-            { "${reverbDecayPercent}%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
-        )
         val reverbFeedbackDial = RotaryControl(
             this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorReverb,
             { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
@@ -1570,11 +1562,13 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        // Original 2x2 layout: SEND / TONE above, TAIL / FEEDBACK below.
+        // Three controls only: SEND / TONE above, FEEDBACK centered below.
+        // Keep the original panel geometry and the remaining rotary's size.
         reverbTopRow.addView(sendDial, LinearLayout.LayoutParams(0, -1, 1f))
         reverbTopRow.addView(toneDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbBottomRow.addView(tailDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
         reverbBottomRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
         reverbRow.addView(reverbTopRow, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(reverbBottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
@@ -2576,7 +2570,7 @@ class MainActivity : Activity() {
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
                                 delayOn, delayFadeMs, delayDivision, manualDelayTimeMs(), delayManualMode, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxLowEnabled, fxMidEnabled, fxHighEnabled,
-                                reverbFeedbackPercent, reverbDecayPercent, reverbColorPercent,
+                                reverbFeedbackPercent, 50, reverbColorPercent,
                                 delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
                             )
                             fxAppliedPhaseDelayMs = processor.getFxPhaseDelayMs()
