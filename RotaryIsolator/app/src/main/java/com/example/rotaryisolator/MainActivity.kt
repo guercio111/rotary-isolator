@@ -319,7 +319,7 @@ class MainActivity : Activity() {
         captureDiag("ACTIVITY onCreate; changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         // Explicitly follow the physical sensor in both portrait and landscape.
         // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        requestedOrientation = if (resources.configuration.smallestScreenWidthDp < 600) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
@@ -410,9 +410,9 @@ class MainActivity : Activity() {
         val cfg = resources.configuration
         val windowWidthDp = if (cfg.screenWidthDp > 0) cfg.screenWidthDp else (dm.widthPixels / dm.density).roundToInt()
         val windowHeightDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else (dm.heightPixels / dm.density).roundToInt()
-        phonePortrait = min(windowWidthDp, windowHeightDp) < 600
+        phonePortrait = min(windowWidthDp, windowHeightDp) < 600 && windowWidthDp <= windowHeightDp
         wideLayout = windowWidthDp > windowHeightDp
-        phoneUiScale = if (phonePortrait && wideLayout) min(windowWidthDp / 1280f, windowHeightDp / 800f).coerceIn(0.42f, 1f) else 1f
+        phoneUiScale = 1f
         colorEq = prefs.getInt("color_eq", Color.rgb(70,190,120))
         colorIso = prefs.getInt("color_iso", Color.rgb(70,190,120))
         colorFilters = prefs.getInt("color_filters", Color.rgb(70,190,120))
@@ -586,7 +586,7 @@ class MainActivity : Activity() {
         val w = newConfig.screenWidthDp
         val h = newConfig.screenHeightDp
         if (w > 0 && h > 0) {
-            phonePortrait = min(w, h) < 600
+            phonePortrait = min(w, h) < 600 && w <= h
             wideLayout = w > h
         }
         lastWindowWidthPx = 0
@@ -874,16 +874,17 @@ class MainActivity : Activity() {
                 val newWide = view.width > view.height
                 val density = resources.displayMetrics.density
                 val newPhone = min(view.width,view.height) / density < 600f
-                val newPhoneScale = if(newPhone && newWide) min((view.width/density)/1280f,(view.height/density)/800f).coerceIn(0.42f,1f) else 1f
+                val newPhonePortrait = newPhone && !newWide
+                val newPhoneScale = 1f
                 val scaleChanged = abs(newPhoneScale-phoneUiScale) > 0.01f
                 val resized = lastWindowWidthPx > 0 &&
                     (abs(view.width-lastWindowWidthPx) > dp(12) || abs(view.height-lastWindowHeightPx) > dp(12))
                 lastWindowWidthPx=view.width
                 lastWindowHeightPx=view.height
-                if (newWide != wideLayout || newPhone != phonePortrait || resized || scaleChanged) {
+                if (newWide != wideLayout || newPhonePortrait != phonePortrait || resized || scaleChanged) {
                     phoneUiScale = newPhoneScale
                     wideLayout = newWide
-                    phonePortrait = newPhone
+                    phonePortrait = newPhonePortrait
                     if (!layoutRebuildPending) {
                         layoutRebuildPending = true
                         handler.post {
@@ -3139,11 +3140,8 @@ private class RotaryControl(
     private var downV=initial
     private var dragged=false
     private val density get()=resources.displayMetrics.density
-    private val layoutScale:Float get() {
-        val cfg=resources.configuration
-        val w=cfg.screenWidthDp.toFloat(); val h=cfg.screenHeightDp.toFloat()
-        return if(min(w,h)<600f && w>h) min(w/1280f,h/800f).coerceIn(0.42f,1f) else 1f
-    }
+    // The complete control is scaled by its parent layout; do not apply a second dial-only scale.
+    private val layoutScale:Float get() = 1f
     private fun dp(x:Float)=x*density*layoutScale
     private val rect get()={
         // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
