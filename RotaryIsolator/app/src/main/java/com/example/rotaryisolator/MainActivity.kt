@@ -889,7 +889,9 @@ class MainActivity : Activity() {
                 val newWide = view.width > view.height
                 val density = resources.displayMetrics.density
                 val newPhone = min(view.width,view.height) / density < 600f
-                val newPhoneScale = if(newPhone && newWide) min((view.width/density)/1280f,(view.height/density)/800f).coerceIn(0.42f,1f) else 1f
+                // In exact-layout phone mode, never resize individual dimensions.
+                // The complete 1280x800 root is scaled later as one view.
+                val newPhoneScale = if (phoneLandscapeAdaptation) 1f else if(newPhone && newWide) min((view.width/density)/1280f,(view.height/density)/800f).coerceIn(0.42f,1f) else 1f
                 val scaleChanged = abs(newPhoneScale-phoneUiScale) > 0.01f
                 val resized = lastWindowWidthPx > 0 &&
                     (abs(view.width-lastWindowWidthPx) > dp(12) || abs(view.height-lastWindowHeightPx) > dp(12))
