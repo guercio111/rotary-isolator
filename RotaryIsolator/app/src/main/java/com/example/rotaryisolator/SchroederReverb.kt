@@ -236,6 +236,14 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var smoothedFxMid = 1f
     private var smoothedFxHigh = 1f
 
+    // Independent crossover instances for the Reverb spectral selectors.
+    private val reverbLowMidSplit = LinkwitzRileySplit(sampleRate, 250f)
+    private val reverbMidHighSplit = LinkwitzRileySplit(sampleRate, 2500f)
+    private val reverbBandSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.035))).toFloat()
+    private var smoothedReverbLow = 1f
+    private var smoothedReverbMid = 1f
+    private var smoothedReverbHigh = 1f
+
     fun clear() {
         lines.forEach { it.clear() }
         inputDiffusers.forEach { it.clear() }
@@ -277,6 +285,11 @@ internal class SchroederReverb(private val sampleRate: Int) {
         smoothedFxLow = 1f
         smoothedFxMid = 1f
         smoothedFxHigh = 1f
+        reverbLowMidSplit.clear()
+        reverbMidHighSplit.clear()
+        smoothedReverbLow = 1f
+        smoothedReverbMid = 1f
+        smoothedReverbHigh = 1f
     }
 
     // Normalized 8-point Hadamard transform: an energy-preserving feedback matrix.
@@ -323,6 +336,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         fxLowEnabled: Boolean = false,
         fxMidEnabled: Boolean = false,
         fxHighEnabled: Boolean = false,
+        reverbLowEnabled: Boolean = true,
+        reverbMidEnabled: Boolean = true,
+        reverbHighEnabled: Boolean = true,
         reverbFeedbackPercent: Int = 50,
         reverbDecayPercent: Int = 50,
         reverbColorPercent: Int = 50,
@@ -509,14 +525,27 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     highBand * smoothedFxHigh
             }
 
-            // Reverb has its own full-band input path. FX LOW/MID/HIGH shape
-            // only the Beat Effects send (x) and must never recolor the Reverb.
-            // Two gentle high-pass stages keep kick/sub energy out of the
-            // reverb excitation while retaining a natural mid/high body.
-            // Restore the Build 907 Reverb excitation path for this diagnostic test.
-            // It prevents full-band kick transients from changing the Reverb excitation.
-            val hpOut1 = hpA * (hpY + x - hpX)
-            hpX = x
+            // Reverb selectors use their own crossover state and untouched PCM.
+            // FX LOW/MID/HIGH therefore affect only the Beat FX delay input.
+            val reverbLowBand = reverbLowMidSplit.processLow(source)
+            val reverbUpperBand = reverbLowMidSplit.processHigh(source)
+            val reverbMidBand = reverbMidHighSplit.processLow(reverbUpperBand)
+            val reverbHighBand = reverbMidHighSplit.processHigh(reverbUpperBand)
+            val allReverbBandsSelected = reverbLowEnabled && reverbMidEnabled && reverbHighEnabled
+            smoothedReverbLow += ((if (reverbLowEnabled) 1f else 0f) - smoothedReverbLow) * reverbBandSmoothing
+            smoothedReverbMid += ((if (reverbMidEnabled) 1f else 0f) - smoothedReverbMid) * reverbBandSmoothing
+            smoothedReverbHigh += ((if (reverbHighEnabled) 1f else 0f) - smoothedReverbHigh) * reverbBandSmoothing
+            val reverbInput = if (allReverbBandsSelected) {
+                source
+            } else {
+                reverbLowBand * smoothedReverbLow +
+                    reverbMidBand * smoothedReverbMid +
+                    reverbHighBand * smoothedReverbHigh
+            }
+
+            // The Reverb's own TONE high-pass follows its independent band selection.
+            val hpOut1 = hpA * (hpY + reverbInput - hpX)
+            hpX = reverbInput
             hpY = hpOut1
             val hpOut2 = hpA * (hp2Y + hpOut1 - hp2X)
             hp2X = hpOut1
