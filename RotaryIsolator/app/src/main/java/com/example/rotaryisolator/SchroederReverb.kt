@@ -461,7 +461,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         val preDelaySmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.025))).toFloat()
         val hpA = exp((-2.0 * PI * hp / sampleRate).toFloat())
 
-        // Build 861: TAIL controls decay while SEND is open; FEEDBACK takes over after SEND closes.
+        // Fixed natural decay while SEND is open; FEEDBACK takes over after SEND closes.
         val feedback = when {
             freeze -> 0.965f
             !inputEnabled -> (0.70f +
