@@ -273,6 +273,7 @@ class MainActivity : Activity() {
     private var gain = 0f
     private var resonance = 0f
     private var phonePortrait = false
+    private var showingEffectsScreen = false
     private var wideLayout = false
     private var layoutRebuildPending = false
     private var lastWindowWidthPx = 0
@@ -317,9 +318,9 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         captureDiag("ACTIVITY onCreate; changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
-        // Explicitly follow the physical sensor in both portrait and landscape.
-        // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        // Smartphone FREQUALIZER is portrait-only. Tablet keeps its existing sensor behavior.
+        val phoneDevice = resources.configuration.smallestScreenWidthDp in 1 until 600
+        requestedOrientation = if (phoneDevice) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         appEnabled = prefs.getBoolean("app_enabled", true)
         reverbOn = prefs.getBoolean("reverb_on", false)
@@ -776,40 +777,99 @@ class MainActivity : Activity() {
         val compactPhone = phonePortrait && !wideLayout
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(compactPhone)72 else 82),dp(if(compactPhone)30 else 36)).apply{rightMargin=dp(5)})
-        val bpmPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(2), 0, dp(2), 0)
-        }
-        bpmButton = TextView(this).apply {
-            text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
-            textSize = if (compactPhone) 8f else 10f
-            gravity = Gravity.CENTER
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(6).toFloat()
-                setColor(if (bpmAnalyzerOn) Color.rgb(155,45,48) else Color.rgb(38,105,70))
-                setStroke(dp(1), if (bpmAnalyzerOn) Color.rgb(245,115,120) else Color.rgb(125,245,155))
+        if (compactPhone && showingEffectsScreen) {
+            val exitButton = TextView(this).apply {
+                text = "EXIT"
+                textSize = 11f
+                gravity = Gravity.CENTER
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(Color.BLACK)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(6).toFloat()
+                    setColor(colorButtons)
+                    setStroke(dp(1), Color.WHITE)
+                }
+                setOnClickListener {
+                    showingEffectsScreen = false
+                    buildUi()
+                }
             }
-            setPadding(dp(4), 0, dp(4), 0)
-            setOnClickListener { if (bpmAnalyzerOn) stopBpmAnalyzer() else startBpmAnalyzer() }
+            titleBar.addView(exitButton, LinearLayout.LayoutParams(dp(72), dp(30)))
+            titleBar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        } else {
+            titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(compactPhone)72 else 82),dp(if(compactPhone)30 else 36)).apply{rightMargin=dp(5)})
+            val bpmPanel = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(dp(2), 0, dp(2), 0)
+            }
+            bpmButton = TextView(this).apply {
+                text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
+                textSize = if (compactPhone) 8f else 10f
+                gravity = Gravity.CENTER
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(Color.WHITE)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(6).toFloat()
+                    setColor(if (bpmAnalyzerOn) Color.rgb(155,45,48) else Color.rgb(38,105,70))
+                    setStroke(dp(1), if (bpmAnalyzerOn) Color.rgb(245,115,120) else Color.rgb(125,245,155))
+                }
+                setPadding(dp(4), 0, dp(4), 0)
+                setOnClickListener { if (bpmAnalyzerOn) stopBpmAnalyzer() else startBpmAnalyzer() }
+            }
+            bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
+            bpmReadout = label("— BPM", if (compactPhone) 8f else 10f, Color.WHITE)
+            bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
+            bpmBeat = label("●", 30f, Color.rgb(75,85,95))
+            titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
+            if (compactPhone) {
+                val effectsButton = TextView(this).apply {
+                    text = "EFFECTS"
+                    textSize = 8f
+                    gravity = Gravity.CENTER
+                    setTypeface(typeface, Typeface.BOLD)
+                    setTextColor(Color.BLACK)
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(6).toFloat()
+                        setColor(colorButtons)
+                        setStroke(dp(1), Color.WHITE)
+                    }
+                    setOnClickListener {
+                        showingEffectsScreen = true
+                        buildUi()
+                    }
+                }
+                titleBar.addView(effectsButton, LinearLayout.LayoutParams(dp(64), dp(30)).apply { leftMargin = dp(4) })
+            }
+            titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         }
-        bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
-        bpmReadout = label("— BPM", if (compactPhone) 8f else 10f, Color.WHITE)
-        bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
-        bpmBeat = label("●", 30f, Color.rgb(75,85,95))
-        titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
-        titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
         // Tutte le sezioni restano nella stessa schermata: nessuno scrolling.
         root.addView(content,LinearLayout.LayoutParams(-1,0,1f))
         sections.clear()
+        // Smartphone portrait: two full-window pages. All section builders and
+        // all parameter/DSP state are reused unchanged from the tablet implementation.
+        if (compactPhone && !showingEffectsScreen) {
+            val upper = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
+            val lower = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
+            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.58f))
+            content.addView(lower, LinearLayout.LayoutParams(-1, 0, 0.42f))
+            addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, upper)
+            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
+            addFilterSection(lower)
+            addGainSection(lower)
+        } else if (compactPhone && showingEffectsScreen) {
+            val upper = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
+            val lower = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
+            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.34f))
+            content.addView(lower, LinearLayout.LayoutParams(-1, 0, 0.66f))
+            addFilterSection(upper)
+            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
+            addEffectsSection(lower)
         // Tablet portrait gets a dedicated vertical composition. Landscape and phone
         // layouts retain the established four-quadrant structure unchanged.
-        if (!phonePortrait && !wideLayout) {
+        } else if (!phonePortrait && !wideLayout) {
             val upper = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
@@ -926,19 +986,20 @@ class MainActivity : Activity() {
         // Size portrait strips from their actual count: EQ has four rows in
         // double-mid mode, while the Isolator has three. This prevents the last
         // strip from being clipped by the quadrant boundary.
-        val indices = if(key=="EQ" && eqDoubleMid) listOf(2,3,1,0) else listOf(2,1,0)
+        val fourBandEq = key=="EQ" && (eqDoubleMid || phonePortrait)
+        val indices = if(fourBandEq) listOf(2,3,1,0) else listOf(2,1,0)
         // Tablet portrait uses measured, weighted rows instead of guessed dp heights.
         // Every band receives exactly the same share of the real section height.
         val verticalRowHeight = ((windowHeightDp()*0.35f-76f)/indices.size).roundToInt().coerceIn(48,112)
         val verticalDialHeight = if(useVerticalRows) dp(verticalRowHeight) else dialHeight()
-        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(key=="EQ" && eqDoubleMid)4f else 3f}
-        val names = if(key=="EQ" && eqDoubleMid) listOf("HIGH","MID HIGH","MID LOW","LOW") else listOf("HIGH","MID","LOW")
+        val row=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;weightSum=if(useVerticalRows)0f else if(fourBandEq)4f else 3f}
+        val names = if(fourBandEq) listOf("HIGH","MID HIGH","MID LOW","LOW") else listOf("HIGH","MID","LOW")
         for(pos in indices.indices){
             val i=indices[pos]
             val bandCeiling = if (key == "ISOLATOR" && isoLimiterOn) (if (i == 0) 0f else 6f) else range.endInclusive
             val bandRange = range.start..bandCeiling
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-            val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
+            val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && fourBandEq)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             if(useVerticalRows) vLabel.gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
             controlHeader.addView(vLabel,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(0,dp(if(compactHeader)19 else 28),1f))
