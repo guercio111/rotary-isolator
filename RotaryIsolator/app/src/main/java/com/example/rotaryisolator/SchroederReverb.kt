@@ -660,8 +660,17 @@ internal class SchroederReverb(private val sampleRate: Int) {
             // Each effect now controls only its own peak envelope.
             val reverbMagnitude = abs(reverbReturn)
             val reverbTarget = if (reverbMagnitude > 0.90f) 0.90f / reverbMagnitude else 1f
-            reverbLimiter = if (reverbTarget < reverbLimiter) reverbTarget
-                else reverbLimiter + (1f - reverbLimiter) * 0.002f
+            // Smooth the Reverb peak-control envelope instead of letting each
+            // kick/snare transient instantly pull the entire wet return down.
+            // A short attack catches sustained overloads; the slower release
+            // prevents rapid gain recovery from creating a beat-following pulse.
+            val reverbLimiterAttack = (1.0 - exp(-1.0 / (sampleRate * 0.0025))).toFloat()
+            val reverbLimiterRelease = (1.0 - exp(-1.0 / (sampleRate * 0.120))).toFloat()
+            reverbLimiter = if (reverbTarget < reverbLimiter) {
+                reverbLimiter + (reverbTarget - reverbLimiter) * reverbLimiterAttack
+            } else {
+                reverbLimiter + (1f - reverbLimiter) * reverbLimiterRelease
+            }
 
             val delayMagnitude = abs(delayReturn)
             val delayTargetGain = if (delayMagnitude > 0.90f) 0.90f / delayMagnitude else 1f
