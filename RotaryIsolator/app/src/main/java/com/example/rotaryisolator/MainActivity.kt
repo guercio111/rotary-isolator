@@ -121,6 +121,9 @@ class MainActivity : Activity() {
     @Volatile private var fxLowEnabled = false
     @Volatile private var fxMidEnabled = false
     @Volatile private var fxHighEnabled = false
+    @Volatile private var reverbLowEnabled = true
+    @Volatile private var reverbMidEnabled = true
+    @Volatile private var reverbHighEnabled = true
     @Volatile private var delayBpm = 120f
     @Volatile private var delayTapBpm = 120f
     @Volatile private var delayBpmCorrection = 0f
@@ -343,6 +346,21 @@ class MainActivity : Activity() {
         }
         fxMidEnabled = prefs.getBoolean("beat_fx_mid_enabled", false)
         fxHighEnabled = prefs.getBoolean("beat_fx_high_enabled", false)
+        // Reverb selectors are independent from Beat FX LOW/MID/HIGH.
+        // All ON preserves the existing full-band Reverb sound by default.
+        reverbLowEnabled = prefs.getBoolean("reverb_low_enabled", true)
+        reverbMidEnabled = prefs.getBoolean("reverb_mid_enabled", true)
+        reverbHighEnabled = prefs.getBoolean("reverb_high_enabled", true)
+        if (!reverbLowEnabled && !reverbMidEnabled && !reverbHighEnabled) {
+            reverbLowEnabled = true
+            reverbMidEnabled = true
+            reverbHighEnabled = true
+            prefs.edit()
+                .putBoolean("reverb_low_enabled", true)
+                .putBoolean("reverb_mid_enabled", true)
+                .putBoolean("reverb_high_enabled", true)
+                .apply()
+        }
         // If an older session saved every band OFF, restore a neutral
         // mid/high pass while keeping the requested FX LOW default OFF.
         if (!fxLowEnabled && !fxMidEnabled && !fxHighEnabled) {
@@ -739,7 +757,7 @@ class MainActivity : Activity() {
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_reverb",colorReverb).putInt("color_delay",colorDelay).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
             .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
-            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx).putBoolean("dub_delay_manual_mode",delayManualMode).putFloat("dub_delay_manual_time_percent",delayManualTimePercent)
+            .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putBoolean("reverb_low_enabled",reverbLowEnabled).putBoolean("reverb_mid_enabled",reverbMidEnabled).putBoolean("reverb_high_enabled",reverbHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx).putBoolean("dub_delay_manual_mode",delayManualMode).putFloat("dub_delay_manual_time_percent",delayManualTimePercent)
             .apply {
                 for(i in 0..2){putFloat("eq_$i",eq[i]);putFloat("iso_$i",iso[i])}
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
@@ -1571,6 +1589,45 @@ class MainActivity : Activity() {
         reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
         reverbRow.addView(reverbTopRow, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(reverbBottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
+        // Dedicated Reverb LOW / MID / HIGH selectors, independent from Beat FX.
+        val reverbBandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        fun addReverbBandButton(caption: String, isSelected: () -> Boolean, toggle: () -> Unit) {
+            val button = TextView(this).apply {
+                text = caption
+                textSize = 8f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                fun paint() {
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = dp(4).toFloat()
+                        setColor(if (isSelected()) colorReverb else Color.rgb(55,62,72))
+                        setStroke(dp(1), colorReverb)
+                    }
+                    setTextColor(if (isSelected()) Color.BLACK else Color.WHITE)
+                }
+                paint()
+                setOnClickListener {
+                    val selectedCount = listOf(reverbLowEnabled, reverbMidEnabled, reverbHighEnabled).count { it }
+                    if (isSelected() && selectedCount <= 1) {
+                        Toast.makeText(this@MainActivity, "Seleziona almeno una banda REVERB", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    toggle()
+                    paint()
+                    save(); scheduleUpdate()
+                }
+            }
+            reverbBandRow.addView(button, LinearLayout.LayoutParams(0, dp(25), 1f).apply {
+                if (reverbBandRow.childCount > 0) leftMargin = dp(3)
+            })
+        }
+        addReverbBandButton("LOW", { reverbLowEnabled }, { reverbLowEnabled = !reverbLowEnabled })
+        addReverbBandButton("MID", { reverbMidEnabled }, { reverbMidEnabled = !reverbMidEnabled })
+        addReverbBandButton("HIGH", { reverbHighEnabled }, { reverbHighEnabled = !reverbHighEnabled })
+        reverbRow.addView(reverbBandRow, LinearLayout.LayoutParams(-1, dp(28)))
         // The Reverb fade strip is intentionally replaced by this third rotary control.
         // The existing smooth Reverb fade remains internal to the DSP.
         val delayDial = RotaryControl(
@@ -2570,6 +2627,7 @@ class MainActivity : Activity() {
                                 reverbOn, reverbFadeMs, delayMix, delayBpm,
                                 delayOn, delayFadeMs, delayDivision, manualDelayTimeMs(), delayManualMode, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxLowEnabled, fxMidEnabled, fxHighEnabled,
+                                reverbLowEnabled, reverbMidEnabled, reverbHighEnabled,
                                 reverbFeedbackPercent, 50, reverbColorPercent,
                                 delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
                             )
