@@ -882,7 +882,7 @@ class MainActivity : Activity() {
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
         val rootWidth = if (phoneLandscapeAdaptation) (1280f * resources.displayMetrics.density).roundToInt() else -1
         val rootHeight = if (phoneLandscapeAdaptation) (800f * resources.displayMetrics.density).roundToInt() else -1
-        container.addView(root,FrameLayout.LayoutParams(rootWidth,rootHeight,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        container.addView(root,FrameLayout.LayoutParams(rootWidth,rootHeight,if (phoneLandscapeAdaptation) Gravity.TOP or Gravity.LEFT else Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         setContentView(container)
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
             if (view.width > 0 && view.height > 0) {
