@@ -135,13 +135,12 @@ internal class SchroederReverb(private val sampleRate: Int) {
         AllPass((sampleRate * 0.0263f).toInt(), 0.66f)
     )
 
-    // Use different, non-eigenvector injection and pickup patterns.
-    // The previous identical alternating pattern was a Hadamard eigenvector:
-    // it excited and listened to essentially one feedback mode, creating a
-    // beat-synchronous metallic pulse. These two independent patterns engage
-    // the full network and average its modes into a smoother continuous tail.
-    private val inputPattern = intArrayOf(1, 1, -1, 1, -1, -1, 1, -1)
-    private val outputPattern = intArrayOf(1, -1, -1, 1, 1, -1, 1, -1)
+    // Use independent injection and pickup codes with full Hadamard spectra.
+    // The previous codes each had four zero Walsh components, leaving half of
+    // the FDN modes unexcited or unheard. These codes couple to and pick up all
+    // eight modes, reducing modal holes that can make the tail pulse on hits.
+    private val inputPattern = intArrayOf(1, -1, -1, -1, -1, -1, -1, -1)
+    private val outputPattern = intArrayOf(1, -1, -1, -1, 1, 1, 1, 1)
     private val matrix = FloatArray(8)
     private var hpX = 0f
     private var hpY = 0f
