@@ -139,8 +139,8 @@ internal class SchroederReverb(private val sampleRate: Int) {
     // The previous codes each had four zero Walsh components, leaving half of
     // the FDN modes unexcited or unheard. These codes couple to and pick up all
     // eight modes, reducing modal holes that can make the tail pulse on hits.
-    private val inputPattern = intArrayOf(1, -1, -1, -1, -1, -1, -1, -1)
-    private val outputPattern = intArrayOf(1, -1, -1, -1, 1, 1, 1, 1)
+    private val inputPattern = intArrayOf(1, 1, -1, 1, -1, -1, 1, -1)
+    private val outputPattern = intArrayOf(1, -1, -1, 1, 1, -1, 1, -1)
     private val matrix = FloatArray(8)
     private var hpX = 0f
     private var hpY = 0f
