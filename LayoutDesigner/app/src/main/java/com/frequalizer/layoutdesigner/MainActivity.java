@@ -299,9 +299,11 @@ public class MainActivity extends Activity {
     // tasti e controlli contenuti si muovono e si ridimensionano insieme.
     private boolean isDelayKeyboardChild(String id) {
         return id.startsWith("division_") || id.equals("delay_bpm") ||
+            id.equals("delay_master_beat") || id.equals("delay_fx_beat") ||
             id.equals("delay_tap") || id.equals("delay_auto") || id.equals("delay_lock") ||
             id.equals("delay_align") || id.equals("delay_back") || id.equals("delay_forward") ||
-            id.equals("delay_skip") || id.equals("delay_rst") || id.equals("delay_phase_label") ||
+            id.equals("delay_skip") || id.equals("delay_rst") || id.equals("delay_pitch_label") ||
+            id.equals("delay_pitch_fader") || id.equals("delay_phase_label") ||
             id.equals("delay_phase_fader") || id.startsWith("delay_mode_") ||
             id.equals("fx_low") || id.equals("fx_mid") || id.equals("fx_high");
     }
