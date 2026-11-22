@@ -111,7 +111,7 @@ public class MainActivity extends Activity {
     private class EditorView extends View {
         Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY; boolean resizing=false;
         EditorView(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
-        protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(18,20,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.contains("ORIZZONTALE")?1.65f:0.62f;float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
+        protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(18,20,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
             p.setColor(Color.rgb(235,235,235));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawRoundRect(left,top,left+w,top+h,12,12,p);
             p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(35,38,43));c.drawRoundRect(left+2,top+2,left+w-2,top+h-2,10,10,p);
             JSONArray a=current();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;float x=left+(float)o.optDouble("x")*w,y=top+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;
@@ -123,7 +123,7 @@ public class MainActivity extends Activity {
         }
         private float[] stage() {
             float pad=18, cw=getWidth()-pad*2, ch=getHeight()-pad*2;
-            float ratio=mode.contains("ORIZZONTALE")?1.65f:0.62f;
+            float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));
             float w=cw,h=ch;
             if(w/h>ratio) w=h*ratio; else h=w/ratio;
             return new float[]{(getWidth()-w)/2,(getHeight()-h)/2,w,h};
