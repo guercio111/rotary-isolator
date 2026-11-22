@@ -139,7 +139,6 @@ public class MainActivity extends Activity {
         tButton(l,"app_power","● ON",.012,.010,.105,.038);
         tButton(l,"bpm_start","BPM START",compact ? .235 : .270,.012,compact ? .18 : .20,.034);
         tText(l,"bpm_readout","— BPM",compact ? .425 : .485,.012,.13,.034);
-        tText(l,"bpm_beat","●",compact ? .565 : .655,.004,.045,.045);
         tButton(l,"options","⚙",.915,.008,.065,.042);
     }
     private void seedBandSection(String l,String key,String title,double x,double y,double w,double h,String[] bands,String color,boolean portraitRows) {
@@ -394,21 +393,24 @@ public class MainActivity extends Activity {
 
     // Unico gruppo BPM/BEAT: header, indicatori, TAP/AUTO, frecce,
     // fader, divisioni, modalità delay ed FX restano solidali.
-    private boolean isBpmHeaderChild(String id) { return id.startsWith("bpm_"); }
+    // Solo i controlli della tastiera BEAT FX appartengono a questo gruppo.
+    // Le quattro rotelle DELAY e la barra BPM superiore restano indipendenti.
     private boolean isBeatBpmChild(String id) {
-        return isBpmHeaderChild(id) || isDelayKeyboardChild(id);
+        return isDelayKeyboardChild(id);
     }
     private void ensureBeatBpmGroup() {
         for (String l : modes) {
             JSONArray original=layouts.get(l);
             JSONArray items=new JSONArray();
             JSONObject existingGroup=null;
-            // Rimuove i vecchi contenitori separati, senza toccare le coordinate
-            // dei controlli: ora esiste un solo gruppo comune.
+            // Elimina il vecchio pallino BPM estraneo alla Build 918 e ricrea
+            // il solo contenitore della tastiera BEAT FX. Tutte le coordinate
+            // personalizzate dei controlli vengono mantenute.
             for(int i=0;i<original.length();i++) {
                 JSONObject item=original.optJSONObject(i);
                 if(item==null) continue;
                 String id=item.optString("id");
+                if("bpm_beat".equals(id)) continue;
                 if("beat_bpm_section_panel".equals(id)) { existingGroup=item; continue; }
                 if("delay_keyboard_panel".equals(id) || "bpm_header_panel".equals(id)) continue;
                 items.put(item);
@@ -422,18 +424,12 @@ public class MainActivity extends Activity {
                 maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+h);
             }
             if(maxX<=minX || maxY<=minY) { layouts.put(l,items); continue; }
-            if(existingGroup!=null) {
-                double gx=existingGroup.optDouble("x"),gy=existingGroup.optDouble("y");
-                double gw=existingGroup.optDouble("w"),gh=existingGroup.optDouble("h");
-                minX=Math.min(minX,gx); minY=Math.min(minY,gy);
-                maxX=Math.max(maxX,gx+gw); maxY=Math.max(maxY,gy+gh);
-            }
             try {
                 JSONObject group=existingGroup==null?new JSONObject():existingGroup;
                 group.put("id","beat_bpm_section_panel"); group.put("type","panel"); group.put("text","");
-                group.put("x",Math.max(0,minX-.008)); group.put("y",Math.max(0,minY-.012));
+                group.put("x",Math.max(0,minX-.008)); group.put("y",Math.max(0,minY-.008));
                 group.put("w",Math.min(1,maxX+.008)-Math.max(0,minX-.008));
-                group.put("h",Math.min(1,maxY+.012)-Math.max(0,minY-.012)); group.put("color","#252A31");
+                group.put("h",Math.min(1,maxY+.008)-Math.max(0,minY-.008)); group.put("color","#252A31");
                 items.put(0,group);
             } catch(Exception ignored) {}
             layouts.put(l,items);
