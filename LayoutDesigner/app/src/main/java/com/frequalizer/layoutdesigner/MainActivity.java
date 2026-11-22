@@ -173,7 +173,7 @@ public class MainActivity extends Activity {
         String[] dn={"LEVEL","FEEDBACK","TONE","TIME"};
         for(int i=0;i<4;i++) {
             double kx=dx+.015*w+i*(w*.14), ky=y+.13*h;
-            tKnob(l,"delay_knob_"+i,dn[i],kx,ky,w*.125,h*.30,"#E2B832");
+            tKnob(l,"delay_knob_"+i,dn[i],kx,ky,w*.125,h*.30,"#46BE78");
         }
         tText(l,"delay_bpm","— BPM",dx+.015*w,y+.46*h,.12*w,.11*h);
         tButton(l,"delay_tap","TAP",dx+.145*w,y+.46*h,.10*w,.11*h);
@@ -190,34 +190,34 @@ public class MainActivity extends Activity {
     }
     private void seedTabletPortrait() {
         String l=modes[0]; seedHeader(l,false);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.305,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.305,new String[]{"HIGH","MID","LOW"},"#55C58A");
-        seedFilterSection(l,.012,.382,.478,.326,"#55C58A");
-        seedMasterPortrait(l,.510,.382,.478,.326,"#55C58A");
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.305,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.305,new String[]{"HIGH","MID","LOW"},"#46BE78");
+        seedFilterSection(l,.012,.382,.478,.326,"#46BE78");
+        seedMasterPortrait(l,.510,.382,.478,.326,"#46BE78");
         seedEffects(l,.012,.718,.976,.274);
     }
     private void seedTabletLandscape() {
         String l=modes[1]; seedHeader(l,false);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#55C58A");
-        seedFilterSection(l,.012,.505,.235,.475,"#55C58A");
-        seedMasterPortrait(l,.255,.505,.235,.475,"#55C58A");
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78");
+        seedFilterSection(l,.012,.505,.235,.475,"#46BE78");
+        seedMasterPortrait(l,.255,.505,.235,.475,"#46BE78");
         seedEffects(l,.500,.505,.488,.475);
     }
     private void seedPhonePortrait() {
         String l=modes[2]; seedHeader(l,true);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#55C58A");
-        seedFilterSection(l,.012,.505,.235,.475,"#55C58A");
-        seedMasterPortrait(l,.255,.505,.235,.475,"#55C58A");
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78");
+        seedFilterSection(l,.012,.505,.235,.475,"#46BE78");
+        seedMasterPortrait(l,.255,.505,.235,.475,"#46BE78");
         seedEffects(l,.500,.505,.488,.475);
     }
     private void seedPhoneLandscape() {
         String l=modes[3]; seedHeader(l,true);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#55C58A");
-        seedFilterSection(l,.012,.505,.235,.475,"#55C58A");
-        seedMasterPortrait(l,.255,.505,.235,.475,"#55C58A");
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78");
+        seedFilterSection(l,.012,.505,.235,.475,"#46BE78");
+        seedMasterPortrait(l,.255,.505,.235,.475,"#46BE78");
         seedEffects(l,.500,.505,.488,.475);
     }
 
@@ -303,7 +303,7 @@ public class MainActivity extends Activity {
         EditorView(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
         protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(17,19,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
             p.setColor(Color.rgb(235,235,235));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawRoundRect(left,top,left+w,top+h,12,12,p);
-            p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(35,38,43));c.drawRoundRect(left+2,top+2,left+w-2,top+h-2,10,10,p);
+            p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(17,19,23));c.drawRoundRect(left+2,top+2,left+w-2,top+h-2,10,10,p);
             JSONArray a=current();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;float x=left+(float)o.optDouble("x")*w,y=top+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;
                 int color;try{color=Color.parseColor(o.optString("color","#DDB833"));}catch(Exception e){color=Color.YELLOW;}
                 String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){
@@ -339,7 +339,7 @@ public class MainActivity extends Activity {
                     p.setColor(color);p.setTextSize(Math.max(5f,Math.min(hh*.095f,ww*.14f)));
                     c.drawText("0.0",cx,y+hh*.98f,p);
                     p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);
-                }else if(type.equals("text")){p.setColor(Color.WHITE);p.setTextSize(Math.max(12,hh*.55f));c.drawText(o.optString("text"),x,y+hh*.7f,p);}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
+                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.BLACK);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
                 if(i==selected){
                     p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
                     c.drawCircle(x+ww,y+hh,12,p);
