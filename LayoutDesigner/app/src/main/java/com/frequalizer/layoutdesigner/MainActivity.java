@@ -121,7 +121,53 @@ public class MainActivity extends Activity {
             }
             p.setColor(Color.LTGRAY);p.setTextSize(22);p.setTextAlign(Paint.Align.CENTER);c.drawText(mode,left+w/2,Math.max(26,top-8),p);p.setTextAlign(Paint.Align.LEFT);
         }
-        public boolean onTouchEvent(android.view.MotionEvent e){float x=e.getX(),y=e.getY();if(e.getAction()==MotionEvent.ACTION_DOWN){downX=x;downY=y;selected=hit(x,y);resizing=false;if(selected>=0){JSONObject o=current().optJSONObject(selected);float ww=(float)o.optDouble("w")*(getWidth()-36),hh=(float)o.optDouble("h")*(getHeight()-36);resizing=Math.abs(x-(downX+ww))<32&&Math.abs(y-(downY+hh))<32;startX=(float)o.optDouble("x");startY=(float)o.optDouble("y");}invalidate();return true;}if(e.getAction()==MotionEvent.ACTION_MOVE&&selected>=0){try{JSONObject o=current().getJSONObject(selected);float dx=(x-downX)/(getWidth()-36),dy=(y-downY)/(getHeight()-36);if(resizing){o.put("w",clamp(o.optDouble("w")+dx,0.03,1));o.put("h",clamp(o.optDouble("h")+dy,0.03,1));}else{o.put("x",clamp(startX+dx,0,0.97));o.put("y",clamp(startY+dy,0,0.97));}invalidate();}catch(Exception ignored){}return true;}if(e.getAction()==MotionEvent.ACTION_UP){saveLocal();return true;}return true;}
-        int hit(float x,float y){float w=getWidth()-36,h=getHeight()-36;for(int i=current().length()-1;i>=0;i--){JSONObject o=current().optJSONObject(i);if(o==null)continue;float xx=18+(float)o.optDouble("x")*w,yy=18+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;if(x>=xx&&x<=xx+ww&&y>=yy&&y<=yy+hh)return i;}return -1;}
+        private float[] stage() {
+            float pad=18, cw=getWidth()-pad*2, ch=getHeight()-pad*2;
+            float ratio=mode.contains("ORIZZONTALE")?1.65f:0.62f;
+            float w=cw,h=ch;
+            if(w/h>ratio) w=h*ratio; else h=w/ratio;
+            return new float[]{(getWidth()-w)/2,(getHeight()-h)/2,w,h};
+        }
+        public boolean onTouchEvent(android.view.MotionEvent e) {
+            float x=e.getX(),y=e.getY();
+            float[] s=stage(); float left=s[0], top=s[1], sw=s[2], sh=s[3];
+            if(e.getAction()==MotionEvent.ACTION_DOWN) {
+                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false;
+                if(selected>=0) {
+                    JSONObject o=current().optJSONObject(selected);
+                    float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
+                    float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
+                    resizing=Math.abs(x-(ex+ew))<36 && Math.abs(y-(ey+eh))<36;
+                    startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
+                }
+                invalidate(); return true;
+            }
+            if(e.getAction()==MotionEvent.ACTION_MOVE && selected>=0) {
+                try {
+                    JSONObject o=current().getJSONObject(selected);
+                    float dx=(x-downX)/sw, dy=(y-downY)/sh;
+                    if(resizing) {
+                        o.put("w",clamp(o.optDouble("w")+dx,0.02,1-startX));
+                        o.put("h",clamp(o.optDouble("h")+dy,0.02,1-startY));
+                    } else {
+                        o.put("x",clamp(startX+dx,0,1-o.optDouble("w")));
+                        o.put("y",clamp(startY+dy,0,1-o.optDouble("h")));
+                    }
+                    invalidate();
+                } catch(Exception ignored) {}
+                return true;
+            }
+            if(e.getAction()==MotionEvent.ACTION_UP) { saveLocal(); return true; }
+            return true;
+        }
+        int hit(float x,float y,float left,float top,float sw,float sh) {
+            for(int i=current().length()-1;i>=0;i--) {
+                JSONObject o=current().optJSONObject(i); if(o==null) continue;
+                float xx=left+(float)o.optDouble("x")*sw, yy=top+(float)o.optDouble("y")*sh;
+                float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
+                if(x>=xx-12 && x<=xx+ww+12 && y>=yy-12 && y<=yy+hh+12) return i;
+            }
+            return -1;
+        }
     }
 }
