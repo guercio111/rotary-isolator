@@ -6,6 +6,7 @@ on:
       - '.github/workflows/layout-designer.yml'
     branches:
       - 'feature/frequalizer-layout-designer'
+      - 'fix/faithful-horizontal-beat-keyboard'
   workflow_dispatch:
 jobs:
   build:
