@@ -243,7 +243,7 @@ public class MainActivity extends Activity {
                 String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){float rad=Math.min(ww,hh)*.36f, cx=x+ww/2, cy=y+hh*.43f;
                     RectF arc=new RectF(cx-rad+2,cy-rad+2,cx+rad-2,cy+rad-2);
                     p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(Math.max(2,rad*.10f));p.setColor(Color.rgb(67,73,82));c.drawArc(arc,135,270,false,p);
-                    for(int tick=0;tick<=20;tick++){double a=Math.toRadians(135+tick*13.5);float inner=rad*(tick%5==0?.76f:.84f),outer=rad*.98f;p.setColor(tick%5==0?color:Color.rgb(150,158,168));p.setStrokeWidth(Math.max(1,rad*.025f));c.drawLine(cx+(float)Math.cos(a)*inner,cy+(float)Math.sin(a)*inner,cx+(float)Math.cos(a)*outer,cy+(float)Math.sin(a)*outer,p);}
+                    for(int tick=0;tick<=20;tick++){double angleRad=Math.toRadians(135+tick*13.5);float inner=rad*(tick%5==0?.76f:.84f),outer=rad*.98f;p.setColor(tick%5==0?color:Color.rgb(150,158,168));p.setStrokeWidth(Math.max(1,rad*.025f));c.drawLine(cx+(float)Math.cos(angleRad)*inner,cy+(float)Math.sin(angleRad)*inner,cx+(float)Math.cos(angleRad)*outer,cy+(float)Math.sin(angleRad)*outer,p);}
                     p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(41,46,54));c.drawCircle(cx,cy,rad*.70f,p);
                     p.setColor(Color.WHITE);p.setStrokeWidth(Math.max(2,rad*.055f));c.drawLine(cx,cy,cx,cy-rad*.52f,p);
                     p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(6,Math.min(ww,hh)*.14f));p.setColor(Color.WHITE);c.drawText(o.optString("text"),cx,y+hh*.86f,p);
