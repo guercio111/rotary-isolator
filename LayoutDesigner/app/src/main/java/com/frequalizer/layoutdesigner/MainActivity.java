@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
         loadLocal();
         seedLayoutsIfEmpty();
         ensureDelayKeyboardGroups();
+        constrainLayoutsToCanvas();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(28,30,34));
@@ -270,6 +271,21 @@ public class MainActivity extends Activity {
     }
 
     private double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
+    // Normalizza anche i record già salvati: nessun elemento può restare fuori dal canvas.
+    private void constrainLayoutsToCanvas() {
+        for (String l : modes) {
+            JSONArray a = layouts.get(l);
+            for (int i=0;i<a.length();i++) {
+                JSONObject o=a.optJSONObject(i); if(o==null) continue;
+                double w=clamp(o.optDouble("w",0.02),0.02,1.0);
+                double h=clamp(o.optDouble("h",0.02),0.02,1.0);
+                double x=clamp(o.optDouble("x",0),0,1.0-w);
+                double y=clamp(o.optDouble("y",0),0,1.0-h);
+                try { o.put("w",w); o.put("h",h); o.put("x",x); o.put("y",y); } catch(Exception ignored) {}
+            }
+        }
+        saveLocal();
+    }
     private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" elementi  ·  Trascina per spostare, angolo per ridimensionare, X sulle scritte per eliminarle");}
     private void saveLocal(){getPreferences(0).edit().putString("project",toJson().toString()).apply(); if(status!=null)updateStatus();}
     private void loadLocal(){try{JSONObject p=new JSONObject(getPreferences(0).getString("project","{}"));for(String m:modes)if(p.has(m))layouts.put(m,p.getJSONArray(m));}catch(Exception ignored){}}
