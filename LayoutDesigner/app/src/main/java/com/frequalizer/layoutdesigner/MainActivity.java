@@ -50,6 +50,23 @@ public class MainActivity extends Activity {
             }
         });
         top.addView(chooser, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView sizeLabel = new TextView(this);
+        sizeLabel.setText("DIM.");
+        sizeLabel.setTextColor(Color.WHITE);
+        sizeLabel.setGravity(Gravity.CENTER);
+        sizeLabel.setPadding(6,0,4,0);
+        top.addView(sizeLabel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        Spinner sizeChooser = new Spinner(this);
+        sizeChooser.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+            new String[]{"PICCOLA", "MEDIA", "GRANDE"}));
+        sizeChooser.setSelection(1);
+        sizeChooser.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            public void onNothingSelected(android.widget.AdapterView<?> p) {}
+            public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) {
+                if (editor != null) editor.applyStandardSize(pos);
+            }
+        });
+        top.addView(sizeChooser, new LinearLayout.LayoutParams(132, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(top);
         editor = new EditorView();
         root.addView(editor, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -552,6 +569,54 @@ public class MainActivity extends Activity {
             }
             return true;
         }
+        void applyStandardSize(int level) {
+            if(selected<0) {
+                Toast.makeText(MainActivity.this,"Seleziona prima un elemento con doppio tocco al centro",Toast.LENGTH_SHORT).show();
+                return;
+            }
+            try {
+                JSONArray before=new JSONArray(current().toString());
+                JSONObject o=current().optJSONObject(selected);
+                if(o==null) return;
+                int oldLevel=o.optInt("standardSizeLevel",1);
+                if(oldLevel==level) return;
+                double[] scales={0.80,1.00,1.20};
+                double factor=scales[level]/scales[oldLevel];
+                double oldX=o.optDouble("x"), oldY=o.optDouble("y");
+                double oldW=o.optDouble("w"), oldH=o.optDouble("h");
+                double centerX=oldX+oldW/2.0, centerY=oldY+oldH/2.0;
+                double newW=clamp(oldW*factor,0.02,1.0);
+                double newH=clamp(oldH*factor,0.02,1.0);
+                double actualX=clamp(centerX-newW/2.0,0,1-newW);
+                double actualY=clamp(centerY-newH/2.0,0,1-newH);
+                if(undoHistory.size()>=MAX_UNDO) undoHistory.removeFirst();
+                undoHistory.addLast(new UndoEntry(mode,before));
+                o.put("x",actualX); o.put("y",actualY); o.put("w",newW); o.put("h",newH);
+                o.put("standardSizeLevel",level);
+                if("panel".equals(o.optString("type")) && oldW>0 && oldH>0) {
+                    JSONArray all=current();
+                    for(int i=0;i<all.length();i++) {
+                        if(i==selected) continue;
+                        JSONObject child=all.optJSONObject(i); if(child==null) continue;
+                        String childId=child.optString("id");
+                        double cx=child.optDouble("x"), cy=child.optDouble("y");
+                        double cw=child.optDouble("w"), ch=child.optDouble("h");
+                        boolean delayGroup="delay_keyboard_panel".equals(o.optString("id")) && isDelayKeyboardChild(childId);
+                        boolean inside=cx>=oldX-0.0001 && cy>=oldY-0.0001 &&
+                            cx+cw<=oldX+oldW+0.0001 && cy+ch<=oldY+oldH+0.0001;
+                        if(delayGroup || inside) {
+                            child.put("x",actualX+(cx-oldX)*(newW/oldW));
+                            child.put("y",actualY+(cy-oldY)*(newH/oldH));
+                            child.put("w",cw*(newW/oldW));
+                            child.put("h",ch*(newH/oldH));
+                        }
+                    }
+                }
+                constrainLayoutsToCanvas();
+                invalidate();
+                saveLocal();
+            } catch(Exception ignored) {}
+        }
         private void rememberUndo() {
             if(gestureSnapshot==null) return;
             try {
@@ -591,7 +656,11 @@ public class MainActivity extends Activity {
                 }
                 float xx=left+(float)o.optDouble("x")*sw, yy=top+(float)o.optDouble("y")*sh;
                 float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
-                if(x>=xx-10 && x<=xx+ww+10 && y>=yy-10 && y<=yy+hh+10) return i;
+                // Selezione precisa: il doppio tocco deve cadere nella zona centrale
+                // dell'elemento, evitando che bordi vicini selezionino il controllo sbagliato.
+                float insetX=ww*.22f, insetY=hh*.22f;
+                if(x>=xx+insetX && x<=xx+ww-insetX &&
+                   y>=yy+insetY && y<=yy+hh-insetY) return i;
             }
             return -1;
         }
