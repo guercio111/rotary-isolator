@@ -202,8 +202,8 @@ public class MainActivity extends Activity {
     }
 
 
-    // La tastiera delle divisioni DELAY è un gruppo unico: i dieci tasti
-    // restano anche selezionabili singolarmente.
+    // La tastiera delle divisioni DELAY è un unico gruppo indivisibile:
+    // tasti e controlli contenuti si muovono e si ridimensionano insieme.
     private void ensureDelayKeyboardGroups() {
         for (String l : modes) {
             JSONArray old = layouts.get(l);
@@ -251,7 +251,7 @@ public class MainActivity extends Activity {
     }
 
     private double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
-    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" controlli originali  ·  Trascina per spostare, angolo per ridimensionare, X per annullare");}
+    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" elementi  ·  Trascina per spostare, angolo per ridimensionare, X sulle scritte per eliminarle");}
     private void saveLocal(){getPreferences(0).edit().putString("project",toJson().toString()).apply(); if(status!=null)updateStatus();}
     private void loadLocal(){try{JSONObject p=new JSONObject(getPreferences(0).getString("project","{}"));for(String m:modes)if(p.has(m))layouts.put(m,p.getJSONArray(m));}catch(Exception ignored){}}
     private JSONObject toJson(){JSONObject p=new JSONObject();try{p.put("project","FREQUALIZER Layout Designer");p.put("version",1);p.put("devices",new JSONObject().put("tablet","Samsung Galaxy Tab A11+ SM-X230").put("smartphone","Samsung Galaxy S25 base"));for(String m:modes)p.put(m,layouts.get(m));}catch(Exception ignored){}return p;}
@@ -281,8 +281,11 @@ public class MainActivity extends Activity {
                 if(i==selected){
                     p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
                     c.drawCircle(x+ww,y+hh,12,p);
-                    p.setColor(Color.rgb(205,45,50));c.drawCircle(x+ww,y,15,p);
-                    p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("×",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
+                    // La X elimina esclusivamente gli elementi testuali.
+                    if("text".equals(type)) {
+                        p.setColor(Color.rgb(205,45,50));c.drawCircle(x+ww,y,15,p);
+                        p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("×",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
+                    }
                 }
             }
             p.setColor(Color.LTGRAY);p.setTextSize(22);p.setTextAlign(Paint.Align.CENTER);c.drawText(mode,left+w/2,Math.max(26,top-8),p);p.setTextAlign(Paint.Align.LEFT);
@@ -304,8 +307,8 @@ public class MainActivity extends Activity {
                     JSONObject o=current().optJSONObject(selected);
                     float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
                     float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
-                    // X in alto a destra della cornice selezionata.
-                    cancelTap = x >= ex+ew-30 && x <= ex+ew+8 && y >= ey-12 && y <= ey+28;
+                    // La X è presente solo sulle scritte e ne permette la cancellazione.
+                    cancelTap = "text".equals(o.optString("type")) && x >= ex+ew-30 && x <= ex+ew+8 && y >= ey-12 && y <= ey+28;
                     resizing=!cancelTap && Math.abs(x-(ex+ew))<28 && Math.abs(y-(ey+eh))<28;
                     startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
                     startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
@@ -365,8 +368,10 @@ public class MainActivity extends Activity {
                 return true;
             }
             if(e.getAction()==MotionEvent.ACTION_UP) {
-                if(cancelTap && gestureSnapshot!=null) {
-                    layouts.put(mode,gestureSnapshot); editor.selected=-1; invalidate(); saveLocal();
+                if(cancelTap && selected>=0) {
+                    JSONArray old=current(); JSONArray kept=new JSONArray();
+                    for(int i=0;i<old.length();i++) if(i!=selected) kept.put(old.opt(i));
+                    layouts.put(mode,kept); selected=-1; invalidate(); saveLocal();
                 } else saveLocal();
                 cancelTap=false; gestureSnapshot=null; return true;
             }
@@ -375,6 +380,9 @@ public class MainActivity extends Activity {
         int hit(float x,float y,float left,float top,float sw,float sh) {
             for(int i=current().length()-1;i>=0;i--) {
                 JSONObject o=current().optJSONObject(i); if(o==null) continue;
+                // I tasti della tastiera DELAY non sono selezionabili singolarmente:
+                // l’area completa viene gestita dal solo riquadro delay_keyboard_panel.
+                if(o.optString("id").startsWith("division_")) continue;
                 float xx=left+(float)o.optDouble("x")*sw, yy=top+(float)o.optDouble("y")*sh;
                 float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
                 if(x>=xx-12 && x<=xx+ww+12 && y>=yy-12 && y<=yy+hh+12) return i;
