@@ -107,8 +107,8 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) {}
     }
     private void tPanel(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"panel","",x,y,w,h,"#111317"); }
-    private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,id.endsWith("_title") ? "#DC464B" : "#FFFFFF"); }
-    private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#E2B832"); }
+    private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,(id.endsWith("_title") || id.equals("eq_title") || id.equals("iso_title") || id.equals("filter_title") || id.equals("master_title")) ? "#DC464B" : "#FFFFFF"); }
+    private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#FFCD00"); }
     private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
     private void seedHeader(String l,boolean compact) {
         tButton(l,"app_power","● ON",.015,.012,.105,.035);
@@ -166,7 +166,7 @@ public class MainActivity extends Activity {
         for(int i=0;i<4;i++) {
             int col=i%2,row=i/2;
             double kx=x+.015*w+col*rw*.49, ky=y+.13*h+row*h*.40;
-            tKnob(l,"reverb_"+i,rn[i],kx,ky,rw*.44,h*.32,"#55C58A");
+            tKnob(l,"reverb_"+i,rn[i],kx,ky,rw*.44,h*.32,"#46BE78");
         }
         tText(l,"delay_title","DELAY / DUB ECHO",dx+.01*w,y+.015*h,.48*w,.10*h);
         tButton(l,"delay_power","ON",dx+.80*w,y+.02*h,.085*w,.075*h);
@@ -306,14 +306,40 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(35,38,43));c.drawRoundRect(left+2,top+2,left+w-2,top+h-2,10,10,p);
             JSONArray a=current();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;float x=left+(float)o.optDouble("x")*w,y=top+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;
                 int color;try{color=Color.parseColor(o.optString("color","#DDB833"));}catch(Exception e){color=Color.YELLOW;}
-                String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){float rad=Math.min(ww,hh)*.36f, cx=x+ww/2, cy=y+hh*.43f;
-                    RectF arc=new RectF(cx-rad+2,cy-rad+2,cx+rad-2,cy+rad-2);
-                    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(Math.max(2,rad*.10f));p.setColor(Color.rgb(67,73,82));c.drawArc(arc,135,270,false,p);
-                    for(int tick=0;tick<=20;tick++){double angleRad=Math.toRadians(135+tick*13.5);float inner=rad*(tick%5==0?.76f:.84f),outer=rad*.98f;p.setColor(tick%5==0?color:Color.rgb(150,158,168));p.setStrokeWidth(Math.max(1,rad*.025f));c.drawLine(cx+(float)Math.cos(angleRad)*inner,cy+(float)Math.sin(angleRad)*inner,cx+(float)Math.cos(angleRad)*outer,cy+(float)Math.sin(angleRad)*outer,p);}
+                String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){
+                    // Renderer portato dalla RotaryControl originale di FREQUALIZER:
+                    // stessa corsa 135°..405°, arco, tacche, centro e indicatore.
+                    float reserve=hh*.18f;
+                    float side=Math.min(ww,Math.max(1f,hh-reserve))*.94f;
+                    float cx=x+ww/2f;
+                    float cy=y+(hh-hh*.18f)/2f;
+                    float rad=side/2f;
+                    RectF arc=new RectF(cx-rad+ww*.025f,cy-rad+ww*.025f,cx+rad-ww*.025f,cy+rad-ww*.025f);
+                    p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(2f,rad*.095f));p.setStrokeCap(Paint.Cap.ROUND);
+                    p.setColor(Color.rgb(69,75,85));c.drawArc(arc,135f,270f,false,p);
+                    for(int tick=0;tick<=20;tick++){
+                        double angle=Math.toRadians(135.0+tick*270.0/20.0);
+                        float inner=rad*(tick%5==0?.78f:.84f), outer=rad*.98f;
+                        p.setColor(tick%5==0?color:Color.rgb(154,162,174));
+                        p.setStrokeWidth(Math.max(1f,rad*(tick%5==0?.035f:.018f)));
+                        c.drawLine(cx+(float)Math.cos(angle)*inner,cy+(float)Math.sin(angle)*inner,
+                                   cx+(float)Math.cos(angle)*outer,cy+(float)Math.sin(angle)*outer,p);
+                        if(tick%5==0){p.setStyle(Paint.Style.FILL);c.drawCircle(cx+(float)Math.cos(angle)*rad*.91f,cy+(float)Math.sin(angle)*rad*.91f,Math.max(1f,rad*.035f),p);p.setStyle(Paint.Style.STROKE);}
+                    }
+                    // I controlli partono neutri: lancetta al centro della corsa.
+                    float fraction=.5f;
+                    p.setColor(color);p.setStrokeWidth(Math.max(2f,rad*.095f));c.drawArc(arc,135f,270f*fraction,false,p);
                     p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(41,46,54));c.drawCircle(cx,cy,rad*.70f,p);
-                    p.setColor(Color.WHITE);p.setStrokeWidth(Math.max(2,rad*.055f));c.drawLine(cx,cy,cx,cy-rad*.52f,p);
-                    p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(6,Math.min(ww,hh)*.14f));p.setColor(Color.WHITE);c.drawText(o.optString("text"),cx,y+hh*.86f,p);
-                    p.setTextSize(Math.max(5,Math.min(ww,hh)*.105f));p.setColor(color);c.drawText("0.0",cx,y+hh*.99f,p);p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);}else if(type.equals("text")){p.setColor(Color.WHITE);p.setTextSize(Math.max(12,hh*.55f));c.drawText(o.optString("text"),x,y+hh*.7f,p);}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
+                    double angle=Math.toRadians(135.0+270.0*fraction);
+                    p.setColor(Color.WHITE);p.setStrokeWidth(Math.max(2f,rad*.047f));
+                    c.drawLine(cx,cy,cx+(float)Math.cos(angle)*rad*.52f,cy+(float)Math.sin(angle)*rad*.52f,p);
+                    p.setTextAlign(Paint.Align.CENTER);
+                    p.setColor(Color.WHITE);p.setTextSize(Math.max(6f,Math.min(hh*.11f,ww*.16f)));
+                    c.drawText(o.optString("text"),cx,y+hh*.84f,p);
+                    p.setColor(color);p.setTextSize(Math.max(5f,Math.min(hh*.095f,ww*.14f)));
+                    c.drawText("0.0",cx,y+hh*.98f,p);
+                    p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);
+                }else if(type.equals("text")){p.setColor(Color.WHITE);p.setTextSize(Math.max(12,hh*.55f));c.drawText(o.optString("text"),x,y+hh*.7f,p);}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
                 if(i==selected){
                     p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
                     c.drawCircle(x+ww,y+hh,12,p);
