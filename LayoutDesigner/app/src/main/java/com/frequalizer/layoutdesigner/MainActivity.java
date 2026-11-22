@@ -89,7 +89,7 @@ public class MainActivity extends Activity {
             layouts.get(layout).put(o);
         } catch (Exception ignored) {}
     }
-    private void tPanel(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"panel",title,x,y,w,h,"#303640"); }
+    private void tPanel(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"panel","",x,y,w,h,"#303640"); }
     private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,"#FFFFFF"); }
     private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#E2B832"); }
     private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
@@ -102,6 +102,7 @@ public class MainActivity extends Activity {
     }
     private void seedBandSection(String l,String key,String title,double x,double y,double w,double h,String[] bands,String color) {
         tPanel(l,key+"_panel",title,x,y,w,h);
+        tText(l,key+"_title",title,x+.025*w,y+.015*h,.45*w,.10*h);
         tText(l,key+"_power","ON",x+.025*w,y+.035*h,.13*w,.075*h);
         tButton(l,key+"_flat","F",x+.82*w,y+.035*h,.13*w,.075*h);
         double rowH=(h*.79)/bands.length;
@@ -128,6 +129,7 @@ public class MainActivity extends Activity {
     }
     private void seedMasterPortrait(String l,double x,double y,double w,double h,String color) {
         tPanel(l,"master_panel","MASTER",x,y,w,h);
+        tText(l,"master_title","MASTER",x+.025*w,y+.015*h,.45*w,.10*h);
         String[] names={"GAIN","COMP","BASS BOOST","LOUDNESS"};
         for(int i=0;i<4;i++) {
             int col=i%2,row=i/2;
