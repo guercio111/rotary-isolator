@@ -26,6 +26,7 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         for (String m : modes) layouts.put(m, new JSONArray());
         loadLocal();
+        seedLayoutsIfEmpty();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(28,30,34));
@@ -67,6 +68,136 @@ public class MainActivity extends Activity {
         row.addView(b, new LinearLayout.LayoutParams(0, 48, 1));
     }
     private JSONArray current() { return layouts.get(mode); }
+
+    // Preload the real FREQUALIZER control map instead of opening on a blank canvas.
+    private void seedLayoutsIfEmpty() {
+        boolean empty = true;
+        for (String m : modes) if (layouts.get(m).length() > 0) empty = false;
+        if (!empty) return;
+        seedTabletPortrait(); seedTabletLandscape(); seedPhonePortrait(); seedPhoneLandscape();
+        saveLocal();
+    }
+    private void templateItem(String layout,String id,String type,String text,double x,double y,double w,double h,String color) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("id",id); o.put("type",type); o.put("text",text);
+            o.put("x",x); o.put("y",y); o.put("w",w); o.put("h",h); o.put("color",color);
+            layouts.get(layout).put(o);
+        } catch (Exception ignored) {}
+    }
+    private void tPanel(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"panel",title,x,y,w,h,"#303640"); }
+    private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,"#FFFFFF"); }
+    private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#E2B832"); }
+    private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
+    private void seedHeader(String l,boolean compact) {
+        tButton(l,"app_power","● ON",.015,.012,.105,.035);
+        tButton(l,"bpm_start","BPM START",compact ? .255 : .285,.012,compact ? .17 : .20,.034);
+        tText(l,"bpm_readout","— BPM",compact ? .435 : .50,.012,.13,.034);
+        tText(l,"bpm_beat","●",compact ? .58 : .68,.006,.045,.045);
+        tButton(l,"options","⚙",.91,.008,.065,.042);
+    }
+    private void seedBandSection(String l,String key,String title,double x,double y,double w,double h,String[] bands,String color) {
+        tPanel(l,key+"_panel",title,x,y,w,h);
+        tText(l,key+"_power","ON",x+.025*w,y+.035*h,.13*w,.075*h);
+        tButton(l,key+"_flat","F",x+.82*w,y+.035*h,.13*w,.075*h);
+        double rowH=(h*.79)/bands.length;
+        for(int i=0;i<bands.length;i++) {
+            double ry=y+h*.17+i*rowH;
+            tText(l,key+"_label_"+i,bands[i],x+.025*w,ry,.25*w,rowH*.76);
+            tKnob(l,key+"_knob_"+i,bands[i],x+.32*w,ry+.03*rowH,.28*w,rowH*.80,color);
+            tButton(l,key+"_return_"+i,"↶",x+.68*w,ry+.20*rowH,.12*w,rowH*.56);
+            tButton(l,key+"_flat_"+i,"F",x+.82*w,ry+.20*rowH,.13*w,rowH*.56);
+        }
+    }
+    private void seedFilterSection(String l,double x,double y,double w,double h,String color) {
+        tPanel(l,"filter_panel","HPF",x,y,w,h);
+        tText(l,"filter_title","HPF",x+.04*w,y+.015*h,.40*w,.10*h);
+        tButton(l,"filter_power","ON",x+.78*w,y+.025*h,.17*w,.085*h);
+        String[] names={"HPF","RESONANCE"};
+        for(int i=0;i<2;i++) {
+            double ry=y+.15*h+i*.405*h;
+            tText(l,"filter_label_"+i,names[i],x+.035*w,ry,.25*w,.25*h);
+            tKnob(l,"filter_knob_"+i,names[i],x+.32*w,ry,.38*w,.31*h,color);
+            tButton(l,"filter_return_"+i,"↶",x+.75*w,ry+.025*h,.095*w,.22*h);
+            tButton(l,"filter_zero_"+i,"0",x+.855*w,ry+.025*h,.095*w,.22*h);
+        }
+    }
+    private void seedMasterPortrait(String l,double x,double y,double w,double h,String color) {
+        tPanel(l,"master_panel","MASTER",x,y,w,h);
+        String[] names={"GAIN","COMP","BASS BOOST","LOUDNESS"};
+        for(int i=0;i<4;i++) {
+            int col=i%2,row=i/2;
+            double cx=x+col*w*.50, cy=y+.12*h+row*h*.43;
+            tText(l,"master_label_"+i,names[i],cx+.025*w,cy,.43*w,.13*h);
+            tKnob(l,"master_knob_"+i,names[i],cx+.12*w,cy+.12*h,.25*w,.25*h,color);
+            if(i>0) tButton(l,"master_on_"+i,"ON",cx+.39*w,cy+.13*h,.095*w,.105*h);
+            if(i>=2) tButton(l,"master_return_"+i,"↶",cx+.39*w,cy+.255*h,.095*w,.105*h);
+        }
+    }
+    private void seedEffects(String l,double x,double y,double w,double h) {
+        tPanel(l,"fx_panel","BEAT FX",x,y,w,h);
+        double rw=w*.37, dx=x+rw;
+        tText(l,"reverb_title","REVERB",x+.015*w,y+.015*h,.30*w,.10*h);
+        tButton(l,"reverb_power","ON",x+.30*w,y+.02*h,.065*w,.075*h);
+        String[] rn={"BEAT","TIME","DRY/WET","FILTER"};
+        for(int i=0;i<4;i++) {
+            int col=i%2,row=i/2;
+            double kx=x+.015*w+col*rw*.49, ky=y+.13*h+row*h*.40;
+            tKnob(l,"reverb_"+i,rn[i],kx,ky,rw*.44,h*.32,"#55C58A");
+        }
+        tText(l,"delay_title","DELAY / DUB ECHO",dx+.01*w,y+.015*h,.48*w,.10*h);
+        tButton(l,"delay_power","ON",dx+.80*w,y+.02*h,.085*w,.075*h);
+        String[] dn={"LEVEL","FEEDBACK","TONE","TIME"};
+        for(int i=0;i<4;i++) {
+            double kx=dx+.015*w+i*(w*.14), ky=y+.13*h;
+            tKnob(l,"delay_knob_"+i,dn[i],kx,ky,w*.125,h*.30,"#E2B832");
+        }
+        tText(l,"delay_bpm","— BPM",dx+.015*w,y+.46*h,.12*w,.11*h);
+        tButton(l,"delay_tap","TAP",dx+.145*w,y+.46*h,.10*w,.11*h);
+        tButton(l,"delay_auto","AUTO",dx+.255*w,y+.46*h,.11*w,.11*h);
+        tButton(l,"delay_lock","LOCK",dx+.375*w,y+.46*h,.11*w,.11*h);
+        tButton(l,"delay_align","ALIGN",dx+.495*w,y+.46*h,.12*w,.11*h);
+        tButton(l,"delay_back","◀",dx+.625*w,y+.46*h,.075*w,.11*h);
+        tButton(l,"delay_forward","▶",dx+.71*w,y+.46*h,.075*w,.11*h);
+        String[] divisions={"1/16","1/8","1/4","1/2","3/4","1","2","4","8","16"};
+        for(int i=0;i<divisions.length;i++) tButton(l,"division_"+i,divisions[i],dx+.015*w+i*(w*.094),y+.60*h,w*.087,h*.12);
+        tButton(l,"fx_low","FX LOW",dx+.015*w,y+.76*h,.29*w,.12*h);
+        tButton(l,"fx_mid","FX MID",dx+.32*w,y+.76*h,.29*w,.12*h);
+        tButton(l,"fx_high","FX HIGH",dx+.625*w,y+.76*h,.29*w,.12*h);
+    }
+    private void seedTabletPortrait() {
+        String l=modes[0]; seedHeader(l,false);
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.305,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.305,new String[]{"HIGH","MID","LOW"},"#55C58A");
+        seedFilterSection(l,.012,.382,.478,.326,"#55C58A");
+        seedMasterPortrait(l,.510,.382,.478,.326,"#55C58A");
+        seedEffects(l,.012,.718,.976,.274);
+    }
+    private void seedTabletLandscape() {
+        String l=modes[1]; seedHeader(l,false);
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#55C58A");
+        seedFilterSection(l,.012,.505,.235,.475,"#55C58A");
+        seedMasterPortrait(l,.255,.505,.235,.475,"#55C58A");
+        seedEffects(l,.500,.505,.488,.475);
+    }
+    private void seedPhonePortrait() {
+        String l=modes[2]; seedHeader(l,true);
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#55C58A");
+        seedFilterSection(l,.012,.505,.235,.475,"#55C58A");
+        seedMasterPortrait(l,.255,.505,.235,.475,"#55C58A");
+        seedEffects(l,.500,.505,.488,.475);
+    }
+    private void seedPhoneLandscape() {
+        String l=modes[3]; seedHeader(l,true);
+        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#55C58A");
+        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#55C58A");
+        seedFilterSection(l,.012,.505,.235,.475,"#55C58A");
+        seedMasterPortrait(l,.255,.505,.235,.475,"#55C58A");
+        seedEffects(l,.500,.505,.488,.475);
+    }
+
     private void add(String type) {
         try {
             JSONObject o = new JSONObject();
@@ -109,7 +240,7 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==EXPORT&&c==RESULT_OK&&d!=null){try(OutputStream os=getContentResolver().openOutputStream(d.getData())){os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show();}}}
 
     private class EditorView extends View {
-        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY; boolean resizing=false;
+        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false;
         EditorView(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
         protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(18,20,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
             p.setColor(Color.rgb(235,235,235));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawRoundRect(left,top,left+w,top+h,12,12,p);
@@ -137,8 +268,9 @@ public class MainActivity extends Activity {
                     JSONObject o=current().optJSONObject(selected);
                     float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
                     float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
-                    resizing=Math.abs(x-(ex+ew))<36 && Math.abs(y-(ey+eh))<36;
+                    resizing=Math.abs(x-(ex+ew))<24 && Math.abs(y-(ey+eh))<24;
                     startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
+                    startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
                 }
                 invalidate(); return true;
             }
@@ -147,8 +279,8 @@ public class MainActivity extends Activity {
                     JSONObject o=current().getJSONObject(selected);
                     float dx=(x-downX)/sw, dy=(y-downY)/sh;
                     if(resizing) {
-                        o.put("w",clamp(o.optDouble("w")+dx,0.02,1-startX));
-                        o.put("h",clamp(o.optDouble("h")+dy,0.02,1-startY));
+                        o.put("w",clamp(startW+dx*0.35,0.02,1-startX));
+                        o.put("h",clamp(startH+dy*0.35,0.02,1-startY));
                     } else {
                         o.put("x",clamp(startX+dx,0,1-o.optDouble("w")));
                         o.put("y",clamp(startY+dy,0,1-o.optDouble("h")));
