@@ -133,6 +133,7 @@ public class MainActivity extends Activity {
     private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,(id.endsWith("_title") || id.equals("eq_title") || id.equals("iso_title") || id.equals("filter_title") || id.equals("master_title")) ? "#DC464B" : "#FFFFFF"); }
     private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#FFCD00"); }
     private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
+    private void tFader(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"fader",title,x,y,w,h,color); }
     private void seedHeader(String l,boolean compact) {
         tButton(l,"app_power","● ON",.012,.010,.105,.038);
         tButton(l,"bpm_start","BPM START",compact ? .235 : .270,.012,compact ? .18 : .20,.034);
@@ -201,7 +202,8 @@ public class MainActivity extends Activity {
             seedReverb(l,x,y,revW,h,true);
             double dx=x+revW;
             tPanel(l,"delay_panel","DELAY",dx,y,delayHeaderW,h);
-            tText(l,"delay_title","DELAY / DUB ECHO",dx+.02*delayHeaderW,y+.02*h,.95*delayHeaderW,.07*h);
+            tText(l,"delay_title","BEAT EFFECTS",dx+.02*delayHeaderW,y+.02*h,.60*delayHeaderW,.07*h);
+            tButton(l,"delay_power","ON",dx+.72*delayHeaderW,y+.02*h,.22*delayHeaderW,.065*h);
             String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
             for(int i=0;i<4;i++) {
                 int col=i%2,row=i/2;
@@ -219,7 +221,8 @@ public class MainActivity extends Activity {
             seedReverb(l,x,y,revW,h,false);
             double dx=x+revW;
             tPanel(l,"delay_panel","DELAY",dx,y,delayW,h);
-            tText(l,"delay_title","DELAY / DUB ECHO",dx+.02*delayW,y+.02*h,.95*delayW,.07*h);
+            tText(l,"delay_title","BEAT EFFECTS",dx+.02*delayW,y+.02*h,.60*delayW,.07*h);
+            tButton(l,"delay_power","ON",dx+.72*delayW,y+.02*h,.22*delayW,.065*h);
             String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
             for(int i=0;i<4;i++) {
                 double kx=dx+.02*delayW+i*delayW*.245;
@@ -239,17 +242,26 @@ public class MainActivity extends Activity {
         for(int i=0;i<3;i++) tButton(l,"reverb_band_"+i,bands[i],x+.04*w+i*.31*w,y+.82*h,.28*w,.10*h);
     }
     private void seedDelayKeyboard(String l,double x,double y,double w,double h) {
-        tText(l,"delay_bpm","— BPM",x+.015*w,y+.02*h,.13*w,.09*h);
-        String[] top={"TAP","AUTO","LOCK","ALIGN","◀","▶","SKIP","RST"};
-        for(int i=0;i<top.length;i++) tButton(l,"delay_"+(i==4?"back":i==5?"forward":i==6?"skip":i==7?"rst":top[i].toLowerCase(Locale.US)),top[i],x+.15*w+i*.105*w,y+.02*h,.095*w,.09*h);
-        tText(l,"delay_phase_label","FX PHASE JOG",x+.02*w,y+.15*h,.32*w,.07*h);
-        tText(l,"delay_phase_fader","────────●────────",x+.03*w,y+.23*h,.94*w,.055*h);
+        // Build 918 order: TAP/ALIGN and beat lamps, clock buttons, PITCH,
+        // FX phase jog, effect mode, beat divisions and frequency selectors.
+        tButton(l,"delay_tap","TAP",x+.015*w,y+.012*h,.105*w,.105*h);
+        tButton(l,"delay_align","ALIGN",x+.135*w,y+.012*h,.105*w,.105*h);
+        templateItem(l,"delay_master_beat","text","●",x+.265*w,y+.012*h,.075*w,.105*h,"#46BE78");
+        templateItem(l,"delay_fx_beat","text","●",x+.365*w,y+.012*h,.075*w,.105*h,"#46BE78");
+        templateItem(l,"delay_bpm","text","120.0 BPM",x+.485*w,y+.012*h,.49*w,.105*h,"#FFFFFF");
+        String[] clock={"AUTO","LOCK","◀","▶","SKIP","RST"};
+        String[] ids={"delay_auto","delay_lock","delay_back","delay_forward","delay_skip","delay_rst"};
+        for(int i=0;i<clock.length;i++) templateItem(l,ids[i],"button",clock[i],x+.012*w+i*.165*w,y+.145*h,.155*w,.092*h,"#46BE78");
+        tText(l,"delay_pitch_label","PITCH  −10%  |  0  |  +10%",x+.02*w,y+.255*h,.96*w,.055*h);
+        tFader(l,"delay_pitch_fader","PITCH",x+.025*w,y+.315*h,.95*w,.052*h,"#46BE78");
+        tText(l,"delay_phase_label","FX PHASE JOG  •  MISURA…",x+.02*w,y+.382*h,.96*w,.055*h);
+        tFader(l,"delay_phase_fader","FX PHASE JOG",x+.025*w,y+.442*h,.95*w,.052*h,"#46BE78");
         String[] modes={"SHORT DELAY","LONG DELAY","DUB ECHO"};
-        for(int i=0;i<3;i++) tButton(l,"delay_mode_"+i,modes[i],x+.02*w+i*.325*w,y+.33*h,.31*w,.10*h);
+        for(int i=0;i<3;i++) templateItem(l,"delay_mode_"+i,"button",modes[i],x+.015*w+i*.325*w,y+.515*h,.31*w,.105*h,"#46BE78");
         String[] divisions={"1/16","1/8","1/4","1/2","3/4","1","2","4","8","16"};
-        for(int i=0;i<divisions.length;i++) tButton(l,"division_"+i,divisions[i],x+.015*w+i*.098*w,y+.47*h,.09*w,.12*h);
+        for(int i=0;i<divisions.length;i++) templateItem(l,"division_"+i,"button",divisions[i],x+.012*w+i*.098*w,y+.642*h,.09*w,.115*h,"#46BE78");
         String[] fx={"FX LOW","FX MID","FX HIGH"};
-        for(int i=0;i<3;i++) tButton(l,"fx_"+new String[]{"low","mid","high"}[i],fx[i],x+.02*w+i*.325*w,y+.66*h,.31*w,.11*h);
+        for(int i=0;i<3;i++) templateItem(l,"fx_"+new String[]{"low","mid","high"}[i],"button",fx[i],x+.015*w+i*.325*w,y+.785*h,.31*w,.105*h,"#46BE78");
     }
     private void seedTabletPortrait() {
         String l=modes[0]; seedHeader(l,false);
@@ -464,7 +476,7 @@ public class MainActivity extends Activity {
                     p.setColor(color);p.setTextSize(Math.max(dp*5.5f,valueSize));
                     c.drawText(valueText,cx,y+hh-dp*4f,p);
                     p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);
-                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{
+                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("fader")){float cy=y+hh/2f;p.setColor(Color.rgb(75,85,95));p.setStrokeWidth(Math.max(2f,hh*.12f));p.setStrokeCap(Paint.Cap.ROUND);c.drawLine(x+ww*.06f,cy,x+ww*.94f,cy,p);p.setColor(color);p.setStrokeWidth(Math.max(2f,hh*.16f));c.drawLine(x+ww*.06f,cy,x+ww*.50f,cy,p);p.setStyle(Paint.Style.FILL);p.setColor(Color.WHITE);c.drawCircle(x+ww*.50f,cy,Math.max(3f,hh*.34f),p);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{
                     String id=o.optString("id"),label=o.optString("text");
                     p.setStyle(Paint.Style.FILL);
                     if(id.equals("options")){
@@ -477,9 +489,10 @@ public class MainActivity extends Activity {
                     }else{
                         boolean toggle=id.equals("app_power")||id.equals("bpm_start")||id.endsWith("_power")||id.startsWith("master_on_");
                         boolean off=id.equals("reverb_power")||id.equals("delay_power")||id.startsWith("master_on_")||id.startsWith("fx_");
-                        if(toggle){
-                            int fill=off?Color.rgb(55,62,72):Color.rgb(25,150,65);
-                            int stroke=off?color:Color.rgb(100,230,130);
+                        boolean beatControl=id.startsWith("delay_")||id.startsWith("division_")||id.startsWith("fx_")||id.startsWith("reverb_band_");
+                        if(toggle || beatControl){
+                            int fill=off||beatControl?Color.rgb(55,62,72):Color.rgb(25,150,65);
+                            int stroke=off||beatControl?color:Color.rgb(100,230,130);
                             p.setColor(fill);c.drawRoundRect(x,y,x+ww,y+hh,Math.min(ww,hh)*.22f,Math.min(ww,hh)*.22f,p);
                             p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(1f,ww*.012f));p.setColor(stroke);c.drawRoundRect(x,y,x+ww,y+hh,Math.min(ww,hh)*.22f,Math.min(ww,hh)*.22f,p);p.setStyle(Paint.Style.FILL);
                             p.setColor(Color.WHITE);
