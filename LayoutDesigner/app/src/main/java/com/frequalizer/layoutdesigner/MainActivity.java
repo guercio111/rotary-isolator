@@ -528,7 +528,7 @@ public class MainActivity extends Activity {
             float x=e.getX(),y=e.getY();
             float[] stage=stage(); float left=stage[0], top=stage[1], sw=stage[2], sh=stage[3];
             if(e.getAction()==MotionEvent.ACTION_DOWN) {
-                editHandler.removeCallbacks(longPressRunnable);
+                if(longPressRunnable!=null) editHandler.removeCallbacks(longPressRunnable);
                 downX=x; downY=y; longPressTriggered=false; deleteOnUp=false;
                 int deleteHit=editUnlocked?hitDeleteHandle(x,y,left,top,sw,sh):-1;
                 if(deleteHit>=0) {
@@ -536,9 +536,10 @@ public class MainActivity extends Activity {
                     try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                     invalidate(); return true;
                 }
-                int elementHit=hitElement(x,y,left,top,sw,sh,-1);
-                tapPanel=elementHit>=0?-1:hitPanel(x,y,left,top,sw,sh);
-                selected=elementHit>=0?elementHit:tapPanel;
+                final boolean pressResizeHandle=editUnlocked && hitResizeHandle(x,y,left,top,sw,sh);
+                int elementHit=pressResizeHandle?selected:hitElement(x,y,left,top,sw,sh,-1);
+                tapPanel=(elementHit>=0 || pressResizeHandle)?-1:hitPanel(x,y,left,top,sw,sh);
+                selected=pressResizeHandle?selected:(elementHit>=0?elementHit:tapPanel);
                 editUnlocked=false; resizing=false; cancelTap=false; gestureChanged=false;
                 resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
@@ -551,7 +552,7 @@ public class MainActivity extends Activity {
                         longPressTriggered=true; editUnlocked=true;
                         float ex=left+startX*sw, ey=top+startY*sh, ew=startW*sw, eh=startH*sh;
                         float brx=x, bry=y;
-                        resizing=Math.hypot(brx-(ex+ew),bry-(ey+eh))<=30f;
+                        resizing=pressResizeHandle || Math.hypot(brx-(ex+ew),bry-(ey+eh))<=30f;
                         JSONObject selectedObject=current().optJSONObject(selected);
                         if(selectedObject!=null && "panel".equals(selectedObject.optString("type"))) {
                             JSONArray all=current();
