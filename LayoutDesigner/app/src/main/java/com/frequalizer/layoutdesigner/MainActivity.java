@@ -248,7 +248,9 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==EXPORT&&c==RESULT_OK&&d!=null){try(OutputStream os=getContentResolver().openOutputStream(d.getData())){os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show();}}}
 
     private class EditorView extends View {
-        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false;
+        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, deleteTap=false;
+        final ArrayList<ChildSnapshot> resizeChildren=new ArrayList<>();
+        class ChildSnapshot { int index; double x,y,w,h; ChildSnapshot(int i,JSONObject o){index=i;x=o.optDouble("x");y=o.optDouble("y");w=o.optDouble("w");h=o.optDouble("h");} }
         EditorView(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
         protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(18,20,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
             p.setColor(Color.rgb(235,235,235));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawRoundRect(left,top,left+w,top+h,12,12,p);
@@ -256,7 +258,12 @@ public class MainActivity extends Activity {
             JSONArray a=current();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;float x=left+(float)o.optDouble("x")*w,y=top+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;
                 int color;try{color=Color.parseColor(o.optString("color","#DDB833"));}catch(Exception e){color=Color.YELLOW;}
                 String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){float rad=Math.min(ww,hh)*.34f;c.drawCircle(x+ww/2,y+hh*.43f,rad,p);p.setColor(Color.DKGRAY);c.drawCircle(x+ww/2,y+hh*.43f,rad*.72f,p);p.setColor(Color.WHITE);c.drawLine(x+ww/2,y+hh*.43f,x+ww/2,y+hh*.43f-rad*.58f,p);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(9,Math.min(ww,hh)*.17f));c.drawText(o.optString("text"),x+ww/2,y+hh*.94f,p);p.setTextAlign(Paint.Align.LEFT);}else if(type.equals("text")){p.setColor(Color.WHITE);p.setTextSize(Math.max(12,hh*.55f));c.drawText(o.optString("text"),x,y+hh*.7f,p);}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
-                if(i==selected){p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);c.drawCircle(x+ww,y+hh,12,p);}
+                if(i==selected){
+                    p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
+                    c.drawCircle(x+ww,y+hh,12,p);
+                    p.setColor(Color.rgb(205,45,50));c.drawCircle(x+ww,y,15,p);
+                    p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("×",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
+                }
             }
             p.setColor(Color.LTGRAY);p.setTextSize(22);p.setTextAlign(Paint.Align.CENTER);c.drawText(mode,left+w/2,Math.max(26,top-8),p);p.setTextAlign(Paint.Align.LEFT);
         }
@@ -271,14 +278,25 @@ public class MainActivity extends Activity {
             float x=e.getX(),y=e.getY();
             float[] s=stage(); float left=s[0], top=s[1], sw=s[2], sh=s[3];
             if(e.getAction()==MotionEvent.ACTION_DOWN) {
-                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false;
+                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; deleteTap=false; resizeChildren.clear();
                 if(selected>=0) {
                     JSONObject o=current().optJSONObject(selected);
                     float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
                     float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
-                    resizing=Math.abs(x-(ex+ew))<24 && Math.abs(y-(ey+eh))<24;
+                    // X in alto a destra della cornice selezionata.
+                    deleteTap = x >= ex+ew-30 && x <= ex+ew+8 && y >= ey-12 && y <= ey+28;
+                    resizing=!deleteTap && Math.abs(x-(ex+ew))<28 && Math.abs(y-(ey+eh))<28;
                     startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
                     startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
+                    if(resizing && "panel".equals(o.optString("type"))) {
+                        JSONArray all=current();
+                        for(int i=0;i<all.length();i++) if(i!=selected) {
+                            JSONObject child=all.optJSONObject(i); if(child==null) continue;
+                            double cx=child.optDouble("x"), cy=child.optDouble("y"), cw=child.optDouble("w"), ch=child.optDouble("h");
+                            if(cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001)
+                                resizeChildren.add(new ChildSnapshot(i,child));
+                        }
+                    }
                 }
                 invalidate(); return true;
             }
@@ -287,8 +305,19 @@ public class MainActivity extends Activity {
                     JSONObject o=current().getJSONObject(selected);
                     float dx=(x-downX)/sw, dy=(y-downY)/sh;
                     if(resizing) {
-                        o.put("w",clamp(startW+dx*0.35,0.02,1-startX));
-                        o.put("h",clamp(startH+dy*0.35,0.02,1-startY));
+                        double newW=clamp(startW+dx*0.35,0.02,1-startX);
+                        double newH=clamp(startH+dy*0.35,0.02,1-startY);
+                        o.put("w",newW); o.put("h",newH);
+                        // La cella scala proporzionalmente tutti i controlli contenuti.
+                        if("panel".equals(o.optString("type")) && startW>0 && startH>0) {
+                            double sx=newW/startW, sy=newH/startH;
+                            for(ChildSnapshot child:resizeChildren) {
+                                JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
+                                item.put("x",startX+(child.x-startX)*sx);
+                                item.put("y",startY+(child.y-startY)*sy);
+                                item.put("w",child.w*sx); item.put("h",child.h*sy);
+                            }
+                        }
                     } else {
                         o.put("x",clamp(startX+dx,0,1-o.optDouble("w")));
                         o.put("y",clamp(startY+dy,0,1-o.optDouble("h")));
@@ -297,7 +326,7 @@ public class MainActivity extends Activity {
                 } catch(Exception ignored) {}
                 return true;
             }
-            if(e.getAction()==MotionEvent.ACTION_UP) { saveLocal(); return true; }
+            if(e.getAction()==MotionEvent.ACTION_UP) { if(deleteTap && selected>=0) deleteSelected(); else saveLocal(); deleteTap=false; return true; }
             return true;
         }
         int hit(float x,float y,float left,float top,float sw,float sh) {
