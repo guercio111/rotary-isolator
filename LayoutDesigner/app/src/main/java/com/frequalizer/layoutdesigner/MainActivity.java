@@ -31,6 +31,7 @@ public class MainActivity extends Activity {
         mode = phoneDevice ? (landscapeDevice ? modes[3] : modes[2]) : (landscapeDevice ? modes[1] : modes[0]);
         loadLocal();
         seedLayoutsIfEmpty();
+        ensureDelayKeyboardGroups();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.rgb(28,30,34));
@@ -200,6 +201,44 @@ public class MainActivity extends Activity {
         seedEffects(l,.500,.505,.488,.475);
     }
 
+
+    // La tastiera delle divisioni DELAY è un gruppo unico: i dieci tasti
+    // restano anche selezionabili singolarmente.
+    private void ensureDelayKeyboardGroups() {
+        for (String l : modes) {
+            JSONArray old = layouts.get(l);
+            boolean exists = false;
+            for (int i=0;i<old.length();i++) {
+                JSONObject o=old.optJSONObject(i);
+                if(o!=null && "delay_keyboard_panel".equals(o.optString("id"))) { exists=true; break; }
+            }
+            if(exists) continue;
+            try {
+                JSONObject group = new JSONObject();
+                group.put("id","delay_keyboard_panel");
+                group.put("type","panel");
+                group.put("text","DELAY KEYBOARD");
+                group.put("x",0.505 + 0.005*0.488);
+                group.put("y",0.505 + 0.585*0.475);
+                group.put("w",0.95*0.488);
+                group.put("h",0.145*0.475);
+                group.put("color","#252A31");
+                JSONArray updated = new JSONArray();
+                boolean inserted=false;
+                for(int i=0;i<old.length();i++) {
+                    JSONObject item=old.optJSONObject(i);
+                    if(item!=null && item.optString("id").startsWith("division_") && !inserted) {
+                        updated.put(group); inserted=true;
+                    }
+                    updated.put(item);
+                }
+                if(!inserted) updated.put(group);
+                layouts.put(l,updated);
+            } catch(Exception ignored) {}
+        }
+        saveLocal();
+    }
+
     private double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
     private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" controlli originali  ·  Trascina per spostare, angolo per ridimensionare, X per annullare");}
     private void saveLocal(){getPreferences(0).edit().putString("project",toJson().toString()).apply(); if(status!=null)updateStatus();}
@@ -212,6 +251,7 @@ public class MainActivity extends Activity {
         Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;
         JSONArray gestureSnapshot;
         final ArrayList<ChildSnapshot> resizeChildren=new ArrayList<>();
+        final ArrayList<ChildSnapshot> groupChildren=new ArrayList<>();
         class ChildSnapshot { int index; double x,y,w,h; ChildSnapshot(int i,JSONObject o){index=i;x=o.optDouble("x");y=o.optDouble("y");w=o.optDouble("w");h=o.optDouble("h");} }
         EditorView(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
         protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(17,19,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
@@ -247,7 +287,7 @@ public class MainActivity extends Activity {
             float x=e.getX(),y=e.getY();
             float[] s=stage(); float left=s[0], top=s[1], sw=s[2], sh=s[3];
             if(e.getAction()==MotionEvent.ACTION_DOWN) {
-                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; cancelTap=false; resizeChildren.clear();
+                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; cancelTap=false; resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
                     JSONObject o=current().optJSONObject(selected);
@@ -258,13 +298,16 @@ public class MainActivity extends Activity {
                     resizing=!cancelTap && Math.abs(x-(ex+ew))<28 && Math.abs(y-(ey+eh))<28;
                     startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
                     startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
-                    if(resizing && "panel".equals(o.optString("type"))) {
+                    if("panel".equals(o.optString("type"))) {
                         JSONArray all=current();
                         for(int i=0;i<all.length();i++) if(i!=selected) {
                             JSONObject child=all.optJSONObject(i); if(child==null) continue;
                             double cx=child.optDouble("x"), cy=child.optDouble("y"), cw=child.optDouble("w"), ch=child.optDouble("h");
-                            if(cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001)
-                                resizeChildren.add(new ChildSnapshot(i,child));
+                            if(cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001) {
+                                ChildSnapshot snap=new ChildSnapshot(i,child);
+                                resizeChildren.add(snap);
+                                groupChildren.add(snap);
+                            }
                         }
                     }
                 }
@@ -290,8 +333,19 @@ public class MainActivity extends Activity {
                             }
                         }
                     } else {
-                        o.put("x",clamp(startX+dx,0,1-o.optDouble("w")));
-                        o.put("y",clamp(startY+dy,0,1-o.optDouble("h")));
+                        double moveX=clamp(startX+dx,0,1-o.optDouble("w"));
+                        double moveY=clamp(startY+dy,0,1-o.optDouble("h"));
+                        double actualDx=moveX-startX, actualDy=moveY-startY;
+                        o.put("x",moveX); o.put("y",moveY);
+                        // Trascinando il riquadro DELAY si muove l'intera tastiera,
+                        // mantenendo invariati posizione e dimensione dei tasti al suo interno.
+                        if("panel".equals(o.optString("type"))) {
+                            for(ChildSnapshot child:groupChildren) {
+                                JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
+                                item.put("x",clamp(child.x+actualDx,0,1-item.optDouble("w")));
+                                item.put("y",clamp(child.y+actualDy,0,1-item.optDouble("h")));
+                            }
+                        }
                     }
                     invalidate();
                 } catch(Exception ignored) {}
