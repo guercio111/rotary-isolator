@@ -25,6 +25,10 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         for (String m : modes) layouts.put(m, new JSONArray());
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        boolean phoneDevice = Math.min(dm.widthPixels, dm.heightPixels) / dm.density < 600f;
+        boolean landscapeDevice = dm.widthPixels > dm.heightPixels;
+        mode = phoneDevice ? (landscapeDevice ? modes[3] : modes[2]) : (landscapeDevice ? modes[1] : modes[0]);
         loadLocal();
         seedLayoutsIfEmpty();
         LinearLayout root = new LinearLayout(this);
