@@ -338,7 +338,7 @@ public class MainActivity extends Activity {
         }
         saveLocal();
     }
-    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" elementi  ·  Trascina per spostare, angolo per ridimensionare, X sulle scritte per eliminarle");}
+    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  1 tocco: riquadro  ·  2 tocchi: elemento  ·  Trascina per spostare, angolo per ridimensionare");}
     private void saveLocal(){getPreferences(0).edit().putString("project",toJson().toString()).apply(); if(status!=null)updateStatus();}
     private void loadLocal(){try{JSONObject p=new JSONObject(getPreferences(0).getString("project","{}"));for(String m:modes)if(p.has(m))layouts.put(m,p.getJSONArray(m));}catch(Exception ignored){}}
     private JSONObject toJson(){JSONObject p=new JSONObject();try{p.put("project","FREQUALIZER Layout Designer");p.put("version",1);p.put("devices",new JSONObject().put("tablet","Samsung Galaxy Tab A11+ SM-X230").put("smartphone","Samsung Galaxy S25 base"));for(String m:modes)p.put(m,layouts.get(m));}catch(Exception ignored){}return p;}
@@ -346,7 +346,7 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==EXPORT&&c==RESULT_OK&&d!=null){try(OutputStream os=getContentResolver().openOutputStream(d.getData())){os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show();}}}
 
     private class EditorView extends View {
-        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;
+        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;\n        long lastTapTime=0; float lastTapX=0,lastTapY=0; int tapPanel=-1; boolean doubleTap=false;
         JSONArray gestureSnapshot;
         boolean gestureChanged=false;
         final ArrayList<ChildSnapshot> resizeChildren=new ArrayList<>();
@@ -450,7 +450,16 @@ public class MainActivity extends Activity {
             float x=e.getX(),y=e.getY();
             float[] s=stage(); float left=s[0], top=s[1], sw=s[2], sh=s[3];
             if(e.getAction()==MotionEvent.ACTION_DOWN) {
-                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; cancelTap=false; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
+                downX=x; downY=y;
+                doubleTap = (e.getEventTime()-lastTapTime)<=ViewConfiguration.getDoubleTapTimeout()
+                    && Math.hypot(x-lastTapX,y-lastTapY)<=ViewConfiguration.get(getContext()).getScaledDoubleTapSlop();
+                tapPanel=hitPanel(x,y,left,top,sw,sh);
+                if(doubleTap && tapPanel>=0) {
+                    int childHit=hitElement(x,y,left,top,sw,sh,tapPanel);
+                    selected=childHit>=0?childHit:tapPanel;
+                } else if(tapPanel>=0) selected=tapPanel;
+                else selected=hitElement(x,y,left,top,sw,sh,-1);
+                resizing=false; cancelTap=false; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
                     JSONObject o=current().optJSONObject(selected);
@@ -537,6 +546,7 @@ public class MainActivity extends Activity {
                     if(gestureChanged) rememberUndo();
                     saveLocal();
                 }
+                if(!gestureChanged && !cancelTap) { lastTapTime=e.getEventTime(); lastTapX=x; lastTapY=y; }
                 cancelTap=false; gestureSnapshot=null; gestureChanged=false; return true;
             }
             return true;
@@ -548,15 +558,39 @@ public class MainActivity extends Activity {
                 undoHistory.addLast(new UndoEntry(mode,new JSONArray(gestureSnapshot.toString())));
             } catch(Exception ignored) {}
         }
-        int hit(float x,float y,float left,float top,float sw,float sh) {
-            for(int i=current().length()-1;i>=0;i--) {
-                JSONObject o=current().optJSONObject(i); if(o==null) continue;
-                // I tasti della tastiera DELAY non sono selezionabili singolarmente:
-                // l’area completa viene gestita dal solo riquadro delay_keyboard_panel.
-                if(isDelayKeyboardChild(o.optString("id"))) continue;
+        // Un tocco seleziona il riquadro contenitore; il doppio tocco seleziona
+        // il singolo controllo al suo interno. Si sceglie il pannello più piccolo
+        // che contiene il punto, così i pannelli annidati restano raggiungibili.
+        int hitPanel(float x,float y,float left,float top,float sw,float sh) {
+            int best=-1; double bestArea=Double.MAX_VALUE;
+            for(int i=0;i<current().length();i++) {
+                JSONObject o=current().optJSONObject(i);
+                if(o==null || !"panel".equals(o.optString("type"))) continue;
                 float xx=left+(float)o.optDouble("x")*sw, yy=top+(float)o.optDouble("y")*sh;
                 float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
-                if(x>=xx-12 && x<=xx+ww+12 && y>=yy-12 && y<=yy+hh+12) return i;
+                if(x>=xx-8 && x<=xx+ww+8 && y>=yy-8 && y<=yy+hh+8) {
+                    double area=ww*hh;
+                    if(area<bestArea) { best=i; bestArea=area; }
+                }
+            }
+            return best;
+        }
+        int hitElement(float x,float y,float left,float top,float sw,float sh,int requiredPanel) {
+            for(int i=current().length()-1;i>=0;i--) {
+                JSONObject o=current().optJSONObject(i); if(o==null) continue;
+                String id=o.optString("id"), type=o.optString("type");
+                if("panel".equals(type) || isDelayKeyboardChild(id)) continue;
+                if(requiredPanel>=0) {
+                    JSONObject panel=current().optJSONObject(requiredPanel);
+                    if(panel==null) continue;
+                    double px=panel.optDouble("x"), py=panel.optDouble("y");
+                    double pw=panel.optDouble("w"), ph=panel.optDouble("h");
+                    double ex=o.optDouble("x"), ey=o.optDouble("y");
+                    if(ex<px-0.0001 || ey<py-0.0001 || ex+o.optDouble("w")>px+pw+0.0001 || ey+o.optDouble("h")>py+ph+0.0001) continue;
+                }
+                float xx=left+(float)o.optDouble("x")*sw, yy=top+(float)o.optDouble("y")*sh;
+                float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
+                if(x>=xx-10 && x<=xx+ww+10 && y>=yy-10 && y<=yy+hh+10) return i;
             }
             return -1;
         }
