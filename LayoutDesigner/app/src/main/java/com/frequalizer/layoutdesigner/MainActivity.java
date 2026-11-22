@@ -75,11 +75,13 @@ public class MainActivity extends Activity {
 
     // Preload the real FREQUALIZER control map instead of opening on a blank canvas.
     private void seedLayoutsIfEmpty() {
-        boolean empty = true;
-        for (String m : modes) if (layouts.get(m).length() > 0) empty = false;
-        if (!empty) return;
+        // Replace only the original blank-prototype project once. From this point
+        // onward the user's edited layouts are always preserved across upgrades.
+        if (getPreferences(0).getBoolean("frequalizer_template_seeded_v1", false)) return;
+        for (String m : modes) layouts.put(m, new JSONArray());
         seedTabletPortrait(); seedTabletLandscape(); seedPhonePortrait(); seedPhoneLandscape();
         saveLocal();
+        getPreferences(0).edit().putBoolean("frequalizer_template_seeded_v1", true).apply();
     }
     private void templateItem(String layout,String id,String type,String text,double x,double y,double w,double h,String color) {
         try {
