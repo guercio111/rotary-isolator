@@ -50,23 +50,6 @@ public class MainActivity extends Activity {
             }
         });
         top.addView(chooser, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        TextView sizeLabel = new TextView(this);
-        sizeLabel.setText("DIM.");
-        sizeLabel.setTextColor(Color.WHITE);
-        sizeLabel.setGravity(Gravity.CENTER);
-        sizeLabel.setPadding(6,0,4,0);
-        top.addView(sizeLabel, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        Spinner sizeChooser = new Spinner(this);
-        sizeChooser.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-            new String[]{"PICCOLA", "MEDIA", "GRANDE"}));
-        sizeChooser.setSelection(1);
-        sizeChooser.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            public void onNothingSelected(android.widget.AdapterView<?> p) {}
-            public void onItemSelected(android.widget.AdapterView<?> p, View v, int pos, long id) {
-                if (editor != null) editor.applyStandardSize(pos);
-            }
-        });
-        top.addView(sizeChooser, new LinearLayout.LayoutParams(132, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(top);
         editor = new EditorView();
         root.addView(editor, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -471,12 +454,11 @@ public class MainActivity extends Activity {
                 downX=x; downY=y;
                 doubleTap = (e.getEventTime()-lastTapTime)<=ViewConfiguration.getDoubleTapTimeout()
                     && Math.hypot(x-lastTapX,y-lastTapY)<=ViewConfiguration.get(getContext()).getScaledDoubleTapSlop();
+                // Prima si cerca un controllo nel punto toccato: il pannello
+                // viene selezionato soltanto quando si tocca una zona libera.
+                int elementHit=hitElement(x,y,left,top,sw,sh,-1);
                 tapPanel=hitPanel(x,y,left,top,sw,sh);
-                if(doubleTap && tapPanel>=0) {
-                    int childHit=hitElement(x,y,left,top,sw,sh,tapPanel);
-                    selected=childHit>=0?childHit:tapPanel;
-                } else if(tapPanel>=0) selected=tapPanel;
-                else selected=hitElement(x,y,left,top,sw,sh,-1);
+                selected=elementHit>=0?elementHit:tapPanel;
                 resizing=false; cancelTap=false; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
@@ -512,18 +494,38 @@ public class MainActivity extends Activity {
                     JSONObject o=current().getJSONObject(selected);
                     float dx=(x-downX)/sw, dy=(y-downY)/sh;
                     if(resizing) {
-                        double newW=clamp(startW+dx*0.35,0.02,1-startX);
-                        double newH=clamp(startH+dy*0.35,0.02,1-startY);
-                        o.put("w",newW); o.put("h",newH);
-                        // La cella scala proporzionalmente tutti i controlli contenuti.
-                        if("panel".equals(o.optString("type")) && startW>0 && startH>0) {
-                            double sx=newW/startW, sy=newH/startH;
-                            for(ChildSnapshot child:resizeChildren) {
-                                JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
-                                item.put("x",startX+(child.x-startX)*sx);
-                                item.put("y",startY+(child.y-startY)*sy);
-                                item.put("w",child.w*sx); item.put("h",child.h*sy);
+                        if("panel".equals(o.optString("type"))) {
+                            // I pannelli mantengono il ridimensionamento libero.
+                            double newW=clamp(startW+dx*0.35,0.02,1-startX);
+                            double newH=clamp(startH+dy*0.35,0.02,1-startY);
+                            o.put("w",newW); o.put("h",newH);
+                            if(startW>0 && startH>0) {
+                                double sx=newW/startW, sy=newH/startH;
+                                for(ChildSnapshot child:resizeChildren) {
+                                    JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
+                                    item.put("x",startX+(child.x-startX)*sx);
+                                    item.put("y",startY+(child.y-startY)*sy);
+                                    item.put("w",child.w*sx); item.put("h",child.h*sy);
+                                }
                             }
+                        } else {
+                            // Rotelle, scritte e pulsanti hanno solo tre taglie:
+                            // 80%, 100% (predefinita), 120% della misura media.
+                            double mediumW=o.optDouble("mediumW",startW);
+                            double mediumH=o.optDouble("mediumH",startH);
+                            o.put("mediumW",mediumW); o.put("mediumH",mediumH);
+                            double wantedW=clamp(startW+dx*0.35,0.02,1-startX);
+                            double wantedH=clamp(startH+dy*0.35,0.02,1-startY);
+                            double wantedScale=Math.max(wantedW/mediumW,wantedH/mediumH);
+                            int level=wantedScale<0.90?0:(wantedScale>1.10?2:1);
+                            double scale=level==0?0.80:(level==2?1.20:1.00);
+                            double newW=Math.min(mediumW*scale,1.0);
+                            double newH=Math.min(mediumH*scale,1.0);
+                            double centerX=startX+startW/2.0, centerY=startY+startH/2.0;
+                            double newX=clamp(centerX-newW/2.0,0,1-newW);
+                            double newY=clamp(centerY-newH/2.0,0,1-newH);
+                            o.put("x",newX); o.put("y",newY); o.put("w",newW); o.put("h",newH);
+                            o.put("standardSizeLevel",level);
                         }
                     } else {
                         double actualDx, actualDy;
@@ -569,54 +571,6 @@ public class MainActivity extends Activity {
             }
             return true;
         }
-        void applyStandardSize(int level) {
-            if(selected<0) {
-                Toast.makeText(MainActivity.this,"Seleziona prima un elemento con doppio tocco al centro",Toast.LENGTH_SHORT).show();
-                return;
-            }
-            try {
-                JSONArray before=new JSONArray(current().toString());
-                JSONObject o=current().optJSONObject(selected);
-                if(o==null) return;
-                int oldLevel=o.optInt("standardSizeLevel",1);
-                if(oldLevel==level) return;
-                double[] scales={0.80,1.00,1.20};
-                double factor=scales[level]/scales[oldLevel];
-                double oldX=o.optDouble("x"), oldY=o.optDouble("y");
-                double oldW=o.optDouble("w"), oldH=o.optDouble("h");
-                double centerX=oldX+oldW/2.0, centerY=oldY+oldH/2.0;
-                double newW=clamp(oldW*factor,0.02,1.0);
-                double newH=clamp(oldH*factor,0.02,1.0);
-                double actualX=clamp(centerX-newW/2.0,0,1-newW);
-                double actualY=clamp(centerY-newH/2.0,0,1-newH);
-                if(undoHistory.size()>=MAX_UNDO) undoHistory.removeFirst();
-                undoHistory.addLast(new UndoEntry(mode,before));
-                o.put("x",actualX); o.put("y",actualY); o.put("w",newW); o.put("h",newH);
-                o.put("standardSizeLevel",level);
-                if("panel".equals(o.optString("type")) && oldW>0 && oldH>0) {
-                    JSONArray all=current();
-                    for(int i=0;i<all.length();i++) {
-                        if(i==selected) continue;
-                        JSONObject child=all.optJSONObject(i); if(child==null) continue;
-                        String childId=child.optString("id");
-                        double cx=child.optDouble("x"), cy=child.optDouble("y");
-                        double cw=child.optDouble("w"), ch=child.optDouble("h");
-                        boolean delayGroup="delay_keyboard_panel".equals(o.optString("id")) && isDelayKeyboardChild(childId);
-                        boolean inside=cx>=oldX-0.0001 && cy>=oldY-0.0001 &&
-                            cx+cw<=oldX+oldW+0.0001 && cy+ch<=oldY+oldH+0.0001;
-                        if(delayGroup || inside) {
-                            child.put("x",actualX+(cx-oldX)*(newW/oldW));
-                            child.put("y",actualY+(cy-oldY)*(newH/oldH));
-                            child.put("w",cw*(newW/oldW));
-                            child.put("h",ch*(newH/oldH));
-                        }
-                    }
-                }
-                constrainLayoutsToCanvas();
-                invalidate();
-                saveLocal();
-            } catch(Exception ignored) {}
-        }
         private void rememberUndo() {
             if(gestureSnapshot==null) return;
             try {
@@ -624,9 +578,8 @@ public class MainActivity extends Activity {
                 undoHistory.addLast(new UndoEntry(mode,new JSONArray(gestureSnapshot.toString())));
             } catch(Exception ignored) {}
         }
-        // Un tocco seleziona il riquadro contenitore; il doppio tocco seleziona
-        // il singolo controllo al suo interno. Si sceglie il pannello più piccolo
-        // che contiene il punto, così i pannelli annidati restano raggiungibili.
+        // I controlli hanno priorità sui pannelli: il pannello si seleziona
+        // soltanto toccando una zona libera al suo interno.
         int hitPanel(float x,float y,float left,float top,float sw,float sh) {
             int best=-1; double bestArea=Double.MAX_VALUE;
             for(int i=0;i<current().length();i++) {
@@ -658,7 +611,7 @@ public class MainActivity extends Activity {
                 float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
                 // Selezione precisa: il doppio tocco deve cadere nella zona centrale
                 // dell'elemento, evitando che bordi vicini selezionino il controllo sbagliato.
-                float insetX=ww*.22f, insetY=hh*.22f;
+                float insetX=ww*.18f, insetY=hh*.18f;
                 if(x>=xx+insetX && x<=xx+ww-insetX &&
                    y>=yy+insetY && y<=yy+hh-insetY) return i;
             }
