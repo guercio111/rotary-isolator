@@ -228,7 +228,7 @@ public class MainActivity extends Activity {
                 JSONObject group = new JSONObject();
                 group.put("id","delay_keyboard_panel");
                 group.put("type","panel");
-                group.put("text","DELAY KEYBOARD");
+                group.put("text","");
                 group.put("x",Math.max(0,minX-marginX));
                 group.put("y",Math.max(0,minY-marginY));
                 group.put("w",Math.min(1, maxX+marginX)-Math.max(0,minX-marginX));
