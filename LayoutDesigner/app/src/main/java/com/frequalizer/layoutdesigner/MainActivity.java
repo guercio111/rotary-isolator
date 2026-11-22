@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
         mode = phoneDevice ? (landscapeDevice ? modes[3] : modes[2]) : (landscapeDevice ? modes[1] : modes[0]);
         loadLocal();
         seedLayoutsIfEmpty();
+        migrateTabletPortraitLayout();
         ensureDelayKeyboardGroups();
         ensureBeatBpmGroup();
         constrainLayoutsToCanvas();
@@ -156,10 +157,13 @@ public class MainActivity extends Activity {
                 tButton(l,key+"_return_"+i,"↶",x+.66*w,ry+.17*rowH*h,.105*w,rowH*h*.54);
                 tButton(l,key+"_flat_"+i,"F",x+.79*w,ry+.17*rowH*h,.15*w,rowH*h*.54);
             } else {
-                tText(l,key+"_label_"+i,bands[i],x+i*w/bands.length,ry,.95*w/bands.length,.12*h);
-                tKnob(l,key+"_knob_"+i,bands[i],x+i*w/bands.length+.05*w/bands.length,ry+.13*h,.88*w/bands.length,.42*h,color);
-                tButton(l,key+"_return_"+i,"↶",x+i*w/bands.length+.17*w/bands.length,ry+.59*h,.25*w/bands.length,.12*h);
-                tButton(l,key+"_flat_"+i,"F",x+i*w/bands.length+.53*w/bands.length,ry+.59*h,.25*w/bands.length,.12*h);
+                // Wide layout: all bands share one horizontal row, matching
+                // the original FREQUALIZER landscape mixer arrangement.
+                double bandY=y+h*.18;
+                tText(l,key+"_label_"+i,bands[i],x+i*w/bands.length,bandY,.95*w/bands.length,.12*h);
+                tKnob(l,key+"_knob_"+i,bands[i],x+i*w/bands.length+.05*w/bands.length,y+.31*h,.88*w/bands.length,.42*h,color);
+                tButton(l,key+"_return_"+i,"↶",x+i*w/bands.length+.17*w/bands.length,y+.77*h,.25*w/bands.length,.12*h);
+                tButton(l,key+"_flat_"+i,"F",x+i*w/bands.length+.53*w/bands.length,y+.77*h,.25*w/bands.length,.12*h);
             }
         }
     }
@@ -264,12 +268,51 @@ public class MainActivity extends Activity {
         for(int i=0;i<3;i++) templateItem(l,"fx_"+new String[]{"low","mid","high"}[i],"button",fx[i],x+.015*w+i*.325*w,y+.785*h,.31*w,.105*h,"#46BE78");
     }
     private void seedTabletPortrait() {
-        String l=modes[0]; seedHeader(l,false);
-        seedBandSection(l,"EQ","EQ",.012,.065,.478,.305,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",true);
-        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.305,new String[]{"HIGH","MID","LOW"},"#46BE78",true);
-        seedFilterSection(l,.012,.382,.478,.326,"#46BE78",true);
-        seedMaster(l,.510,.382,.478,.326,"#46BE78",false);
-        seedEffects(l,.012,.718,.976,.274,true,false,false);
+        String l=modes[0];
+        seedHeader(l,false);
+
+        // Portrait tablet: keep the same mixer identity as the landscape
+        // reference, but use full-width horizontal band rows so every rotary
+        // remains large and the lower effects area has enough vertical room.
+        seedBandSection(l,"EQ","EQ",.012,.065,.976,.180,
+            new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.012,.250,.976,.160,
+            new String[]{"HIGH","MID","LOW"},"#46BE78",false);
+
+        seedFilterSection(l,.012,.415,.478,.145,"#46BE78",false);
+        seedMaster(l,.510,.415,.478,.145,"#46BE78",false);
+
+        // Reverb gets a dedicated full-width row with three equally sized dials.
+        tPanel(l,"reverb_panel","REVERB",.012,.565,.976,.135);
+        tText(l,"reverb_title","REVERB",.035,.567,.24,.045);
+        tButton(l,"reverb_power","ON",.265,.567,.10,.045);
+        String[] rv={"SEND","TONE","FEEDBACK"};
+        for(int i=0;i<3;i++)
+            tKnob(l,"reverb_"+i,rv[i],.025+i*.325,.590,.285,.082,"#46BE78");
+        String[] bands={"LOW","MID","HIGH"};
+        for(int i=0;i<3;i++)
+            tButton(l,"reverb_band_"+i,bands[i],.705+i*.095,.666,.085,.028);
+
+        // BEAT EFFECTS occupies the remaining lower area. Its BPM/beat controls
+        // remain one unified movable/resizable group, as in the other profiles.
+        tPanel(l,"fx_panel","BEAT FX",.012,.705,.976,.285);
+        tPanel(l,"delay_panel","DELAY",.012,.705,.976,.285);
+        tText(l,"delay_title","BEAT EFFECTS",.032,.710,.42,.035);
+        tButton(l,"delay_power","ON",.755,.710,.12,.035);
+        String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
+        for(int i=0;i<4;i++)
+            tKnob(l,"delay_knob_"+i,d[i],.025+i*.245,.748,.215,.064,"#46BE78");
+        tPanel(l,"delay_keyboard_panel","BEAT FX",.020,.810,.960,.180);
+        seedDelayKeyboard(l,.020,.810,.960,.180);
+    }
+    private void migrateTabletPortraitLayout() {
+        // Rebuild only the tablet-portrait profile once. Preserve the user's
+        // horizontal tablet and both S25 profiles exactly as they are.
+        if(getPreferences(0).getBoolean("frequalizer_tablet_portrait_build918_v1",false)) return;
+        layouts.put(modes[0],new JSONArray());
+        seedTabletPortrait();
+        getPreferences(0).edit().putBoolean("frequalizer_tablet_portrait_build918_v1",true).apply();
+        saveLocal();
     }
     private void seedTabletLandscape() {
         String l=modes[1]; seedHeader(l,false);
