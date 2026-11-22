@@ -355,8 +355,8 @@ public class MainActivity extends Activity {
                         if("panel".equals(o.optString("type"))) {
                             for(ChildSnapshot child:groupChildren) {
                                 JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
-                                item.put("x",clamp(child.x+actualDx,0,1-item.optDouble("w")));
-                                item.put("y",clamp(child.y+actualDy,0,1-item.optDouble("h")));
+                                item.put("x",child.x+actualDx);
+                                item.put("y",child.y+actualDy);
                             }
                         }
                     }
