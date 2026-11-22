@@ -307,37 +307,47 @@ public class MainActivity extends Activity {
             JSONArray a=current();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;float x=left+(float)o.optDouble("x")*w,y=top+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;
                 int color;try{color=Color.parseColor(o.optString("color","#DDB833"));}catch(Exception e){color=Color.YELLOW;}
                 String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){
-                    // Renderer portato dalla RotaryControl originale di FREQUALIZER:
-                    // stessa corsa 135°..405°, arco, tacche, centro e indicatore.
-                    float reserve=hh*.18f;
-                    float side=Math.min(ww,Math.max(1f,hh-reserve))*.94f;
+                    // Port fedele del disegno RotaryControl originale:
+                    // stessi margini dp, dimensionamento del quadrante, tacche e testi.
+                    float refWidthDp=mode.startsWith("S25")?(mode.contains("ORIZZONTALE")?852f:393f):(mode.contains("ORIZZONTALE")?1280f:800f);
+                    float layoutScale=1f;
+                    if(mode.startsWith("S25")&&mode.contains("ORIZZONTALE")) layoutScale=Math.max(.42f,Math.min(1f,Math.min(852f/1280f,393f/800f)));
+                    float dp=(w/refWidthDp)*layoutScale;
+                    String id=o.optString("id");
+                    boolean portraitFit=!mode.contains("ORIZZONTALE")&&(id.startsWith("eq_knob_")||id.startsWith("iso_knob_")||id.startsWith("filter_knob_"));
+                    float textReserve=dp*(portraitFit?27f:18f);
+                    float side=Math.min(ww,Math.max(1f,hh-textReserve))*.94f;
+                    float cy=y+(portraitFit?(hh-dp*27f)/2f:(hh-dp*26f)/2f);
                     float cx=x+ww/2f;
-                    float cy=y+(hh-hh*.18f)/2f;
                     float rad=side/2f;
-                    RectF arc=new RectF(cx-rad+ww*.025f,cy-rad+ww*.025f,cx+rad-ww*.025f,cy+rad-ww*.025f);
-                    p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(2f,rad*.095f));p.setStrokeCap(Paint.Cap.ROUND);
+                    RectF arc=new RectF(cx-rad+dp*5f,cy-rad+dp*5f,cx+rad-dp*5f,cy+rad-dp*5f);
+                    p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp*6f);p.setStrokeCap(Paint.Cap.ROUND);
                     p.setColor(Color.rgb(69,75,85));c.drawArc(arc,135f,270f,false,p);
                     for(int tick=0;tick<=20;tick++){
                         double angle=Math.toRadians(135.0+tick*270.0/20.0);
-                        float inner=rad*(tick%5==0?.78f:.84f), outer=rad*.98f;
+                        float inner=rad*(tick%5==0?.78f:.84f),outer=rad*.98f;
                         p.setColor(tick%5==0?color:Color.rgb(154,162,174));
-                        p.setStrokeWidth(Math.max(1f,rad*(tick%5==0?.035f:.018f)));
-                        c.drawLine(cx+(float)Math.cos(angle)*inner,cy+(float)Math.sin(angle)*inner,
-                                   cx+(float)Math.cos(angle)*outer,cy+(float)Math.sin(angle)*outer,p);
-                        if(tick%5==0){p.setStyle(Paint.Style.FILL);c.drawCircle(cx+(float)Math.cos(angle)*rad*.91f,cy+(float)Math.sin(angle)*rad*.91f,Math.max(1f,rad*.035f),p);p.setStyle(Paint.Style.STROKE);}
+                        p.setStrokeWidth(dp*(tick%5==0?2.5f:1.3f));
+                        c.drawLine(cx+(float)Math.cos(angle)*inner,cy+(float)Math.sin(angle)*inner,cx+(float)Math.cos(angle)*outer,cy+(float)Math.sin(angle)*outer,p);
+                        if(tick%5==0){p.setStyle(Paint.Style.FILL);c.drawCircle(cx+(float)Math.cos(angle)*rad*.91f,cy+(float)Math.sin(angle)*rad*.91f,dp*3.2f,p);p.setStyle(Paint.Style.STROKE);}
                     }
-                    // I controlli partono neutri: lancetta al centro della corsa.
                     float fraction=.5f;
-                    p.setColor(color);p.setStrokeWidth(Math.max(2f,rad*.095f));c.drawArc(arc,135f,270f*fraction,false,p);
+                    if(id.startsWith("filter_knob_")||id.startsWith("reverb_")||id.startsWith("delay_knob_")) fraction=0f;
+                    if(id.equals("master_knob_1")||id.equals("master_knob_2")||id.equals("master_knob_3")) fraction=0f;
+                    p.setColor(color);p.setStrokeWidth(dp*6f);c.drawArc(arc,135f,270f*fraction,false,p);
                     p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(41,46,54));c.drawCircle(cx,cy,rad*.70f,p);
                     double angle=Math.toRadians(135.0+270.0*fraction);
-                    p.setColor(Color.WHITE);p.setStrokeWidth(Math.max(2f,rad*.047f));
+                    p.setColor(Color.WHITE);p.setStrokeWidth(dp*3f);
                     c.drawLine(cx,cy,cx+(float)Math.cos(angle)*rad*.52f,cy+(float)Math.sin(angle)*rad*.52f,p);
                     p.setTextAlign(Paint.Align.CENTER);
-                    p.setColor(Color.WHITE);p.setTextSize(Math.max(6f,Math.min(hh*.11f,ww*.16f)));
-                    c.drawText(o.optString("text"),cx,y+hh*.84f,p);
-                    p.setColor(color);p.setTextSize(Math.max(5f,Math.min(hh*.095f,ww*.14f)));
-                    c.drawText("0.0",cx,y+hh*.98f,p);
+                    String dialTitle=o.optString("text");
+                    float titleSize=Math.min(dp*11f,rad*2f*.86f/(Math.max(1,dialTitle.length())*.58f));
+                    p.setTextSize(Math.max(dp*5.5f,titleSize));p.setColor(Color.WHITE);
+                    c.drawText(dialTitle,cx,y+hh-dp*17f,p);
+                    String valueText=(id.startsWith("eq_knob_")||id.startsWith("iso_knob_")||id.equals("master_knob_0"))?"0.0 dB":"0%";
+                    float valueSize=Math.min(dp*10f,rad*2f*.86f/(Math.max(1,valueText.length())*.58f));
+                    p.setColor(color);p.setTextSize(Math.max(dp*5.5f,valueSize));
+                    c.drawText(valueText,cx,y+hh-dp*4f,p);
                     p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);
                 }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.BLACK);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
                 if(i==selected){
