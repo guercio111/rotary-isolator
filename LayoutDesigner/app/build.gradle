@@ -12,3 +12,5 @@ android {
         versionName '1.0'
     }
 }
+
+// Build marker: standalone visual layout editor; no FREQUALIZER audio engine.
