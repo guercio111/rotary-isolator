@@ -34,7 +34,8 @@ public class MainActivity extends Activity {
         mode = phoneDevice ? (landscapeDevice ? modes[3] : modes[2]) : (landscapeDevice ? modes[1] : modes[0]);
         loadLocal();
         seedLayoutsIfEmpty();
-        ensureDelayKeyboardGroups();
+        upgradeBeatKeyboardLayout();
+        ensureKnobValueLabels();
         ensureBeatBpmGroup();
         constrainLayoutsToCanvas();
         LinearLayout root = new LinearLayout(this);
@@ -116,7 +117,6 @@ public class MainActivity extends Activity {
         // This one-time migration intentionally replaces the older prototype maps.
         for (String m : modes) layouts.put(m, new JSONArray());
         seedTabletPortrait(); seedTabletLandscape(); seedPhonePortrait(); seedPhoneLandscape();
-        ensureDelayKeyboardGroups();
         constrainLayoutsToCanvas();
         saveLocal();
         getPreferences(0).edit().putBoolean("frequalizer_template_seeded_build918", true).apply();
@@ -132,12 +132,17 @@ public class MainActivity extends Activity {
     private void tPanel(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"panel","",x,y,w,h,"#111317"); }
     private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,(id.endsWith("_title") || id.equals("eq_title") || id.equals("iso_title") || id.equals("filter_title") || id.equals("master_title")) ? "#DC464B" : "#FFFFFF"); }
     private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#FFCD00"); }
-    private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
+    private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) {
+        templateItem(l,id,"knob",title,x,y,w,h,color);
+        String value=(id.startsWith("eq_knob_") || id.startsWith("iso_knob_") || id.equals("master_knob_0")) ? "0.0 dB" : "50%";
+        tText(l,id+"_value",value,x,y+h*.84,w,h*.15);
+    }
+    private void tFader(String l,String id,double x,double y,double w,double h) { templateItem(l,id,"fader","",x,y,w,h,"#46BE78"); }
+    private void tIndicator(String l,String id,double x,double y,double w,double h,String color) { templateItem(l,id,"indicator","",x,y,w,h,color); }
     private void seedHeader(String l,boolean compact) {
         tButton(l,"app_power","● ON",.012,.010,.105,.038);
         tButton(l,"bpm_start","BPM START",compact ? .235 : .270,.012,compact ? .18 : .20,.034);
         tText(l,"bpm_readout","— BPM",compact ? .425 : .485,.012,.13,.034);
-        tText(l,"bpm_beat","●",compact ? .565 : .655,.004,.045,.045);
         tButton(l,"options","⚙",.915,.008,.065,.042);
     }
     private void seedBandSection(String l,String key,String title,double x,double y,double w,double h,String[] bands,String color,boolean portraitRows) {
@@ -239,17 +244,37 @@ public class MainActivity extends Activity {
         for(int i=0;i<3;i++) tButton(l,"reverb_band_"+i,bands[i],x+.04*w+i*.31*w,y+.82*h,.28*w,.10*h);
     }
     private void seedDelayKeyboard(String l,double x,double y,double w,double h) {
-        tText(l,"delay_bpm","— BPM",x+.015*w,y+.02*h,.13*w,.09*h);
-        String[] top={"TAP","AUTO","LOCK","ALIGN","◀","▶","SKIP","RST"};
-        for(int i=0;i<top.length;i++) tButton(l,"delay_"+(i==4?"back":i==5?"forward":i==6?"skip":i==7?"rst":top[i].toLowerCase(Locale.US)),top[i],x+.15*w+i*.105*w,y+.02*h,.095*w,.09*h);
-        tText(l,"delay_phase_label","FX PHASE JOG",x+.02*w,y+.15*h,.32*w,.07*h);
-        tText(l,"delay_phase_fader","────────●────────",x+.03*w,y+.23*h,.94*w,.055*h);
+        // Layout ricavato dalla struttura orizzontale originale di FREQUALIZER:
+        // riga TAP/ALIGN + due indicatori + BPM, sei comandi clock,
+        // PITCH fader, FX PHASE fader, tre modalità, divisioni e bande FX.
+        tButton(l,"delay_tap","TAP",x+.020*w,y+.055*h,.120*w,.105*h);
+        tButton(l,"delay_align","ALIGN",x+.155*w,y+.055*h,.120*w,.105*h);
+        tIndicator(l,"delay_bpm_dot",x+.292*w,y+.060*h,.075*w,.095*h,"#2DEB69");
+        tIndicator(l,"delay_fx_dot",x+.385*w,y+.060*h,.075*w,.095*h,"#FFBE2D");
+        tText(l,"delay_bpm","— BPM",x+.485*w,y+.055*h,.495*w,.105*h);
+
+        String[] clock={"AUTO","LOCK","◀","▶","SKIP","RST"};
+        String[] ids={"delay_auto","delay_lock","delay_back","delay_forward","delay_skip","delay_rst"};
+        for(int i=0;i<clock.length;i++) {
+            double bx=x+.020*w+i*.162*w;
+            tButton(l,ids[i],clock[i],bx,y+.185*h,.150*w,.090*h);
+        }
+
+        tText(l,"delay_pitch_label","PITCH   −10%   |   0   |   +10%",x+.020*w,y+.292*h,.960*w,.060*h);
+        tFader(l,"delay_pitch_fader",x+.025*w,y+.352*h,.950*w,.075*h);
+
+        tText(l,"delay_phase_label","FX PHASE JOG",x+.020*w,y+.438*h,.960*w,.060*h);
+        tFader(l,"delay_phase_fader",x+.025*w,y+.498*h,.950*w,.090*h);
+
         String[] modes={"SHORT DELAY","LONG DELAY","DUB ECHO"};
-        for(int i=0;i<3;i++) tButton(l,"delay_mode_"+i,modes[i],x+.02*w+i*.325*w,y+.33*h,.31*w,.10*h);
+        for(int i=0;i<modes.length;i++) tButton(l,"delay_mode_"+i,modes[i],x+.020*w+i*.325*w,y+.608*h,.310*w,.090*h);
+
         String[] divisions={"1/16","1/8","1/4","1/2","3/4","1","2","4","8","16"};
-        for(int i=0;i<divisions.length;i++) tButton(l,"division_"+i,divisions[i],x+.015*w+i*.098*w,y+.47*h,.09*w,.12*h);
+        for(int i=0;i<divisions.length;i++) tButton(l,"division_"+i,divisions[i],x+.015*w+i*.098*w,y+.713*h,.090*w,.115*h);
+
         String[] fx={"FX LOW","FX MID","FX HIGH"};
-        for(int i=0;i<3;i++) tButton(l,"fx_"+new String[]{"low","mid","high"}[i],fx[i],x+.02*w+i*.325*w,y+.66*h,.31*w,.11*h);
+        String[] fxIds={"fx_low","fx_mid","fx_high"};
+        for(int i=0;i<fx.length;i++) tButton(l,fxIds[i],fx[i],x+.020*w+i*.325*w,y+.850*h,.310*w,.105*h);
     }
     private void seedTabletPortrait() {
         String l=modes[0]; seedHeader(l,false);
@@ -285,98 +310,117 @@ public class MainActivity extends Activity {
 
     // La tastiera delle divisioni DELAY è un unico gruppo indivisibile:
     // tasti e controlli contenuti si muovono e si ridimensionano insieme.
+    // La tastiera BPM/BEAT è un solo oggetto selezionabile.
+    // Nessun controllo interno può essere selezionato o spostato da solo.
     private boolean isDelayKeyboardChild(String id) {
-        return id.startsWith("division_") || id.equals("delay_bpm") ||
-            id.equals("delay_tap") || id.equals("delay_auto") || id.equals("delay_lock") ||
-            id.equals("delay_align") || id.equals("delay_back") || id.equals("delay_forward") ||
-            id.equals("delay_skip") || id.equals("delay_rst") || id.equals("delay_phase_label") ||
-            id.equals("delay_phase_fader") || id.startsWith("delay_mode_") ||
+        return id.equals("delay_tap") || id.equals("delay_align") ||
+            id.equals("delay_bpm") || id.equals("delay_bpm_dot") || id.equals("delay_fx_dot") ||
+            id.equals("delay_auto") || id.equals("delay_lock") ||
+            id.equals("delay_back") || id.equals("delay_forward") ||
+            id.equals("delay_skip") || id.equals("delay_rst") ||
+            id.equals("delay_pitch_label") || id.equals("delay_pitch_fader") ||
+            id.equals("delay_phase_label") || id.equals("delay_phase_fader") ||
+            id.startsWith("delay_mode_") || id.startsWith("division_") ||
             id.equals("fx_low") || id.equals("fx_mid") || id.equals("fx_high");
     }
-    // Tastiera BEAT FX indivisibile: tasti, divisioni, fader e selettori restano un gruppo.
-    private void ensureDelayKeyboardGroups() {
-        for (String l : modes) {
+    private boolean isBeatBpmChild(String id) { return isDelayKeyboardChild(id); }
+
+    private JSONObject findItem(JSONArray array,String id) {
+        for(int i=0;i<array.length();i++) {
+            JSONObject o=array.optJSONObject(i);
+            if(o!=null && id.equals(o.optString("id"))) return o;
+        }
+        return null;
+    }
+    private void upgradeBeatKeyboardLayout() {
+        if(getPreferences(0).getBoolean("frequalizer_complete_beat_keyboard_v1",false)) return;
+        for(String l:modes) {
             JSONArray old=layouts.get(l);
-            double minX=1,minY=1,maxX=0,maxY=0;
+            JSONObject parent;
+            double x,y,w,h;
+            if(l.contains("ORIZZONTALE")) {
+                parent=findItem(old,"fx_panel");
+                if(parent==null) continue;
+                x=parent.optDouble("x")+parent.optDouble("w")*.50;
+                y=parent.optDouble("y");
+                w=parent.optDouble("w")*.30;
+                h=parent.optDouble("h");
+            } else {
+                parent=findItem(old,"delay_panel");
+                if(parent==null) continue;
+                x=parent.optDouble("x");
+                y=parent.optDouble("y")+parent.optDouble("h")*.34;
+                w=parent.optDouble("w");
+                h=parent.optDouble("h")*.64;
+            }
+            JSONArray kept=new JSONArray();
             for(int i=0;i<old.length();i++) {
                 JSONObject item=old.optJSONObject(i);
-                if(item==null || !isDelayKeyboardChild(item.optString("id"))) continue;
-                double x=item.optDouble("x"),y=item.optDouble("y"),w=item.optDouble("w"),h=item.optDouble("h");
-                minX=Math.min(minX,x); minY=Math.min(minY,y);
-                maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+h);
+                if(item==null) continue;
+                String id=item.optString("id");
+                if(isDelayKeyboardChild(id) || id.equals("bpm_beat") ||
+                    id.equals("delay_keyboard_panel") || id.equals("beat_bpm_section_panel") ||
+                    id.equals("bpm_header_panel")) continue;
+                kept.put(item);
             }
-            int groupIndex=-1;
-            for(int i=0;i<old.length();i++) {
-                JSONObject o=old.optJSONObject(i);
-                if(o!=null && "delay_keyboard_panel".equals(o.optString("id"))) {groupIndex=i;break;}
+            layouts.put(l,kept);
+            seedDelayKeyboard(l,x,y,w,h);
+        }
+        getPreferences(0).edit().putBoolean("frequalizer_complete_beat_keyboard_v1",true).apply();
+        saveLocal();
+    }
+    private void ensureKnobValueLabels() {
+        for(String l:modes) {
+            JSONArray a=layouts.get(l);
+            ArrayList<JSONObject> knobs=new ArrayList<>();
+            for(int i=0;i<a.length();i++) {
+                JSONObject o=a.optJSONObject(i);
+                if(o!=null && "knob".equals(o.optString("type"))) knobs.add(o);
             }
-            // Se il gruppo esiste già, conserva anche il suo perimetro originale:
-            // non restringerlo ai soli controlli riconosciuti, altrimenti gli indicatori
-            // BPM vicini ai bordi possono restare fuori quando si sposta il gruppo.
-            if(groupIndex>=0) {
-                JSONObject existing=old.optJSONObject(groupIndex);
-                if(existing!=null) {
-                    double gx=existing.optDouble("x"), gy=existing.optDouble("y");
-                    double gw=existing.optDouble("w"), gh=existing.optDouble("h");
-                    minX=Math.min(minX,gx); minY=Math.min(minY,gy);
-                    maxX=Math.max(maxX,gx+gw); maxY=Math.max(maxY,gy+gh);
-                }
+            for(JSONObject knob:knobs) {
+                String id=knob.optString("id");
+                if(findItem(a,id+"_value")!=null) continue;
+                String value=(id.startsWith("eq_knob_") || id.startsWith("iso_knob_") || id.equals("master_knob_0")) ? "0.0 dB" : "50%";
+                double x=knob.optDouble("x"),y=knob.optDouble("y"),w=knob.optDouble("w"),h=knob.optDouble("h");
+                tText(l,id+"_value",value,x,y+h*.84,w,h*.15);
             }
-            if(maxX<=minX || maxY<=minY) continue;
-            try {
-                JSONObject group=groupIndex>=0?old.getJSONObject(groupIndex):new JSONObject();
-                group.put("id","delay_keyboard_panel"); group.put("type","panel"); group.put("text","");
-                group.put("x",Math.max(0,minX-.008)); group.put("y",Math.max(0,minY-.012));
-                group.put("w",Math.min(1,maxX+.008)-Math.max(0,minX-.008));
-                group.put("h",Math.min(1,maxY+.012)-Math.max(0,minY-.012)); group.put("color","#252A31");
-                if(groupIndex<0) old.put(0,group);
-            } catch(Exception ignored) {}
         }
         saveLocal();
     }
-
-    // Unico gruppo BPM/BEAT: header, indicatori, TAP/AUTO, frecce,
-    // fader, divisioni, modalità delay ed FX restano solidali.
-    private boolean isBpmHeaderChild(String id) { return id.startsWith("bpm_"); }
-    private boolean isBeatBpmChild(String id) {
-        return isBpmHeaderChild(id) || isDelayKeyboardChild(id);
-    }
     private void ensureBeatBpmGroup() {
-        for (String l : modes) {
-            JSONArray original=layouts.get(l);
+        for(String l:modes) {
+            JSONArray old=layouts.get(l);
+            JSONObject parent;
+            double x,y,w,h;
+            if(l.contains("ORIZZONTALE")) {
+                parent=findItem(old,"fx_panel");
+                if(parent==null) continue;
+                x=parent.optDouble("x")+parent.optDouble("w")*.50;
+                y=parent.optDouble("y");
+                w=parent.optDouble("w")*.30;
+                h=parent.optDouble("h");
+            } else {
+                parent=findItem(old,"delay_panel");
+                if(parent==null) continue;
+                x=parent.optDouble("x");
+                y=parent.optDouble("y")+parent.optDouble("h")*.34;
+                w=parent.optDouble("w");
+                h=parent.optDouble("h")*.64;
+            }
             JSONArray items=new JSONArray();
-            JSONObject existingGroup=null;
-            // Rimuove i vecchi contenitori separati, senza toccare le coordinate
-            // dei controlli: ora esiste un solo gruppo comune.
-            for(int i=0;i<original.length();i++) {
-                JSONObject item=original.optJSONObject(i);
+            for(int i=0;i<old.length();i++) {
+                JSONObject item=old.optJSONObject(i);
                 if(item==null) continue;
                 String id=item.optString("id");
-                if("beat_bpm_section_panel".equals(id)) { existingGroup=item; continue; }
-                if("delay_keyboard_panel".equals(id) || "bpm_header_panel".equals(id)) continue;
+                if(id.equals("beat_bpm_section_panel") || id.equals("delay_keyboard_panel") || id.equals("bpm_header_panel")) continue;
                 items.put(item);
             }
-            double minX=1,minY=1,maxX=0,maxY=0;
-            for(int i=0;i<items.length();i++) {
-                JSONObject item=items.optJSONObject(i);
-                if(item==null || !isBeatBpmChild(item.optString("id"))) continue;
-                double x=item.optDouble("x"),y=item.optDouble("y"),w=item.optDouble("w"),h=item.optDouble("h");
-                minX=Math.min(minX,x); minY=Math.min(minY,y);
-                maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+h);
-            }
-            if(maxX<=minX || maxY<=minY) { layouts.put(l,items); continue; }
-            if(existingGroup!=null) {
-                double gx=existingGroup.optDouble("x"),gy=existingGroup.optDouble("y");
-                double gw=existingGroup.optDouble("w"),gh=existingGroup.optDouble("h");
-                minX=Math.min(minX,gx); minY=Math.min(minY,gy);
-                maxX=Math.max(maxX,gx+gw); maxY=Math.max(maxY,gy+gh);
-            }
             try {
-                JSONObject group=existingGroup==null?new JSONObject():existingGroup;
+                JSONObject group=new JSONObject();
                 group.put("id","beat_bpm_section_panel"); group.put("type","panel"); group.put("text","");
-                group.put("x",Math.max(0,minX-.008)); group.put("y",Math.max(0,minY-.012));
-                group.put("w",Math.min(1,maxX+.008)-Math.max(0,minX-.008));
-                group.put("h",Math.min(1,maxY+.012)-Math.max(0,minY-.012)); group.put("color","#252A31");
+                // Il bordo coincide esattamente con il perimetro della tastiera.
+                group.put("x",x); group.put("y",y); group.put("w",w); group.put("h",h);
+                group.put("color","#252A31");
                 items.put(0,group);
             } catch(Exception ignored) {}
             layouts.put(l,items);
@@ -459,12 +503,29 @@ public class MainActivity extends Activity {
                     float titleSize=Math.min(dp*11f,rad*2f*.86f/(Math.max(1,dialTitle.length())*.58f));
                     p.setTextSize(Math.max(dp*5.5f,titleSize));p.setColor(Color.WHITE);
                     c.drawText(dialTitle,cx,y+hh-dp*17f,p);
-                    String valueText=(id.startsWith("eq_knob_")||id.startsWith("iso_knob_")||id.equals("master_knob_0"))?"0.0 dB":"0%";
-                    float valueSize=Math.min(dp*10f,rad*2f*.86f/(Math.max(1,valueText.length())*.58f));
-                    p.setColor(color);p.setTextSize(Math.max(dp*5.5f,valueSize));
-                    c.drawText(valueText,cx,y+hh-dp*4f,p);
                     p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);
-                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{
+                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("fader")){
+                    float cy=y+hh*.50f;
+                    p.setColor(Color.rgb(73,80,91));p.setStrokeWidth(Math.max(2f,hh*.16f));p.setStrokeCap(Paint.Cap.ROUND);
+                    c.drawLine(x+ww*.04f,cy,x+ww*.96f,cy,p);
+                    if(o.optString("id").equals("delay_phase_fader")){
+                        float masterX=x+ww*.50f,fxX=x+ww*.63f;
+                        p.setColor(Color.rgb(45,235,105));p.setStrokeWidth(Math.max(2f,hh*.12f));
+                        c.drawLine(masterX,cy-hh*.34f,masterX,cy+hh*.05f,p);
+                        p.setStyle(Paint.Style.FILL);c.drawCircle(masterX,cy-hh*.34f,Math.max(3f,hh*.20f),p);
+                        p.setColor(Color.rgb(255,190,45));p.setStrokeWidth(Math.max(2f,hh*.12f));
+                        c.drawLine(fxX,cy-hh*.05f,fxX,cy+hh*.34f,p);
+                        p.setStyle(Paint.Style.FILL);c.drawCircle(fxX,cy+hh*.34f,Math.max(3f,hh*.20f),p);
+                    }else{
+                        float thumbX=x+ww*.50f;
+                        p.setColor(Color.rgb(255,205,0));p.setStyle(Paint.Style.FILL);
+                        c.drawCircle(thumbX,cy,Math.max(4f,hh*.34f),p);
+                    }
+                    p.setStyle(Paint.Style.FILL);
+                }else if(type.equals("indicator")){
+                    p.setColor(color);p.setStyle(Paint.Style.FILL);
+                    c.drawCircle(x+ww*.5f,y+hh*.5f,Math.min(ww,hh)*.36f,p);
+                }else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{
                     String id=o.optString("id"),label=o.optString("text");
                     p.setStyle(Paint.Style.FILL);
                     if(id.equals("options")){
@@ -665,13 +726,13 @@ public class MainActivity extends Activity {
         boolean hitResizeHandle(float x,float y,float left,float top,float sw,float sh) {
             if(selected<0) return false;
             JSONObject o=current().optJSONObject(selected);
-            if(o==null || "panel".equals(o.optString("type"))) return false;
+            if(o==null) return false;
             float ex=left+(float)o.optDouble("x")*sw;
             float ey=top+(float)o.optDouble("y")*sh;
             float ew=(float)o.optDouble("w")*sw;
             float eh=(float)o.optDouble("h")*sh;
             float dx=x-(ex+ew),dy=y-(ey+eh);
-            return dx*dx+dy*dy<=22f*22f;
+            return dx*dx+dy*dy<=16f*16f;
         }
         int hitTextDelete(float x,float y,float left,float top,float sw,float sh) {
             if(selected<0) return -1;
@@ -681,7 +742,7 @@ public class MainActivity extends Activity {
             float ey=top+(float)o.optDouble("y")*sh;
             float ew=(float)o.optDouble("w")*sw;
             float dx=x-(ex+ew), dy=y-ey;
-            return dx*dx+dy*dy<=28f*28f?selected:-1;
+            return dx*dx+dy*dy<=18f*18f?selected:-1;
         }
         // I controlli hanno priorità sui pannelli: il pannello si seleziona
         // soltanto toccando una zona libera al suo interno.
