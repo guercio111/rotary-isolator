@@ -408,7 +408,7 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==EXPORT&&c==RESULT_OK&&d!=null){try(OutputStream os=getContentResolver().openOutputStream(d.getData())){os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show();}}}
 
     private class EditorView extends View {
-        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;
+        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false; boolean editUnlocked=false, longPressTriggered=false, deleteOnUp=false; final android.os.Handler editHandler=new android.os.Handler(android.os.Looper.getMainLooper()); Runnable longPressRunnable;
         long lastTapTime=0; float lastTapX=0,lastTapY=0; int tapPanel=-1; boolean doubleTap=false;
         JSONArray gestureSnapshot;
         boolean gestureChanged=false;
@@ -491,12 +491,12 @@ public class MainActivity extends Activity {
                     }
                 }
                 if(i==selected){
-                    p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
-                    c.drawCircle(x+ww,y+hh,12,p);
-                    // La X elimina esclusivamente gli elementi testuali.
-                    if("text".equals(type)) {
+                    p.setColor(editUnlocked?Color.rgb(255,205,0):Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
+                    if(editUnlocked){
+                        // Delete and resize handles are available for every element type.
                         p.setColor(Color.rgb(205,45,50));c.drawCircle(x+ww,y,15,p);
                         p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("×",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
+                        p.setColor(Color.rgb(255,205,0));c.drawCircle(x+ww,y+hh,12,p);
                     }
                 }
             }
@@ -511,126 +511,87 @@ public class MainActivity extends Activity {
         }
         public boolean onTouchEvent(android.view.MotionEvent e) {
             float x=e.getX(),y=e.getY();
-            float[] s=stage(); float left=s[0], top=s[1], sw=s[2], sh=s[3];
+            float[] stage=stage(); float left=stage[0], top=stage[1], sw=stage[2], sh=stage[3];
             if(e.getAction()==MotionEvent.ACTION_DOWN) {
-                downX=x; downY=y;
-                doubleTap = (e.getEventTime()-lastTapTime)<=ViewConfiguration.getDoubleTapTimeout()
-                    && Math.hypot(x-lastTapX,y-lastTapY)<=ViewConfiguration.get(getContext()).getScaledDoubleTapSlop();
-                // Priorità: X elimina, maniglia ridimensiona, elemento seleziona,
-                // pannello solo quando si tocca uno spazio vuoto.
-                int deleteHit=hitTextDelete(x,y,left,top,sw,sh);
-                boolean resizeHit=deleteHit<0 && hitResizeHandle(x,y,left,top,sw,sh);
-                int elementHit=(deleteHit>=0 || resizeHit)?-1:hitElement(x,y,left,top,sw,sh,-1);
-                tapPanel=(deleteHit>=0 || resizeHit || elementHit>=0)?-1:hitPanel(x,y,left,top,sw,sh);
-                selected=deleteHit>=0?deleteHit:(resizeHit?selected:(elementHit>=0?elementHit:tapPanel));
-                resizing=resizeHit; cancelTap=deleteHit>=0; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
+                editHandler.removeCallbacks(longPressRunnable);
+                downX=x; downY=y; longPressTriggered=false; deleteOnUp=false;
+                int deleteHit=editUnlocked?hitDeleteHandle(x,y,left,top,sw,sh):-1;
+                if(deleteHit>=0) {
+                    deleteOnUp=true; gestureChanged=false;
+                    try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
+                    invalidate(); return true;
+                }
+                int elementHit=hitElement(x,y,left,top,sw,sh,-1);
+                tapPanel=elementHit>=0?-1:hitPanel(x,y,left,top,sw,sh);
+                selected=elementHit>=0?elementHit:tapPanel;
+                editUnlocked=false; resizing=false; cancelTap=false; gestureChanged=false;
+                resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
-                    JSONObject o=current().optJSONObject(selected);
-                    float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
-                    float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
-                    // La maniglia in basso a destra viene intercettata prima del pannello.
-                    resizing=!cancelTap && (resizeHit || (Math.abs(x-(ex+ew))<22 && Math.abs(y-(ey+eh))<22));
-                    startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
-                    startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
-                    if("panel".equals(o.optString("type"))) {
-                        JSONArray all=current();
-                        for(int i=0;i<all.length();i++) if(i!=selected) {
-                            JSONObject child=all.optJSONObject(i); if(child==null) continue;
-                            double cx=child.optDouble("x"), cy=child.optDouble("y"), cw=child.optDouble("w"), ch=child.optDouble("h");
-                            boolean beatBpmGroup="beat_bpm_section_panel".equals(o.optString("id")) && isBeatBpmChild(child.optString("id"));
-                            boolean insidePanel=!"beat_bpm_section_panel".equals(o.optString("id")) && cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001;
-                            if(beatBpmGroup || insidePanel) {
-                                ChildSnapshot snap=new ChildSnapshot(i,child);
-                                resizeChildren.add(snap);
-                                groupChildren.add(snap);
+                    JSONObject target=current().optJSONObject(selected);
+                    startX=(float)target.optDouble("x"); startY=(float)target.optDouble("y");
+                    startW=(float)target.optDouble("w"); startH=(float)target.optDouble("h");
+                    longPressRunnable=()->{
+                        if(selected<0) return;
+                        longPressTriggered=true; editUnlocked=true;
+                        float ex=left+startX*sw, ey=top+startY*sh, ew=startW*sw, eh=startH*sh;
+                        float brx=x, bry=y;
+                        resizing=Math.hypot(brx-(ex+ew),bry-(ey+eh))<=30f;
+                        JSONObject selectedObject=current().optJSONObject(selected);
+                        if(selectedObject!=null && "panel".equals(selectedObject.optString("type"))) {
+                            JSONArray all=current();
+                            for(int i=0;i<all.length();i++) if(i!=selected) {
+                                JSONObject child=all.optJSONObject(i); if(child==null) continue;
+                                double cx=child.optDouble("x"),cy=child.optDouble("y"),cw=child.optDouble("w"),ch=child.optDouble("h");
+                                boolean beatGroup="beat_bpm_section_panel".equals(selectedObject.optString("id")) && isBeatBpmChild(child.optString("id"));
+                                boolean inside=!"beat_bpm_section_panel".equals(selectedObject.optString("id")) &&
+                                    cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001;
+                                if(beatGroup||inside) { ChildSnapshot snap=new ChildSnapshot(i,child); resizeChildren.add(snap); groupChildren.add(snap); }
                             }
                         }
-                    }
+                        invalidate();
+                        Toast.makeText(MainActivity.this,resizing?"RIDIMENSIONA":"MODIFICA ATTIVA",Toast.LENGTH_SHORT).show();
+                    };
+                    editHandler.postDelayed(longPressRunnable,550L);
+                } else {
+                    longPressRunnable=null;
                 }
                 invalidate(); return true;
             }
-            if(e.getAction()==MotionEvent.ACTION_MOVE && selected>=0) {
-                if(cancelTap) return true;
-                if(Math.abs(x-downX)>1f || Math.abs(y-downY)>1f) gestureChanged=true;
+            if(e.getAction()==MotionEvent.ACTION_MOVE) {
+                if(!longPressTriggered || !editUnlocked || selected<0 || deleteOnUp) return true;
+                if(Math.abs(x-downX)>2f || Math.abs(y-downY)>2f) gestureChanged=true;
                 try {
-                    JSONObject o=current().getJSONObject(selected);
-                    float dx=(x-downX)/sw, dy=(y-downY)/sh;
+                    JSONObject item=current().getJSONObject(selected);
+                    double dx=(x-downX)/sw, dy=(y-downY)/sh;
                     if(resizing) {
-                        if("panel".equals(o.optString("type"))) {
-                            // I pannelli mantengono il ridimensionamento libero.
-                            double newW=clamp(startW+dx*0.35,0.02,1-startX);
-                            double newH=clamp(startH+dy*0.35,0.02,1-startY);
-                            o.put("w",newW); o.put("h",newH);
-                            if(startW>0 && startH>0) {
-                                double sx=newW/startW, sy=newH/startH;
-                                for(ChildSnapshot child:resizeChildren) {
-                                    JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
-                                    item.put("x",startX+(child.x-startX)*sx);
-                                    item.put("y",startY+(child.y-startY)*sy);
-                                    item.put("w",child.w*sx); item.put("h",child.h*sy);
-                                }
+                        double newW=clamp(snapToGrid(startW+dx),0.02,1-startX);
+                        double newH=clamp(snapToGrid(startH+dy),0.02,1-startY);
+                        item.put("w",newW); item.put("h",newH);
+                        if("panel".equals(item.optString("type")) && startW>0 && startH>0) {
+                            double sx=newW/startW, sy=newH/startH;
+                            for(ChildSnapshot child:resizeChildren) {
+                                JSONObject member=current().optJSONObject(child.index); if(member==null) continue;
+                                member.put("x",snapToGrid(startX+(child.x-startX)*sx));
+                                member.put("y",snapToGrid(startY+(child.y-startY)*sy));
+                                member.put("w",Math.max(0.01,snapToGrid(child.w*sx)));
+                                member.put("h",Math.max(0.01,snapToGrid(child.h*sy)));
                             }
-                        } else {
-                            // Testi e tasti: sei dimensioni, fino al 200% della misura iniziale.
-                            // Le rotelle mantengono le tre dimensioni già previste.
-                            double mediumW=o.optDouble("mediumW",startW);
-                            double mediumH=o.optDouble("mediumH",startH);
-                            o.put("mediumW",mediumW); o.put("mediumH",mediumH);
-                            double wantedW=clamp(startW+dx*0.35,0.02,1-startX);
-                            double wantedH=clamp(startH+dy*0.35,0.02,1-startY);
-                            double wantedScale=Math.max(wantedW/mediumW,wantedH/mediumH);
-                            boolean sixSizes="text".equals(o.optString("type")) || "button".equals(o.optString("type"));
-                            double scale;
-                            int level;
-                            if(sixSizes) {
-                                double[] sizes={0.60,0.80,1.00,1.30,1.60,2.00};
-                                level=0;
-                                double distance=Math.abs(wantedScale-sizes[0]);
-                                for(int n=1;n<sizes.length;n++) {
-                                    double candidate=Math.abs(wantedScale-sizes[n]);
-                                    if(candidate<distance){distance=candidate;level=n;}
-                                }
-                                scale=sizes[level];
-                            } else {
-                                level=wantedScale<0.90?0:(wantedScale>1.10?2:1);
-                                scale=level==0?0.80:(level==2?1.20:1.00);
-                            }
-                            double newW=Math.min(mediumW*scale,1.0);
-                            double newH=Math.min(mediumH*scale,1.0);
-                            double centerX=startX+startW/2.0, centerY=startY+startH/2.0;
-                            double newX=clamp(centerX-newW/2.0,0,1-newW);
-                            double newY=clamp(centerY-newH/2.0,0,1-newH);
-                            o.put("x",newX); o.put("y",newY); o.put("w",newW); o.put("h",newH);
-                            o.put("standardSizeLevel",level);
                         }
                     } else {
-                        double actualDx, actualDy;
-                        if("panel".equals(o.optString("type")) && !groupChildren.isEmpty()) {
-                            double minGX=startX, minGY=startY, maxGX=startX+o.optDouble("w"), maxGY=startY+o.optDouble("h");
-                            for(ChildSnapshot child:groupChildren) {
-                                minGX=Math.min(minGX,child.x); minGY=Math.min(minGY,child.y);
-                                maxGX=Math.max(maxGX,child.x+child.w); maxGY=Math.max(maxGY,child.y+child.h);
-                            }
-                            // Anche i pannelli e i gruppi seguono lo stesso reticolo.
-                            double targetX=snapToGrid(startX+dx);
-                            double targetY=snapToGrid(startY+dy);
-                            actualDx=clamp(targetX-startX,-minGX,1-maxGX);
-                            actualDy=clamp(targetY-startY,-minGY,1-maxGY);
-                        } else {
-                            // Reticolo invisibile: aggancio a passi dell'1% del canvas.
-                            double moveX=clamp(snapToGrid(startX+dx),0,Math.max(0,1-o.optDouble("w")));
-                            double moveY=clamp(snapToGrid(startY+dy),0,Math.max(0,1-o.optDouble("h")));
-                            actualDx=moveX-startX; actualDy=moveY-startY;
+                        double targetX=snapToGrid(startX+dx), targetY=snapToGrid(startY+dy);
+                        double minX=startX,minY=startY,maxX=startX+startW,maxY=startY+startH;
+                        for(ChildSnapshot child:groupChildren) {
+                            minX=Math.min(minX,child.x); minY=Math.min(minY,child.y);
+                            maxX=Math.max(maxX,child.x+child.w); maxY=Math.max(maxY,child.y+child.h);
                         }
-                        o.put("x",startX+actualDx); o.put("y",startY+actualDy);
-                        // Il gruppo DELAY non può mai oltrepassare i bordi del layout.
-                        if("panel".equals(o.optString("type"))) {
-                            for(ChildSnapshot child:groupChildren) {
-                                JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
-                                item.put("x",child.x+actualDx);
-                                item.put("y",child.y+actualDy);
-                            }
+                        double actualDx=clamp(targetX-startX,-minX,1-maxX);
+                        double actualDy=clamp(targetY-startY,-minY,1-maxY);
+                        item.put("x",snapToGrid(startX+actualDx)); item.put("y",snapToGrid(startY+actualDy));
+                        for(ChildSnapshot child:groupChildren) {
+                            JSONObject member=current().optJSONObject(child.index); if(member==null) continue;
+                            member.put("x",snapToGrid(child.x+actualDx));
+                            member.put("y",snapToGrid(child.y+actualDy));
                         }
                     }
                     invalidate();
@@ -638,17 +599,35 @@ public class MainActivity extends Activity {
                 return true;
             }
             if(e.getAction()==MotionEvent.ACTION_UP) {
-                if(cancelTap && selected>=0) {
+                editHandler.removeCallbacks(longPressRunnable);
+                if(deleteOnUp && selected>=0) {
                     rememberUndo();
-                    JSONArray old=current(); JSONArray kept=new JSONArray();
-                    for(int i=0;i<old.length();i++) if(i!=selected) kept.put(old.opt(i));
-                    layouts.put(mode,kept); selected=-1; invalidate(); saveLocal();
+                    JSONArray old=current(), kept=new JSONArray();
+                    JSONObject victim=old.optJSONObject(selected);
+                    boolean panel=victim!=null && "panel".equals(victim.optString("type"));
+                    double vx=panel?victim.optDouble("x"):0, vy=panel?victim.optDouble("y"):0;
+                    double vw=panel?victim.optDouble("w"):0, vh=panel?victim.optDouble("h"):0;
+                    for(int i=0;i<old.length();i++) {
+                        JSONObject candidate=old.optJSONObject(i);
+                        if(i==selected) continue;
+                        if(panel && candidate!=null && candidate.optDouble("x")>=vx-0.0001 && candidate.optDouble("y")>=vy-0.0001 &&
+                            candidate.optDouble("x")+candidate.optDouble("w")<=vx+vw+0.0001 &&
+                            candidate.optDouble("y")+candidate.optDouble("h")<=vy+vh+0.0001) continue;
+                        kept.put(old.opt(i));
+                    }
+                    layouts.put(mode,kept); selected=-1; editUnlocked=false; invalidate(); saveLocal();
+                    Toast.makeText(MainActivity.this,"Elemento eliminato",Toast.LENGTH_SHORT).show();
                 } else {
-                    if(gestureChanged) rememberUndo();
-                    saveLocal();
+                    if(longPressTriggered && gestureChanged) rememberUndo();
+                    if(longPressTriggered) saveLocal();
                 }
-                if(!gestureChanged && !cancelTap) { lastTapTime=e.getEventTime(); lastTapX=x; lastTapY=y; }
-                cancelTap=false; gestureSnapshot=null; gestureChanged=false; return true;
+                deleteOnUp=false; longPressTriggered=false; gestureSnapshot=null; gestureChanged=false;
+                return true;
+            }
+            if(e.getAction()==MotionEvent.ACTION_CANCEL) {
+                editHandler.removeCallbacks(longPressRunnable);
+                deleteOnUp=false; longPressTriggered=false; gestureSnapshot=null; gestureChanged=false;
+                return true;
             }
             return true;
         }
@@ -673,15 +652,15 @@ public class MainActivity extends Activity {
             float dx=x-(ex+ew),dy=y-(ey+eh);
             return dx*dx+dy*dy<=22f*22f;
         }
-        int hitTextDelete(float x,float y,float left,float top,float sw,float sh) {
-            if(selected<0) return -1;
+        int hitDeleteHandle(float x,float y,float left,float top,float sw,float sh) {
+            if(selected<0 || !editUnlocked) return -1;
             JSONObject o=current().optJSONObject(selected);
-            if(o==null || !"text".equals(o.optString("type"))) return -1;
+            if(o==null) return -1;
             float ex=left+(float)o.optDouble("x")*sw;
             float ey=top+(float)o.optDouble("y")*sh;
             float ew=(float)o.optDouble("w")*sw;
             float dx=x-(ex+ew), dy=y-ey;
-            return dx*dx+dy*dy<=28f*28f?selected:-1;
+            return dx*dx+dy*dy<=30f*30f?selected:-1;
         }
         // I controlli hanno priorità sui pannelli: il pannello si seleziona
         // soltanto toccando una zona libera al suo interno.
