@@ -214,14 +214,25 @@ public class MainActivity extends Activity {
             }
             if(exists) continue;
             try {
+                double minX=1,minY=1,maxX=0,maxY=0;
+                for(int i=0;i<old.length();i++) {
+                    JSONObject item=old.optJSONObject(i);
+                    if(item==null || !item.optString("id").startsWith("division_")) continue;
+                    double x=item.optDouble("x"), y=item.optDouble("y");
+                    minX=Math.min(minX,x); minY=Math.min(minY,y);
+                    maxX=Math.max(maxX,x+item.optDouble("w"));
+                    maxY=Math.max(maxY,y+item.optDouble("h"));
+                }
+                if(maxX<=minX || maxY<=minY) continue;
+                double marginX=0.012, marginY=0.018;
                 JSONObject group = new JSONObject();
                 group.put("id","delay_keyboard_panel");
                 group.put("type","panel");
                 group.put("text","DELAY KEYBOARD");
-                group.put("x",0.505 + 0.005*0.488);
-                group.put("y",0.505 + 0.585*0.475);
-                group.put("w",0.95*0.488);
-                group.put("h",0.145*0.475);
+                group.put("x",Math.max(0,minX-marginX));
+                group.put("y",Math.max(0,minY-marginY));
+                group.put("w",Math.min(1, maxX+marginX)-Math.max(0,minX-marginX));
+                group.put("h",Math.min(1, maxY+marginY)-Math.max(0,minY-marginY));
                 group.put("color","#252A31");
                 JSONArray updated = new JSONArray();
                 boolean inserted=false;
