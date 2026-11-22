@@ -338,7 +338,7 @@ public class MainActivity extends Activity {
         }
         saveLocal();
     }
-    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  1 tocco: riquadro  ·  2 tocchi: elemento  ·  Trascina per spostare, angolo per ridimensionare");}
+    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  Tocca un elemento per selezionarlo  ·  Spazio vuoto: pannello  ·  Trascina per spostare, angolo per ridimensionare");}
     private void saveLocal(){getPreferences(0).edit().putString("project",toJson().toString()).apply(); if(status!=null)updateStatus();}
     private void loadLocal(){try{JSONObject p=new JSONObject(getPreferences(0).getString("project","{}"));for(String m:modes)if(p.has(m))layouts.put(m,p.getJSONArray(m));}catch(Exception ignored){}}
     private JSONObject toJson(){JSONObject p=new JSONObject();try{p.put("project","FREQUALIZER Layout Designer");p.put("version",1);p.put("devices",new JSONObject().put("tablet","Samsung Galaxy Tab A11+ SM-X230").put("smartphone","Samsung Galaxy S25 base"));for(String m:modes)p.put(m,layouts.get(m));}catch(Exception ignored){}return p;}
@@ -454,19 +454,21 @@ public class MainActivity extends Activity {
                 downX=x; downY=y;
                 doubleTap = (e.getEventTime()-lastTapTime)<=ViewConfiguration.getDoubleTapTimeout()
                     && Math.hypot(x-lastTapX,y-lastTapY)<=ViewConfiguration.get(getContext()).getScaledDoubleTapSlop();
-                // La X rossa della scritta selezionata ha priorità assoluta.
+                // Priorità: X elimina, maniglia ridimensiona, elemento seleziona,
+                // pannello solo quando si tocca uno spazio vuoto.
                 int deleteHit=hitTextDelete(x,y,left,top,sw,sh);
-                int elementHit=deleteHit>=0?-1:hitElement(x,y,left,top,sw,sh,-1);
-                tapPanel=deleteHit>=0?-1:hitPanel(x,y,left,top,sw,sh);
-                selected=deleteHit>=0?deleteHit:(elementHit>=0?elementHit:tapPanel);
-                resizing=false; cancelTap=deleteHit>=0; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
+                boolean resizeHit=deleteHit<0 && hitResizeHandle(x,y,left,top,sw,sh);
+                int elementHit=(deleteHit>=0 || resizeHit)?-1:hitElement(x,y,left,top,sw,sh,-1);
+                tapPanel=(deleteHit>=0 || resizeHit || elementHit>=0)?-1:hitPanel(x,y,left,top,sw,sh);
+                selected=deleteHit>=0?deleteHit:(resizeHit?selected:(elementHit>=0?elementHit:tapPanel));
+                resizing=resizeHit; cancelTap=deleteHit>=0; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
                     JSONObject o=current().optJSONObject(selected);
                     float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
                     float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
-                    // La cancellazione è stata riconosciuta prima dei normali hit test.
-                    resizing=!cancelTap && Math.abs(x-(ex+ew))<28 && Math.abs(y-(ey+eh))<28;
+                    // La maniglia in basso a destra viene intercettata prima del pannello.
+                    resizing=!cancelTap && (resizeHit || (Math.abs(x-(ex+ew))<22 && Math.abs(y-(ey+eh))<22));
                     startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
                     startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
                     if("panel".equals(o.optString("type"))) {
@@ -584,6 +586,17 @@ public class MainActivity extends Activity {
         private double snapToGrid(double value){return Math.round(value*100.0)/100.0;}
         // La X rossa viene verificata prima di qualsiasi controllo o pannello.
         // La zona sensibile è più ampia del cerchio visibile per facilitare il tocco.
+        boolean hitResizeHandle(float x,float y,float left,float top,float sw,float sh) {
+            if(selected<0) return false;
+            JSONObject o=current().optJSONObject(selected);
+            if(o==null || "panel".equals(o.optString("type"))) return false;
+            float ex=left+(float)o.optDouble("x")*sw;
+            float ey=top+(float)o.optDouble("y")*sh;
+            float ew=(float)o.optDouble("w")*sw;
+            float eh=(float)o.optDouble("h")*sh;
+            float dx=x-(ex+ew),dy=y-(ey+eh);
+            return dx*dx+dy*dy<=22f*22f;
+        }
         int hitTextDelete(float x,float y,float left,float top,float sw,float sh) {
             if(selected<0) return -1;
             JSONObject o=current().optJSONObject(selected);
@@ -614,7 +627,7 @@ public class MainActivity extends Activity {
             for(int i=current().length()-1;i>=0;i--) {
                 JSONObject o=current().optJSONObject(i); if(o==null) continue;
                 String id=o.optString("id"), type=o.optString("type");
-                if("panel".equals(type) || isDelayKeyboardChild(id)) continue;
+                if("panel".equals(type)) continue;
                 if(requiredPanel>=0) {
                     JSONObject panel=current().optJSONObject(requiredPanel);
                     if(panel==null) continue;
@@ -625,11 +638,8 @@ public class MainActivity extends Activity {
                 }
                 float xx=left+(float)o.optDouble("x")*sw, yy=top+(float)o.optDouble("y")*sh;
                 float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
-                // Selezione precisa: il doppio tocco deve cadere nella zona centrale
-                // dell'elemento, evitando che bordi vicini selezionino il controllo sbagliato.
-                float insetX=ww*.18f, insetY=hh*.18f;
-                if(x>=xx+insetX && x<=xx+ww-insetX &&
-                   y>=yy+insetY && y<=yy+hh-insetY) return i;
+                // Tutta la superficie dell'elemento è selezionabile, anche se piccola.
+                if(x>=xx-4 && x<=xx+ww+4 && y>=yy-4 && y<=yy+hh+4) return i;
             }
             return -1;
         }
