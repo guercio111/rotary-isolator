@@ -89,10 +89,12 @@ public class MainActivity extends Activity {
             box.addView(label); box.addView(width); box.addView(height);
             new AlertDialog.Builder(this).setTitle("Proprietà elemento").setView(box)
                 .setPositiveButton("APPLICA",(d,w)->{
-                    o.put("text",label.getText().toString());
-                    o.put("w",clamp(parse(width.getText().toString(),20)/100.0,0.01,1));
-                    o.put("h",clamp(parse(height.getText().toString(),14)/100.0,0.01,1));
-                    editor.invalidate(); saveLocal();
+                    try {
+                        o.put("text",label.getText().toString());
+                        o.put("w",clamp(parse(width.getText().toString(),20)/100.0,0.01,1));
+                        o.put("h",clamp(parse(height.getText().toString(),14)/100.0,0.01,1));
+                        editor.invalidate(); saveLocal();
+                    } catch (Exception ignored) {}
                 }).setNegativeButton("ANNULLA",null).show();
         } catch(Exception ignored) {}
     }
