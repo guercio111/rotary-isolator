@@ -304,12 +304,24 @@ public class MainActivity extends Activity {
                 minX=Math.min(minX,x); minY=Math.min(minY,y);
                 maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+h);
             }
-            if(maxX<=minX || maxY<=minY) continue;
             int groupIndex=-1;
             for(int i=0;i<old.length();i++) {
                 JSONObject o=old.optJSONObject(i);
                 if(o!=null && "delay_keyboard_panel".equals(o.optString("id"))) {groupIndex=i;break;}
             }
+            // Se il gruppo esiste già, conserva anche il suo perimetro originale:
+            // non restringerlo ai soli controlli riconosciuti, altrimenti gli indicatori
+            // BPM vicini ai bordi possono restare fuori quando si sposta il gruppo.
+            if(groupIndex>=0) {
+                JSONObject existing=old.optJSONObject(groupIndex);
+                if(existing!=null) {
+                    double gx=existing.optDouble("x"), gy=existing.optDouble("y");
+                    double gw=existing.optDouble("w"), gh=existing.optDouble("h");
+                    minX=Math.min(minX,gx); minY=Math.min(minY,gy);
+                    maxX=Math.max(maxX,gx+gw); maxY=Math.max(maxY,gy+gh);
+                }
+            }
+            if(maxX<=minX || maxY<=minY) continue;
             try {
                 JSONObject group=groupIndex>=0?old.getJSONObject(groupIndex):new JSONObject();
                 group.put("id","delay_keyboard_panel"); group.put("type","panel"); group.put("text","");
