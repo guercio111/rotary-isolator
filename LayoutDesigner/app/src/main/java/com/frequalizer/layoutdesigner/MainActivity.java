@@ -510,16 +510,30 @@ public class MainActivity extends Activity {
                                 }
                             }
                         } else {
-                            // Rotelle, scritte e pulsanti hanno solo tre taglie:
-                            // 80%, 100% (predefinita), 120% della misura media.
+                            // Testi e tasti: sei dimensioni, fino al 200% della misura iniziale.
+                            // Le rotelle mantengono le tre dimensioni già previste.
                             double mediumW=o.optDouble("mediumW",startW);
                             double mediumH=o.optDouble("mediumH",startH);
                             o.put("mediumW",mediumW); o.put("mediumH",mediumH);
                             double wantedW=clamp(startW+dx*0.35,0.02,1-startX);
                             double wantedH=clamp(startH+dy*0.35,0.02,1-startY);
                             double wantedScale=Math.max(wantedW/mediumW,wantedH/mediumH);
-                            int level=wantedScale<0.90?0:(wantedScale>1.10?2:1);
-                            double scale=level==0?0.80:(level==2?1.20:1.00);
+                            boolean sixSizes="text".equals(o.optString("type")) || "button".equals(o.optString("type"));
+                            double scale;
+                            int level;
+                            if(sixSizes) {
+                                double[] sizes={0.60,0.80,1.00,1.30,1.60,2.00};
+                                level=0;
+                                double distance=Math.abs(wantedScale-sizes[0]);
+                                for(int n=1;n<sizes.length;n++) {
+                                    double candidate=Math.abs(wantedScale-sizes[n]);
+                                    if(candidate<distance){distance=candidate;level=n;}
+                                }
+                                scale=sizes[level];
+                            } else {
+                                level=wantedScale<0.90?0:(wantedScale>1.10?2:1);
+                                scale=level==0?0.80:(level==2?1.20:1.00);
+                            }
                             double newW=Math.min(mediumW*scale,1.0);
                             double newH=Math.min(mediumH*scale,1.0);
                             double centerX=startX+startW/2.0, centerY=startY+startH/2.0;
@@ -623,11 +637,24 @@ public class MainActivity extends Activity {
             }
             return best;
         }
+        boolean isInsideDelayKeyboardGroup(JSONObject item) {
+            double x=item.optDouble("x"), y=item.optDouble("y");
+            double w=item.optDouble("w"), h=item.optDouble("h");
+            for(int i=0;i<current().length();i++) {
+                JSONObject panel=current().optJSONObject(i);
+                if(panel==null || !"delay_keyboard_panel".equals(panel.optString("id"))) continue;
+                double px=panel.optDouble("x"), py=panel.optDouble("y");
+                double pw=panel.optDouble("w"), ph=panel.optDouble("h");
+                if(x>=px-0.0001 && y>=py-0.0001 && x+w<=px+pw+0.0001 && y+h<=py+ph+0.0001) return true;
+            }
+            return false;
+        }
         int hitElement(float x,float y,float left,float top,float sw,float sh,int requiredPanel) {
             for(int i=current().length()-1;i>=0;i--) {
                 JSONObject o=current().optJSONObject(i); if(o==null) continue;
                 String id=o.optString("id"), type=o.optString("type");
-                if("panel".equals(type)) continue;
+                // La sezione BEAT/DELAY è indivisibile: i suoi elementi non si selezionano singolarmente.
+                if("panel".equals(type) || isInsideDelayKeyboardGroup(o)) continue;
                 if(requiredPanel>=0) {
                     JSONObject panel=current().optJSONObject(requiredPanel);
                     if(panel==null) continue;
