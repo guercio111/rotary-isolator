@@ -21,6 +21,8 @@ public class MainActivity extends Activity {
     private EditorView editor;
     private TextView status;
     private static final int EXPORT = 41;
+    private String undoMode;
+    private JSONArray undoSnapshot;
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -51,6 +53,7 @@ public class MainActivity extends Activity {
         root.addView(editor, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout bottom = new LinearLayout(this);
         bottom.setPadding(8,5,8,8);
+        addTopButton(bottom, "RETURN", this::undoLast);
         addTopButton(bottom, "SALVA", this::saveLocal);
         addTopButton(bottom, "ESPORTA RECORD", this::export);
         root.addView(bottom);
@@ -67,6 +70,22 @@ public class MainActivity extends Activity {
         row.addView(b, new LinearLayout.LayoutParams(0, 48, 1));
     }
     private JSONArray current() { return layouts.get(mode); }
+
+    // Annulla l'ultima modifica effettuata, anche se apparteneva a un altro profilo.
+    private void undoLast() {
+        if (undoSnapshot == null || undoMode == null) {
+            Toast.makeText(this, "Nessuna modifica da annullare", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            layouts.put(undoMode, new JSONArray(undoSnapshot.toString()));
+            undoSnapshot = null;
+            undoMode = null;
+            if (editor != null) { editor.selected = -1; editor.invalidate(); }
+            saveLocal();
+            Toast.makeText(this, "Ultima modifica annullata", Toast.LENGTH_SHORT).show();
+        } catch (Exception ignored) {}
+    }
 
     // Preload the real FREQUALIZER control map instead of opening on a blank canvas.
     private void seedLayoutsIfEmpty() {
@@ -261,6 +280,7 @@ public class MainActivity extends Activity {
     private class EditorView extends View {
         Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;
         JSONArray gestureSnapshot;
+        boolean gestureChanged=false;
         final ArrayList<ChildSnapshot> resizeChildren=new ArrayList<>();
         final ArrayList<ChildSnapshot> groupChildren=new ArrayList<>();
         class ChildSnapshot { int index; double x,y,w,h; ChildSnapshot(int i,JSONObject o){index=i;x=o.optDouble("x");y=o.optDouble("y");w=o.optDouble("w");h=o.optDouble("h");} }
@@ -301,7 +321,7 @@ public class MainActivity extends Activity {
             float x=e.getX(),y=e.getY();
             float[] s=stage(); float left=s[0], top=s[1], sw=s[2], sh=s[3];
             if(e.getAction()==MotionEvent.ACTION_DOWN) {
-                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; cancelTap=false; resizeChildren.clear(); groupChildren.clear();
+                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; cancelTap=false; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
                     JSONObject o=current().optJSONObject(selected);
@@ -331,6 +351,7 @@ public class MainActivity extends Activity {
             }
             if(e.getAction()==MotionEvent.ACTION_MOVE && selected>=0) {
                 if(cancelTap) return true;
+                if(Math.abs(x-downX)>1f || Math.abs(y-downY)>1f) gestureChanged=true;
                 try {
                     JSONObject o=current().getJSONObject(selected);
                     float dx=(x-downX)/sw, dy=(y-downY)/sh;
@@ -349,12 +370,22 @@ public class MainActivity extends Activity {
                             }
                         }
                     } else {
-                        double moveX=clamp(startX+dx,0,1-o.optDouble("w"));
-                        double moveY=clamp(startY+dy,0,1-o.optDouble("h"));
-                        double actualDx=moveX-startX, actualDy=moveY-startY;
-                        o.put("x",moveX); o.put("y",moveY);
-                        // Trascinando il riquadro DELAY si muove l'intera tastiera,
-                        // mantenendo invariati posizione e dimensione dei tasti al suo interno.
+                        double actualDx, actualDy;
+                        if("panel".equals(o.optString("type")) && !groupChildren.isEmpty()) {
+                            double minGX=startX, minGY=startY, maxGX=startX+o.optDouble("w"), maxGY=startY+o.optDouble("h");
+                            for(ChildSnapshot child:groupChildren) {
+                                minGX=Math.min(minGX,child.x); minGY=Math.min(minGY,child.y);
+                                maxGX=Math.max(maxGX,child.x+child.w); maxGY=Math.max(maxGY,child.y+child.h);
+                            }
+                            actualDx=clamp(dx,-minGX,1-maxGX);
+                            actualDy=clamp(dy,-minGY,1-maxGY);
+                        } else {
+                            double moveX=clamp(startX+dx,0,Math.max(0,1-o.optDouble("w")));
+                            double moveY=clamp(startY+dy,0,Math.max(0,1-o.optDouble("h")));
+                            actualDx=moveX-startX; actualDy=moveY-startY;
+                        }
+                        o.put("x",startX+actualDx); o.put("y",startY+actualDy);
+                        // Il gruppo DELAY non può mai oltrepassare i bordi del layout.
                         if("panel".equals(o.optString("type"))) {
                             for(ChildSnapshot child:groupChildren) {
                                 JSONObject item=current().optJSONObject(child.index); if(item==null) continue;
@@ -369,13 +400,21 @@ public class MainActivity extends Activity {
             }
             if(e.getAction()==MotionEvent.ACTION_UP) {
                 if(cancelTap && selected>=0) {
+                    rememberUndo();
                     JSONArray old=current(); JSONArray kept=new JSONArray();
                     for(int i=0;i<old.length();i++) if(i!=selected) kept.put(old.opt(i));
                     layouts.put(mode,kept); selected=-1; invalidate(); saveLocal();
-                } else saveLocal();
-                cancelTap=false; gestureSnapshot=null; return true;
+                } else {
+                    if(gestureChanged) rememberUndo();
+                    saveLocal();
+                }
+                cancelTap=false; gestureSnapshot=null; gestureChanged=false; return true;
             }
             return true;
+        }
+        private void rememberUndo() {
+            if(gestureSnapshot==null) return;
+            try { undoSnapshot=new JSONArray(gestureSnapshot.toString()); undoMode=mode; } catch(Exception ignored) {}
         }
         int hit(float x,float y,float left,float top,float sw,float sh) {
             for(int i=current().length()-1;i>=0;i--) {
