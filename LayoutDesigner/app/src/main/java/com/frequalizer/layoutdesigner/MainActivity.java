@@ -355,7 +355,7 @@ public class MainActivity extends Activity {
                     if(id.equals("options")){
                         float outer=Math.min(ww,hh)*.43f,root=outer*.76f,cx=x+ww/2f,cy=y+hh/2f;
                         Path path=new Path();
-                        for(int n=0;n<32;n++){float radius=(n%4==0||n%4==1)?outer:root;double a=Math.toRadians(-90.0+n*360.0/32.0);float px=cx+(float)Math.cos(a)*radius,py=cy+(float)Math.sin(a)*radius;if(n==0)path.moveTo(px,py);else path.lineTo(px,py);}
+                        for(int n=0;n<32;n++){float radius=(n%4==0||n%4==1)?outer:root;double gearAngle=Math.toRadians(-90.0+n*360.0/32.0);float px=cx+(float)Math.cos(gearAngle)*radius,py=cy+(float)Math.sin(gearAngle)*radius;if(n==0)path.moveTo(px,py);else path.lineTo(px,py);}
                         path.close();p.setColor(Color.rgb(255,205,0));c.drawPath(path,p);p.setColor(Color.rgb(17,19,23));c.drawCircle(cx,cy,outer*.37f,p);p.setColor(Color.rgb(255,205,0));c.drawCircle(cx,cy,outer*.17f,p);
                     }else if(id.endsWith("_flat")||id.contains("_return_")||id.startsWith("master_return_")){
                         float radius=Math.min(ww,hh)*.47f;p.setColor(Color.rgb(255,205,0));c.drawCircle(x+ww/2f,y+hh/2f,radius,p);p.setColor(Color.rgb(255,235,100));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(1f,radius*.07f));c.drawCircle(x+ww/2f,y+hh/2f,radius,p);p.setStyle(Paint.Style.FILL);p.setColor(Color.BLACK);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(8f,Math.min(ww,hh)*.42f));c.drawText(label,x+ww/2f,y+hh/2f+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);
