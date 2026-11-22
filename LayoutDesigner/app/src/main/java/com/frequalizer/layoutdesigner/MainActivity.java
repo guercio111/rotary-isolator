@@ -454,19 +454,18 @@ public class MainActivity extends Activity {
                 downX=x; downY=y;
                 doubleTap = (e.getEventTime()-lastTapTime)<=ViewConfiguration.getDoubleTapTimeout()
                     && Math.hypot(x-lastTapX,y-lastTapY)<=ViewConfiguration.get(getContext()).getScaledDoubleTapSlop();
-                // Prima si cerca un controllo nel punto toccato: il pannello
-                // viene selezionato soltanto quando si tocca una zona libera.
-                int elementHit=hitElement(x,y,left,top,sw,sh,-1);
-                tapPanel=hitPanel(x,y,left,top,sw,sh);
-                selected=elementHit>=0?elementHit:tapPanel;
-                resizing=false; cancelTap=false; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
+                // La X rossa della scritta selezionata ha priorità assoluta.
+                int deleteHit=hitTextDelete(x,y,left,top,sw,sh);
+                int elementHit=deleteHit>=0?-1:hitElement(x,y,left,top,sw,sh,-1);
+                tapPanel=deleteHit>=0?-1:hitPanel(x,y,left,top,sw,sh);
+                selected=deleteHit>=0?deleteHit:(elementHit>=0?elementHit:tapPanel);
+                resizing=false; cancelTap=deleteHit>=0; gestureChanged=false; resizeChildren.clear(); groupChildren.clear();
                 try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
                     JSONObject o=current().optJSONObject(selected);
                     float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
                     float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
-                    // La X è presente solo sulle scritte e ne permette la cancellazione.
-                    cancelTap = "text".equals(o.optString("type")) && x >= ex+ew-30 && x <= ex+ew+8 && y >= ey-12 && y <= ey+28;
+                    // La cancellazione è stata riconosciuta prima dei normali hit test.
                     resizing=!cancelTap && Math.abs(x-(ex+ew))<28 && Math.abs(y-(ey+eh))<28;
                     startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
                     startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
@@ -535,11 +534,15 @@ public class MainActivity extends Activity {
                                 minGX=Math.min(minGX,child.x); minGY=Math.min(minGY,child.y);
                                 maxGX=Math.max(maxGX,child.x+child.w); maxGY=Math.max(maxGY,child.y+child.h);
                             }
-                            actualDx=clamp(dx,-minGX,1-maxGX);
-                            actualDy=clamp(dy,-minGY,1-maxGY);
+                            // Anche i pannelli e i gruppi seguono lo stesso reticolo.
+                            double targetX=snapToGrid(startX+dx);
+                            double targetY=snapToGrid(startY+dy);
+                            actualDx=clamp(targetX-startX,-minGX,1-maxGX);
+                            actualDy=clamp(targetY-startY,-minGY,1-maxGY);
                         } else {
-                            double moveX=clamp(startX+dx,0,Math.max(0,1-o.optDouble("w")));
-                            double moveY=clamp(startY+dy,0,Math.max(0,1-o.optDouble("h")));
+                            // Reticolo invisibile: aggancio a passi dell'1% del canvas.
+                            double moveX=clamp(snapToGrid(startX+dx),0,Math.max(0,1-o.optDouble("w")));
+                            double moveY=clamp(snapToGrid(startY+dy),0,Math.max(0,1-o.optDouble("h")));
                             actualDx=moveX-startX; actualDy=moveY-startY;
                         }
                         o.put("x",startX+actualDx); o.put("y",startY+actualDy);
@@ -577,6 +580,19 @@ public class MainActivity extends Activity {
                 if(undoHistory.size()>=MAX_UNDO) undoHistory.removeFirst();
                 undoHistory.addLast(new UndoEntry(mode,new JSONArray(gestureSnapshot.toString())));
             } catch(Exception ignored) {}
+        }
+        private double snapToGrid(double value){return Math.round(value*100.0)/100.0;}
+        // La X rossa viene verificata prima di qualsiasi controllo o pannello.
+        // La zona sensibile è più ampia del cerchio visibile per facilitare il tocco.
+        int hitTextDelete(float x,float y,float left,float top,float sw,float sh) {
+            if(selected<0) return -1;
+            JSONObject o=current().optJSONObject(selected);
+            if(o==null || !"text".equals(o.optString("type"))) return -1;
+            float ex=left+(float)o.optDouble("x")*sw;
+            float ey=top+(float)o.optDouble("y")*sh;
+            float ew=(float)o.optDouble("w")*sw;
+            float dx=x-(ex+ew), dy=y-ey;
+            return dx*dx+dy*dy<=28f*28f?selected:-1;
         }
         // I controlli hanno priorità sui pannelli: il pannello si seleziona
         // soltanto toccando una zona libera al suo interno.
