@@ -223,7 +223,7 @@ public class MainActivity extends Activity {
             tPanel(l,"reverb_panel","REVERB",x,y,revW,h);
             seedReverb(l,x,y,revW,h,false);
             double dx=x+revW;
-            tPanel(l,"delay_panel","DELAY",dx,y,delayW,h);
+            tPanel(l,"delay_panel","DELAY",dx,y,delayW,h*.33);
             tText(l,"delay_title","BEAT EFFECTS",dx+.02*delayW,y+.02*h,.60*delayW,.07*h);
             tButton(l,"delay_power","ON",dx+.72*delayW,y+.02*h,.22*delayW,.065*h);
             String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
@@ -295,14 +295,14 @@ public class MainActivity extends Activity {
         // BEAT EFFECTS occupies the remaining lower area. Its BPM/beat controls
         // remain one unified movable/resizable group, as in the other profiles.
         tPanel(l,"fx_panel","BEAT FX",.012,.705,.976,.285);
-        tPanel(l,"delay_panel","DELAY",.012,.705,.976,.285);
+        tPanel(l,"delay_panel","DELAY",.012,.705,.976,.108);
         tText(l,"delay_title","BEAT EFFECTS",.032,.710,.42,.035);
         tButton(l,"delay_power","ON",.755,.710,.12,.035);
         String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
         for(int i=0;i<4;i++)
             tKnob(l,"delay_knob_"+i,d[i],.025+i*.245,.748,.215,.064,"#46BE78");
-        tPanel(l,"delay_keyboard_panel","BEAT FX",.020,.810,.960,.180);
-        seedDelayKeyboard(l,.020,.810,.960,.180);
+        tPanel(l,"delay_keyboard_panel","BEAT FX",.020,.815,.960,.175);
+        seedDelayKeyboard(l,.020,.815,.960,.175);
     }
     private void migrateTabletPortraitLayout() {
         // Rebuild only the tablet-portrait profile once. Preserve the user's
