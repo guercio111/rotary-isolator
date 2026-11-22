@@ -21,8 +21,9 @@ public class MainActivity extends Activity {
     private EditorView editor;
     private TextView status;
     private static final int EXPORT = 41;
-    private String undoMode;
-    private JSONArray undoSnapshot;
+    private static final int MAX_UNDO = 30;
+    private final ArrayDeque<UndoEntry> undoHistory = new ArrayDeque<>();
+    private static class UndoEntry { final String mode; final JSONArray snapshot; UndoEntry(String m, JSONArray a) { mode=m; snapshot=a; } }
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -54,7 +55,7 @@ public class MainActivity extends Activity {
         root.addView(editor, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout bottom = new LinearLayout(this);
         bottom.setPadding(8,5,8,8);
-        addTopButton(bottom, "RETURN", this::undoLast);
+        addReturnButton(top);
         addTopButton(bottom, "SALVA", this::saveLocal);
         addTopButton(bottom, "ESPORTA RECORD", this::export);
         root.addView(bottom);
@@ -72,31 +73,52 @@ public class MainActivity extends Activity {
     }
     private JSONArray current() { return layouts.get(mode); }
 
-    // Annulla l'ultima modifica effettuata, anche se apparteneva a un altro profilo.
+    // Undo globale: conserva le ultime 30 modifiche, anche tra profili diversi.
     private void undoLast() {
-        if (undoSnapshot == null || undoMode == null) {
+        if (undoHistory.isEmpty()) {
             Toast.makeText(this, "Nessuna modifica da annullare", Toast.LENGTH_SHORT).show();
             return;
         }
         try {
-            layouts.put(undoMode, new JSONArray(undoSnapshot.toString()));
-            undoSnapshot = null;
-            undoMode = null;
+            UndoEntry entry = undoHistory.removeLast();
+            layouts.put(entry.mode, new JSONArray(entry.snapshot.toString()));
             if (editor != null) { editor.selected = -1; editor.invalidate(); }
             saveLocal();
             Toast.makeText(this, "Ultima modifica annullata", Toast.LENGTH_SHORT).show();
         } catch (Exception ignored) {}
+    }
+    private void addReturnButton(LinearLayout row) {
+        TextView b = new TextView(this);
+        b.setText("↶");
+        b.setTextSize(27);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setTextColor(Color.BLACK);
+        b.setGravity(Gravity.CENTER);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        bg.setColor(Color.rgb(255,205,0));
+        bg.setStroke(2, Color.rgb(255,235,100));
+        b.setBackground(bg);
+        b.setContentDescription("RETURN - annulla ultima modifica");
+        b.setOnClickListener(v -> undoLast());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(48,48);
+        lp.leftMargin=8;
+        row.addView(b,lp);
     }
 
     // Preload the real FREQUALIZER control map instead of opening on a blank canvas.
     private void seedLayoutsIfEmpty() {
         // Replace only the original blank-prototype project once. From this point
         // onward the user's edited layouts are always preserved across upgrades.
-        if (getPreferences(0).getBoolean("frequalizer_template_seeded_v1", false)) return;
+        if (getPreferences(0).getBoolean("frequalizer_template_seeded_build918", false)) return;
+        // Build 918 becomes the new starting reference for all four profiles.
+        // This one-time migration intentionally replaces the older prototype maps.
         for (String m : modes) layouts.put(m, new JSONArray());
         seedTabletPortrait(); seedTabletLandscape(); seedPhonePortrait(); seedPhoneLandscape();
+        ensureDelayKeyboardGroups();
+        constrainLayoutsToCanvas();
         saveLocal();
-        getPreferences(0).edit().putBoolean("frequalizer_template_seeded_v1", true).apply();
+        getPreferences(0).edit().putBoolean("frequalizer_template_seeded_build918", true).apply();
     }
     private void templateItem(String layout,String id,String type,String text,double x,double y,double w,double h,String color) {
         try {
@@ -111,160 +133,190 @@ public class MainActivity extends Activity {
     private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#FFCD00"); }
     private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
     private void seedHeader(String l,boolean compact) {
-        tButton(l,"app_power","● ON",.015,.012,.105,.035);
-        tButton(l,"bpm_start","BPM START",compact ? .255 : .285,.012,compact ? .17 : .20,.034);
-        tText(l,"bpm_readout","— BPM",compact ? .435 : .50,.012,.13,.034);
-        tText(l,"bpm_beat","●",compact ? .58 : .68,.006,.045,.045);
-        tButton(l,"options","⚙",.91,.008,.065,.042);
+        tButton(l,"app_power","● ON",.012,.010,.105,.038);
+        tButton(l,"bpm_start","BPM START",compact ? .235 : .270,.012,compact ? .18 : .20,.034);
+        tText(l,"bpm_readout","— BPM",compact ? .425 : .485,.012,.13,.034);
+        tText(l,"bpm_beat","●",compact ? .565 : .655,.004,.045,.045);
+        tButton(l,"options","⚙",.915,.008,.065,.042);
     }
-    private void seedBandSection(String l,String key,String title,double x,double y,double w,double h,String[] bands,String color) {
+    private void seedBandSection(String l,String key,String title,double x,double y,double w,double h,String[] bands,String color,boolean portraitRows) {
         tPanel(l,key+"_panel",title,x,y,w,h);
-        tText(l,key+"_title",title,x+.025*w,y+.015*h,.45*w,.10*h);
-        tText(l,key+"_power","ON",x+.025*w,y+.035*h,.13*w,.075*h);
-        tButton(l,key+"_flat","F",x+.82*w,y+.035*h,.13*w,.075*h);
-        double rowH=(h*.79)/bands.length;
+        tText(l,key+"_title",title,x+.025*w,y+.012*h,.40*w,.075*h);
+        tButton(l,key+"_power","ON",x+.025*w,y+.095*h,.14*w,.065*h);
+        if(key.equals("ISOLATOR")) tButton(l,"iso_limiter","LIMITER ON",x+.19*w,y+.095*h,.25*w,.065*h);
+        tButton(l,key+"_flat","F",x+.84*w,y+.095*h,.10*w,.065*h);
+        double head=.18, rowH=(.79)/bands.length;
         for(int i=0;i<bands.length;i++) {
-            double ry=y+h*.17+i*rowH;
-            tText(l,key+"_label_"+i,bands[i],x+.025*w,ry,.25*w,rowH*.76);
-            tKnob(l,key+"_knob_"+i,bands[i],x+.32*w,ry+.03*rowH,.28*w,rowH*.80,color);
-            tButton(l,key+"_return_"+i,"↶",x+.68*w,ry+.20*rowH,.12*w,rowH*.56);
-            tButton(l,key+"_flat_"+i,"F",x+.82*w,ry+.20*rowH,.13*w,rowH*.56);
+            double ry=y+h*(head+i*rowH);
+            if(portraitRows) {
+                tText(l,key+"_label_"+i,bands[i],x+.025*w,ry,.23*w,rowH*h*.72);
+                tKnob(l,key+"_knob_"+i,bands[i],x+.28*w,ry+.02*rowH*h,.31*w,rowH*h*.76,color);
+                tButton(l,key+"_return_"+i,"↶",x+.66*w,ry+.17*rowH*h,.105*w,rowH*h*.54);
+                tButton(l,key+"_flat_"+i,"F",x+.79*w,ry+.17*rowH*h,.15*w,rowH*h*.54);
+            } else {
+                tText(l,key+"_label_"+i,bands[i],x+i*w/bands.length,ry,.95*w/bands.length,.12*h);
+                tKnob(l,key+"_knob_"+i,bands[i],x+i*w/bands.length+.05*w/bands.length,ry+.13*h,.88*w/bands.length,.42*h,color);
+                tButton(l,key+"_return_"+i,"↶",x+i*w/bands.length+.17*w/bands.length,ry+.59*h,.25*w/bands.length,.12*h);
+                tButton(l,key+"_flat_"+i,"F",x+i*w/bands.length+.53*w/bands.length,ry+.59*h,.25*w/bands.length,.12*h);
+            }
         }
     }
-    private void seedFilterSection(String l,double x,double y,double w,double h,String color) {
-        tPanel(l,"filter_panel","HPF",x,y,w,h);
-        tText(l,"filter_title","HPF",x+.04*w,y+.015*h,.40*w,.10*h);
-        tButton(l,"filter_power","ON",x+.78*w,y+.025*h,.17*w,.085*h);
+    private void seedFilterSection(String l,double x,double y,double w,double h,String color,boolean vertical) {
+        tPanel(l,"filter_panel","FILTER",x,y,w,h);
+        tText(l,"filter_title","FILTER",x+.04*w,y+.012*h,.42*w,.09*h);
         String[] names={"HPF","RESONANCE"};
         for(int i=0;i<2;i++) {
-            double ry=y+.15*h+i*.405*h;
-            tText(l,"filter_label_"+i,names[i],x+.035*w,ry,.25*w,.25*h);
-            tKnob(l,"filter_knob_"+i,names[i],x+.32*w,ry,.38*w,.31*h,color);
-            tButton(l,"filter_return_"+i,"↶",x+.75*w,ry+.025*h,.095*w,.22*h);
-            tButton(l,"filter_zero_"+i,"0",x+.855*w,ry+.025*h,.095*w,.22*h);
+            if(vertical) {
+                double ry=y+.12*h+i*.43*h;
+                tText(l,"filter_label_"+i,names[i],x+.04*w,ry,.28*w,.16*h);
+                tKnob(l,"filter_knob_"+i,names[i],x+.33*w,ry-.015*h,.42*w,.32*h,color);
+            } else {
+                double cx=x+i*w*.5;
+                tText(l,"filter_label_"+i,names[i],cx+.02*w,y+.13*h,.46*w,.12*h);
+                tKnob(l,"filter_knob_"+i,names[i],cx+.05*w,y+.25*h,.40*w,.53*h,color);
+            }
         }
     }
-    private void seedMasterPortrait(String l,double x,double y,double w,double h,String color) {
+    private void seedMaster(String l,double x,double y,double w,double h,String color,boolean wide) {
         tPanel(l,"master_panel","MASTER",x,y,w,h);
         tText(l,"master_title","MASTER",x+.025*w,y+.015*h,.45*w,.10*h);
-        String[] names={"GAIN","COMP","BASS BOOST","LOUDNESS"};
-        for(int i=0;i<4;i++) {
-            int col=i%2,row=i/2;
-            double cx=x+col*w*.50, cy=y+.12*h+row*h*.43;
-            tText(l,"master_label_"+i,names[i],cx+.025*w,cy,.43*w,.13*h);
-            tKnob(l,"master_knob_"+i,names[i],cx+.12*w,cy+.12*h,.25*w,.25*h,color);
-            if(i>0) tButton(l,"master_on_"+i,"ON",cx+.39*w,cy+.13*h,.095*w,.105*h);
-            if(i>=2) tButton(l,"master_return_"+i,"↶",cx+.39*w,cy+.255*h,.095*w,.105*h);
+        String[] names={"GAIN","COMP","LOUDNESS"};
+        for(int i=0;i<3;i++) {
+            if(wide) {
+                double ry=y+.12*h+i*.29*h;
+                tKnob(l,"master_knob_"+i,names[i],x+.12*w,ry,.72*w,.25*h,color);
+                if(i>0) tButton(l,"master_on_"+i,"●",x+.84*w,ry+.07*h,.09*w,.09*h);
+            } else {
+                double cx=x+i*w/3.0;
+                tKnob(l,"master_knob_"+i,names[i],cx+.035*w,y+.20*h,.27*w,.58*h,color);
+            }
         }
     }
-    private void seedEffects(String l,double x,double y,double w,double h) {
+    private void seedEffects(String l,double x,double y,double w,double h,boolean tabletPortrait,boolean tabletLandscape,boolean phoneWide) {
         tPanel(l,"fx_panel","BEAT FX",x,y,w,h);
-        double rw=w*.37, dx=x+rw;
-        tText(l,"reverb_title","REVERB",x+.015*w,y+.015*h,.30*w,.10*h);
-        tButton(l,"reverb_power","ON",x+.30*w,y+.02*h,.065*w,.075*h);
-        String[] rn={"BEAT","TIME","DRY/WET","FILTER"};
-        for(int i=0;i<4;i++) {
-            int col=i%2,row=i/2;
-            double kx=x+.015*w+col*rw*.49, ky=y+.13*h+row*h*.40;
-            tKnob(l,"reverb_"+i,rn[i],kx,ky,rw*.44,h*.32,"#46BE78");
+        if(tabletLandscape || phoneWide) {
+            double revW=w*.25, delayHeaderW=w*.25, controlsW=w*.30, masterW=w*.20;
+            tPanel(l,"reverb_panel","REVERB",x,y,revW,h);
+            seedReverb(l,x,y,revW,h,true);
+            double dx=x+revW;
+            tPanel(l,"delay_panel","DELAY",dx,y,delayHeaderW,h);
+            tText(l,"delay_title","DELAY / DUB ECHO",dx+.02*delayHeaderW,y+.02*h,.95*delayHeaderW,.07*h);
+            String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
+            for(int i=0;i<4;i++) {
+                int col=i%2,row=i/2;
+                tKnob(l,"delay_knob_"+i,d[i],dx+col*delayHeaderW*.49,y+.12*h+row*h*.43,delayHeaderW*.46,h*.34,"#46BE78");
+            }
+            double kx=dx+delayHeaderW;
+            tPanel(l,"delay_keyboard_panel","BEAT FX",kx,y,controlsW,h);
+            seedDelayKeyboard(l,kx,y,controlsW,h);
+            double mx=kx+controlsW;
+            seedMaster(l,mx,y,masterW,h,"#46BE78",true);
+        } else {
+            double revW=w*(tabletPortrait?.37:.43);
+            double delayW=w-revW;
+            tPanel(l,"reverb_panel","REVERB",x,y,revW,h);
+            seedReverb(l,x,y,revW,h,false);
+            double dx=x+revW;
+            tPanel(l,"delay_panel","DELAY",dx,y,delayW,h);
+            tText(l,"delay_title","DELAY / DUB ECHO",dx+.02*delayW,y+.02*h,.95*delayW,.07*h);
+            String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
+            for(int i=0;i<4;i++) {
+                double kx=dx+.02*delayW+i*delayW*.245;
+                tKnob(l,"delay_knob_"+i,d[i],kx,y+.10*h,delayW*.22,h*.22,"#46BE78");
+            }
+            seedDelayKeyboard(l,dx,y+.34*h,delayW,h*.64);
         }
-        tText(l,"delay_title","DELAY / DUB ECHO",dx+.01*w,y+.015*h,.48*w,.10*h);
-        tButton(l,"delay_power","ON",dx+.80*w,y+.02*h,.085*w,.075*h);
-        String[] dn={"LEVEL","FEEDBACK","TONE","TIME"};
-        for(int i=0;i<4;i++) {
-            double kx=dx+.015*w+i*(w*.14), ky=y+.13*h;
-            tKnob(l,"delay_knob_"+i,dn[i],kx,ky,w*.125,h*.30,"#46BE78");
-        }
-        tText(l,"delay_bpm","— BPM",dx+.015*w,y+.46*h,.12*w,.11*h);
-        tButton(l,"delay_tap","TAP",dx+.145*w,y+.46*h,.10*w,.11*h);
-        tButton(l,"delay_auto","AUTO",dx+.255*w,y+.46*h,.11*w,.11*h);
-        tButton(l,"delay_lock","LOCK",dx+.375*w,y+.46*h,.11*w,.11*h);
-        tButton(l,"delay_align","ALIGN",dx+.495*w,y+.46*h,.12*w,.11*h);
-        tButton(l,"delay_back","◀",dx+.625*w,y+.46*h,.075*w,.11*h);
-        tButton(l,"delay_forward","▶",dx+.71*w,y+.46*h,.075*w,.11*h);
+    }
+    private void seedReverb(String l,double x,double y,double w,double h,boolean wide) {
+        tText(l,"reverb_title","REVERB",x+.025*w,y+.015*h,.48*w,.07*h);
+        tButton(l,"reverb_power","ON",x+.58*w,y+.015*h,.18*w,.065*h);
+        String[] names={"SEND","TONE","FEEDBACK"};
+        tKnob(l,"reverb_0",names[0],x+.04*w,y+.10*h,.42*w,.34*h,"#46BE78");
+        tKnob(l,"reverb_1",names[1],x+.53*w,y+.10*h,.42*w,.34*h,"#46BE78");
+        tKnob(l,"reverb_2",names[2],x+.29*w,y+.48*h,.42*w,.30*h,"#46BE78");
+        String[] bands={"LOW","MID","HIGH"};
+        for(int i=0;i<3;i++) tButton(l,"reverb_band_"+i,bands[i],x+.04*w+i*.31*w,y+.82*h,.28*w,.10*h);
+    }
+    private void seedDelayKeyboard(String l,double x,double y,double w,double h) {
+        tText(l,"delay_bpm","— BPM",x+.015*w,y+.02*h,.13*w,.09*h);
+        String[] top={"TAP","AUTO","LOCK","ALIGN","◀","▶","SKIP","RST"};
+        for(int i=0;i<top.length;i++) tButton(l,"delay_"+(i==4?"back":i==5?"forward":i==6?"skip":i==7?"rst":top[i].toLowerCase(Locale.US)),top[i],x+.15*w+i*.105*w,y+.02*h,.095*w,.09*h);
+        tText(l,"delay_phase_label","FX PHASE JOG",x+.02*w,y+.15*h,.32*w,.07*h);
+        tPanel(l,"delay_phase_fader","",x+.03*w,y+.23*h,.94*w,.055*h);
+        String[] modes={"SHORT DELAY","LONG DELAY","DUB ECHO"};
+        for(int i=0;i<3;i++) tButton(l,"delay_mode_"+i,modes[i],x+.02*w+i*.325*w,y+.33*h,.31*w,.10*h);
         String[] divisions={"1/16","1/8","1/4","1/2","3/4","1","2","4","8","16"};
-        for(int i=0;i<divisions.length;i++) tButton(l,"division_"+i,divisions[i],dx+.015*w+i*(w*.094),y+.60*h,w*.087,h*.12);
-        tButton(l,"fx_low","FX LOW",dx+.015*w,y+.76*h,.29*w,.12*h);
-        tButton(l,"fx_mid","FX MID",dx+.32*w,y+.76*h,.29*w,.12*h);
-        tButton(l,"fx_high","FX HIGH",dx+.625*w,y+.76*h,.29*w,.12*h);
+        for(int i=0;i<divisions.length;i++) tButton(l,"division_"+i,divisions[i],x+.015*w+i*.098*w,y+.47*h,.09*w,.12*h);
+        String[] fx={"FX LOW","FX MID","FX HIGH"};
+        for(int i=0;i<3;i++) tButton(l,"fx_"+new String[]{"low","mid","high"}[i],fx[i],x+.02*w+i*.325*w,y+.66*h,.31*w,.11*h);
     }
     private void seedTabletPortrait() {
         String l=modes[0]; seedHeader(l,false);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.305,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.305,new String[]{"HIGH","MID","LOW"},"#46BE78");
-        seedFilterSection(l,.012,.382,.478,.326,"#46BE78");
-        seedMasterPortrait(l,.510,.382,.478,.326,"#46BE78");
-        seedEffects(l,.012,.718,.976,.274);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.305,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",true);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.305,new String[]{"HIGH","MID","LOW"},"#46BE78",true);
+        seedFilterSection(l,.012,.382,.478,.326,"#46BE78",true);
+        seedMaster(l,.510,.382,.478,.326,"#46BE78",false);
+        seedEffects(l,.012,.718,.976,.274,true,false,false);
     }
     private void seedTabletLandscape() {
         String l=modes[1]; seedHeader(l,false);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78");
-        seedFilterSection(l,.012,.505,.235,.475,"#46BE78");
-        seedMasterPortrait(l,.255,.505,.235,.475,"#46BE78");
-        seedEffects(l,.500,.505,.488,.475);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
+        seedFilterSection(l,.012,.505,.19,.475,"#46BE78",true);
+        seedEffects(l,.205,.505,.783,.475,false,true,false);
     }
     private void seedPhonePortrait() {
         String l=modes[2]; seedHeader(l,true);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78");
-        seedFilterSection(l,.012,.505,.235,.475,"#46BE78");
-        seedMasterPortrait(l,.255,.505,.235,.475,"#46BE78");
-        seedEffects(l,.500,.505,.488,.475);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
+        seedFilterSection(l,.012,.505,.235,.475,"#46BE78",false);
+        seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
+        seedEffects(l,.500,.505,.488,.475,false,false,false);
     }
     private void seedPhoneLandscape() {
         String l=modes[3]; seedHeader(l,true);
-        seedBandSection(l,"eq","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78");
-        seedBandSection(l,"iso","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78");
-        seedFilterSection(l,.012,.505,.235,.475,"#46BE78");
-        seedMasterPortrait(l,.255,.505,.235,.475,"#46BE78");
-        seedEffects(l,.500,.505,.488,.475);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
+        seedFilterSection(l,.012,.505,.235,.475,"#46BE78",false);
+        seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
+        seedEffects(l,.500,.505,.488,.475,false,false,true);
     }
-
 
     // La tastiera delle divisioni DELAY è un unico gruppo indivisibile:
     // tasti e controlli contenuti si muovono e si ridimensionano insieme.
+    private boolean isDelayKeyboardChild(String id) {
+        return id.startsWith("division_") || id.equals("delay_bpm") ||
+            id.equals("delay_tap") || id.equals("delay_auto") || id.equals("delay_lock") ||
+            id.equals("delay_align") || id.equals("delay_back") || id.equals("delay_forward") ||
+            id.equals("delay_skip") || id.equals("delay_rst") || id.equals("delay_phase_label") ||
+            id.equals("delay_phase_fader") || id.startsWith("delay_mode_") ||
+            id.equals("fx_low") || id.equals("fx_mid") || id.equals("fx_high");
+    }
+    // Tastiera BEAT FX indivisibile: tasti, divisioni, fader e selettori restano un gruppo.
     private void ensureDelayKeyboardGroups() {
         for (String l : modes) {
-            JSONArray old = layouts.get(l);
-            boolean exists = false;
-            for (int i=0;i<old.length();i++) {
-                JSONObject o=old.optJSONObject(i);
-                if(o!=null && "delay_keyboard_panel".equals(o.optString("id"))) { exists=true; break; }
+            JSONArray old=layouts.get(l);
+            double minX=1,minY=1,maxX=0,maxY=0;
+            for(int i=0;i<old.length();i++) {
+                JSONObject item=old.optJSONObject(i);
+                if(item==null || !isDelayKeyboardChild(item.optString("id"))) continue;
+                double x=item.optDouble("x"),y=item.optDouble("y"),w=item.optDouble("w"),h=item.optDouble("h");
+                minX=Math.min(minX,x); minY=Math.min(minY,y);
+                maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+h);
             }
-            if(exists) continue;
+            if(maxX<=minX || maxY<=minY) continue;
+            int groupIndex=-1;
+            for(int i=0;i<old.length();i++) {
+                JSONObject o=old.optJSONObject(i);
+                if(o!=null && "delay_keyboard_panel".equals(o.optString("id"))) {groupIndex=i;break;}
+            }
             try {
-                double minX=1,minY=1,maxX=0,maxY=0;
-                for(int i=0;i<old.length();i++) {
-                    JSONObject item=old.optJSONObject(i);
-                    if(item==null || !item.optString("id").startsWith("division_")) continue;
-                    double x=item.optDouble("x"), y=item.optDouble("y");
-                    minX=Math.min(minX,x); minY=Math.min(minY,y);
-                    maxX=Math.max(maxX,x+item.optDouble("w"));
-                    maxY=Math.max(maxY,y+item.optDouble("h"));
-                }
-                if(maxX<=minX || maxY<=minY) continue;
-                double marginX=0.012, marginY=0.018;
-                JSONObject group = new JSONObject();
-                group.put("id","delay_keyboard_panel");
-                group.put("type","panel");
-                group.put("text","");
-                group.put("x",Math.max(0,minX-marginX));
-                group.put("y",Math.max(0,minY-marginY));
-                group.put("w",Math.min(1, maxX+marginX)-Math.max(0,minX-marginX));
-                group.put("h",Math.min(1, maxY+marginY)-Math.max(0,minY-marginY));
-                group.put("color","#252A31");
-                JSONArray updated = new JSONArray();
-                boolean inserted=false;
-                for(int i=0;i<old.length();i++) {
-                    JSONObject item=old.optJSONObject(i);
-                    if(item!=null && item.optString("id").startsWith("division_") && !inserted) {
-                        updated.put(group); inserted=true;
-                    }
-                    updated.put(item);
-                }
-                if(!inserted) updated.put(group);
-                layouts.put(l,updated);
+                JSONObject group=groupIndex>=0?old.getJSONObject(groupIndex):new JSONObject();
+                group.put("id","delay_keyboard_panel"); group.put("type","panel"); group.put("text","");
+                group.put("x",Math.max(0,minX-.008)); group.put("y",Math.max(0,minY-.012));
+                group.put("w",Math.min(1,maxX+.008)-Math.max(0,minX-.008));
+                group.put("h",Math.min(1,maxY+.012)-Math.max(0,minY-.012)); group.put("color","#252A31");
+                if(groupIndex<0) old.put(0,group);
             } catch(Exception ignored) {}
         }
         saveLocal();
@@ -414,7 +466,7 @@ public class MainActivity extends Activity {
                         for(int i=0;i<all.length();i++) if(i!=selected) {
                             JSONObject child=all.optJSONObject(i); if(child==null) continue;
                             double cx=child.optDouble("x"), cy=child.optDouble("y"), cw=child.optDouble("w"), ch=child.optDouble("h");
-                            boolean delayKeyGroup="delay_keyboard_panel".equals(o.optString("id")) && child.optString("id").startsWith("division_");
+                            boolean delayKeyGroup="delay_keyboard_panel".equals(o.optString("id")) && isDelayKeyboardChild(child.optString("id"));
                             boolean insidePanel=cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001;
                             if(delayKeyGroup || insidePanel) {
                                 ChildSnapshot snap=new ChildSnapshot(i,child);
@@ -491,14 +543,17 @@ public class MainActivity extends Activity {
         }
         private void rememberUndo() {
             if(gestureSnapshot==null) return;
-            try { undoSnapshot=new JSONArray(gestureSnapshot.toString()); undoMode=mode; } catch(Exception ignored) {}
+            try {
+                if(undoHistory.size()>=MAX_UNDO) undoHistory.removeFirst();
+                undoHistory.addLast(new UndoEntry(mode,new JSONArray(gestureSnapshot.toString())));
+            } catch(Exception ignored) {}
         }
         int hit(float x,float y,float left,float top,float sw,float sh) {
             for(int i=current().length()-1;i>=0;i--) {
                 JSONObject o=current().optJSONObject(i); if(o==null) continue;
                 // I tasti della tastiera DELAY non sono selezionabili singolarmente:
                 // l’area completa viene gestita dal solo riquadro delay_keyboard_panel.
-                if(o.optString("id").startsWith("division_")) continue;
+                if(isDelayKeyboardChild(o.optString("id"))) continue;
                 float xx=left+(float)o.optDouble("x")*sw, yy=top+(float)o.optDouble("y")*sh;
                 float ww=(float)o.optDouble("w")*sw, hh=(float)o.optDouble("h")*sh;
                 if(x>=xx-12 && x<=xx+ww+12 && y>=yy-12 && y<=yy+hh+12) return i;
