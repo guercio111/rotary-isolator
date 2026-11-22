@@ -346,7 +346,8 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==EXPORT&&c==RESULT_OK&&d!=null){try(OutputStream os=getContentResolver().openOutputStream(d.getData())){os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show();}}}
 
     private class EditorView extends View {
-        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;\n        long lastTapTime=0; float lastTapX=0,lastTapY=0; int tapPanel=-1; boolean doubleTap=false;
+        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;
+        long lastTapTime=0; float lastTapX=0,lastTapY=0; int tapPanel=-1; boolean doubleTap=false;
         JSONArray gestureSnapshot;
         boolean gestureChanged=false;
         final ArrayList<ChildSnapshot> resizeChildren=new ArrayList<>();
