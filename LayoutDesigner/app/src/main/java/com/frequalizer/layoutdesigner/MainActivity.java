@@ -35,6 +35,7 @@ public class MainActivity extends Activity {
         loadLocal();
         seedLayoutsIfEmpty();
         ensureDelayKeyboardGroups();
+        ensureBpmHeaderGroup();
         constrainLayoutsToCanvas();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -329,6 +330,38 @@ public class MainActivity extends Activity {
                 group.put("w",Math.min(1,maxX+.008)-Math.max(0,minX-.008));
                 group.put("h",Math.min(1,maxY+.012)-Math.max(0,minY-.012)); group.put("color","#252A31");
                 if(groupIndex<0) old.put(0,group);
+            } catch(Exception ignored) {}
+        }
+        saveLocal();
+    }
+
+    // BPM header: avvio, display e indicatori si spostano/ridimensionano insieme.
+    // Le coordinate originali dei singoli controlli non vengono modificate.
+    private boolean isBpmHeaderChild(String id) { return id.startsWith("bpm_"); }
+    private void ensureBpmHeaderGroup() {
+        for (String l : modes) {
+            JSONArray items=layouts.get(l);
+            double minX=1,minY=1,maxX=0,maxY=0;
+            for(int i=0;i<items.length();i++) {
+                JSONObject item=items.optJSONObject(i);
+                if(item==null || !isBpmHeaderChild(item.optString("id"))) continue;
+                double x=item.optDouble("x"),y=item.optDouble("y"),w=item.optDouble("w"),h=item.optDouble("h");
+                minX=Math.min(minX,x); minY=Math.min(minY,y);
+                maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+h);
+            }
+            if(maxX<=minX || maxY<=minY) continue;
+            int groupIndex=-1;
+            for(int i=0;i<items.length();i++) {
+                JSONObject o=items.optJSONObject(i);
+                if(o!=null && "bpm_header_panel".equals(o.optString("id"))) {groupIndex=i;break;}
+            }
+            try {
+                JSONObject group=groupIndex>=0?items.getJSONObject(groupIndex):new JSONObject();
+                group.put("id","bpm_header_panel"); group.put("type","panel"); group.put("text","");
+                group.put("x",Math.max(0,minX-.008)); group.put("y",Math.max(0,minY-.012));
+                group.put("w",Math.min(1,maxX+.008)-Math.max(0,minX-.008));
+                group.put("h",Math.min(1,maxY+.012)-Math.max(0,minY-.012)); group.put("color","#252A31");
+                if(groupIndex<0) items.put(0,group);
             } catch(Exception ignored) {}
         }
         saveLocal();
@@ -661,12 +694,24 @@ public class MainActivity extends Activity {
             }
             return false;
         }
+        boolean isInsideBpmHeaderGroup(JSONObject item) {
+            double x=item.optDouble("x"), y=item.optDouble("y");
+            double w=item.optDouble("w"), h=item.optDouble("h");
+            for(int i=0;i<current().length();i++) {
+                JSONObject panel=current().optJSONObject(i);
+                if(panel==null || !"bpm_header_panel".equals(panel.optString("id"))) continue;
+                double px=panel.optDouble("x"), py=panel.optDouble("y");
+                double pw=panel.optDouble("w"), ph=panel.optDouble("h");
+                if(x>=px-0.0001 && y>=py-0.0001 && x+w<=px+pw+0.0001 && y+h<=py+ph+0.0001) return true;
+            }
+            return false;
+        }
         int hitElement(float x,float y,float left,float top,float sw,float sh,int requiredPanel) {
             for(int i=current().length()-1;i>=0;i--) {
                 JSONObject o=current().optJSONObject(i); if(o==null) continue;
                 String id=o.optString("id"), type=o.optString("type");
                 // La sezione BEAT/DELAY è indivisibile: i suoi elementi non si selezionano singolarmente.
-                if("panel".equals(type) || isInsideDelayKeyboardGroup(o)) continue;
+                if("panel".equals(type) || isInsideDelayKeyboardGroup(o) || isInsideBpmHeaderGroup(o)) continue;
                 if(requiredPanel>=0) {
                     JSONObject panel=current().optJSONObject(requiredPanel);
                     if(panel==null) continue;
