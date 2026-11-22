@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
         loadLocal();
         seedLayoutsIfEmpty();
         ensureDelayKeyboardGroups();
-        ensureBpmHeaderGroup();
+        ensureBeatBpmGroup();
         constrainLayoutsToCanvas();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -335,34 +335,51 @@ public class MainActivity extends Activity {
         saveLocal();
     }
 
-    // BPM header: avvio, display e indicatori si spostano/ridimensionano insieme.
-    // Le coordinate originali dei singoli controlli non vengono modificate.
+    // Unico gruppo BPM/BEAT: header, indicatori, TAP/AUTO, frecce,
+    // fader, divisioni, modalità delay ed FX restano solidali.
     private boolean isBpmHeaderChild(String id) { return id.startsWith("bpm_"); }
-    private void ensureBpmHeaderGroup() {
+    private boolean isBeatBpmChild(String id) {
+        return isBpmHeaderChild(id) || isDelayKeyboardChild(id);
+    }
+    private void ensureBeatBpmGroup() {
         for (String l : modes) {
-            JSONArray items=layouts.get(l);
+            JSONArray original=layouts.get(l);
+            JSONArray items=new JSONArray();
+            JSONObject existingGroup=null;
+            // Rimuove i vecchi contenitori separati, senza toccare le coordinate
+            // dei controlli: ora esiste un solo gruppo comune.
+            for(int i=0;i<original.length();i++) {
+                JSONObject item=original.optJSONObject(i);
+                if(item==null) continue;
+                String id=item.optString("id");
+                if("beat_bpm_section_panel".equals(id)) { existingGroup=item; continue; }
+                if("delay_keyboard_panel".equals(id) || "bpm_header_panel".equals(id)) continue;
+                items.put(item);
+            }
             double minX=1,minY=1,maxX=0,maxY=0;
             for(int i=0;i<items.length();i++) {
                 JSONObject item=items.optJSONObject(i);
-                if(item==null || !isBpmHeaderChild(item.optString("id"))) continue;
+                if(item==null || !isBeatBpmChild(item.optString("id"))) continue;
                 double x=item.optDouble("x"),y=item.optDouble("y"),w=item.optDouble("w"),h=item.optDouble("h");
                 minX=Math.min(minX,x); minY=Math.min(minY,y);
                 maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+h);
             }
-            if(maxX<=minX || maxY<=minY) continue;
-            int groupIndex=-1;
-            for(int i=0;i<items.length();i++) {
-                JSONObject o=items.optJSONObject(i);
-                if(o!=null && "bpm_header_panel".equals(o.optString("id"))) {groupIndex=i;break;}
+            if(maxX<=minX || maxY<=minY) { layouts.put(l,items); continue; }
+            if(existingGroup!=null) {
+                double gx=existingGroup.optDouble("x"),gy=existingGroup.optDouble("y");
+                double gw=existingGroup.optDouble("w"),gh=existingGroup.optDouble("h");
+                minX=Math.min(minX,gx); minY=Math.min(minY,gy);
+                maxX=Math.max(maxX,gx+gw); maxY=Math.max(maxY,gy+gh);
             }
             try {
-                JSONObject group=groupIndex>=0?items.getJSONObject(groupIndex):new JSONObject();
-                group.put("id","bpm_header_panel"); group.put("type","panel"); group.put("text","");
+                JSONObject group=existingGroup==null?new JSONObject():existingGroup;
+                group.put("id","beat_bpm_section_panel"); group.put("type","panel"); group.put("text","");
                 group.put("x",Math.max(0,minX-.008)); group.put("y",Math.max(0,minY-.012));
                 group.put("w",Math.min(1,maxX+.008)-Math.max(0,minX-.008));
                 group.put("h",Math.min(1,maxY+.012)-Math.max(0,minY-.012)); group.put("color","#252A31");
-                if(groupIndex<0) items.put(0,group);
+                items.put(0,group);
             } catch(Exception ignored) {}
+            layouts.put(l,items);
         }
         saveLocal();
     }
@@ -521,9 +538,9 @@ public class MainActivity extends Activity {
                         for(int i=0;i<all.length();i++) if(i!=selected) {
                             JSONObject child=all.optJSONObject(i); if(child==null) continue;
                             double cx=child.optDouble("x"), cy=child.optDouble("y"), cw=child.optDouble("w"), ch=child.optDouble("h");
-                            boolean delayKeyGroup="delay_keyboard_panel".equals(o.optString("id")) && isDelayKeyboardChild(child.optString("id"));
-                            boolean insidePanel=cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001;
-                            if(delayKeyGroup || insidePanel) {
+                            boolean beatBpmGroup="beat_bpm_section_panel".equals(o.optString("id")) && isBeatBpmChild(child.optString("id"));
+                            boolean insidePanel=!"beat_bpm_section_panel".equals(o.optString("id")) && cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001;
+                            if(beatBpmGroup || insidePanel) {
                                 ChildSnapshot snap=new ChildSnapshot(i,child);
                                 resizeChildren.add(snap);
                                 groupChildren.add(snap);
@@ -669,6 +686,18 @@ public class MainActivity extends Activity {
         // I controlli hanno priorità sui pannelli: il pannello si seleziona
         // soltanto toccando una zona libera al suo interno.
         int hitPanel(float x,float y,float left,float top,float sw,float sh) {
+            // Il tocco su qualsiasi controllo BPM/BEAT seleziona sempre il gruppo completo.
+            for(int i=0;i<current().length();i++) {
+                JSONObject panel=current().optJSONObject(i);
+                if(panel==null || !"beat_bpm_section_panel".equals(panel.optString("id"))) continue;
+                for(int j=0;j<current().length();j++) {
+                    JSONObject child=current().optJSONObject(j);
+                    if(child==null || !isBeatBpmChild(child.optString("id"))) continue;
+                    float cx=left+(float)child.optDouble("x")*sw, cy=top+(float)child.optDouble("y")*sh;
+                    float cw=(float)child.optDouble("w")*sw, ch=(float)child.optDouble("h")*sh;
+                    if(x>=cx-5 && x<=cx+cw+5 && y>=cy-5 && y<=cy+ch+5) return i;
+                }
+            }
             int best=-1; double bestArea=Double.MAX_VALUE;
             for(int i=0;i<current().length();i++) {
                 JSONObject o=current().optJSONObject(i);
@@ -711,7 +740,7 @@ public class MainActivity extends Activity {
                 JSONObject o=current().optJSONObject(i); if(o==null) continue;
                 String id=o.optString("id"), type=o.optString("type");
                 // La sezione BEAT/DELAY è indivisibile: i suoi elementi non si selezionano singolarmente.
-                if("panel".equals(type) || isInsideDelayKeyboardGroup(o) || isInsideBpmHeaderGroup(o)) continue;
+                if("panel".equals(type) || isBeatBpmChild(id)) continue;
                 if(requiredPanel>=0) {
                     JSONObject panel=current().optJSONObject(requiredPanel);
                     if(panel==null) continue;
