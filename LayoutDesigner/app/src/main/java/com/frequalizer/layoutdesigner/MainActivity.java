@@ -242,7 +242,7 @@ public class MainActivity extends Activity {
         String[] top={"TAP","AUTO","LOCK","ALIGN","◀","▶","SKIP","RST"};
         for(int i=0;i<top.length;i++) tButton(l,"delay_"+(i==4?"back":i==5?"forward":i==6?"skip":i==7?"rst":top[i].toLowerCase(Locale.US)),top[i],x+.15*w+i*.105*w,y+.02*h,.095*w,.09*h);
         tText(l,"delay_phase_label","FX PHASE JOG",x+.02*w,y+.15*h,.32*w,.07*h);
-        tPanel(l,"delay_phase_fader","",x+.03*w,y+.23*h,.94*w,.055*h);
+        tText(l,"delay_phase_fader","────────●────────",x+.03*w,y+.23*h,.94*w,.055*h);
         String[] modes={"SHORT DELAY","LONG DELAY","DUB ECHO"};
         for(int i=0;i<3;i++) tButton(l,"delay_mode_"+i,modes[i],x+.02*w+i*.325*w,y+.33*h,.31*w,.10*h);
         String[] divisions={"1/16","1/8","1/4","1/2","3/4","1","2","4","8","16"};
@@ -279,7 +279,7 @@ public class MainActivity extends Activity {
         seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedFilterSection(l,.012,.505,.235,.475,"#46BE78",false);
         seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
-        seedEffects(l,.500,.505,.488,.475,false,false,true);
+        seedEffects(l,.500,.505,.488,.475,false,false,false);
     }
 
     // La tastiera delle divisioni DELAY è un unico gruppo indivisibile:
