@@ -349,7 +349,32 @@ public class MainActivity extends Activity {
                     p.setColor(color);p.setTextSize(Math.max(dp*5.5f,valueSize));
                     c.drawText(valueText,cx,y+hh-dp*4f,p);
                     p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);
-                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.BLACK);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
+                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{
+                    String id=o.optString("id"),label=o.optString("text");
+                    p.setStyle(Paint.Style.FILL);
+                    if(id.equals("options")){
+                        float outer=Math.min(ww,hh)*.43f,root=outer*.76f,cx=x+ww/2f,cy=y+hh/2f;
+                        Path path=new Path();
+                        for(int n=0;n<32;n++){float radius=(n%4==0||n%4==1)?outer:root;double a=Math.toRadians(-90.0+n*360.0/32.0);float px=cx+(float)Math.cos(a)*radius,py=cy+(float)Math.sin(a)*radius;if(n==0)path.moveTo(px,py);else path.lineTo(px,py);}
+                        path.close();p.setColor(Color.rgb(255,205,0));c.drawPath(path,p);p.setColor(Color.rgb(17,19,23));c.drawCircle(cx,cy,outer*.37f,p);p.setColor(Color.rgb(255,205,0));c.drawCircle(cx,cy,outer*.17f,p);
+                    }else if(id.endsWith("_flat")||id.contains("_return_")||id.startsWith("master_return_")){
+                        float radius=Math.min(ww,hh)*.47f;p.setColor(Color.rgb(255,205,0));c.drawCircle(x+ww/2f,y+hh/2f,radius,p);p.setColor(Color.rgb(255,235,100));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(1f,radius*.07f));c.drawCircle(x+ww/2f,y+hh/2f,radius,p);p.setStyle(Paint.Style.FILL);p.setColor(Color.BLACK);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(8f,Math.min(ww,hh)*.42f));c.drawText(label,x+ww/2f,y+hh/2f+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);
+                    }else{
+                        boolean toggle=id.equals("app_power")||id.equals("bpm_start")||id.endsWith("_power")||id.startsWith("master_on_");
+                        boolean off=id.equals("reverb_power")||id.equals("delay_power")||id.startsWith("master_on_")||id.startsWith("fx_");
+                        if(toggle){
+                            int fill=off?Color.rgb(55,62,72):Color.rgb(25,150,65);
+                            int stroke=off?color:Color.rgb(100,230,130);
+                            p.setColor(fill);c.drawRoundRect(x,y,x+ww,y+hh,Math.min(ww,hh)*.22f,Math.min(ww,hh)*.22f,p);
+                            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(1f,ww*.012f));p.setColor(stroke);c.drawRoundRect(x,y,x+ww,y+hh,Math.min(ww,hh)*.22f,Math.min(ww,hh)*.22f,p);p.setStyle(Paint.Style.FILL);
+                            p.setColor(Color.WHITE);
+                        }else{
+                            p.setColor(color);c.drawRoundRect(x,y,x+ww,y+hh,Math.min(ww,hh)*.22f,Math.min(ww,hh)*.22f,p);
+                            p.setColor(Color.BLACK);
+                        }
+                        p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(8f,Math.min(ww,hh)*.28f));p.setTypeface(Typeface.DEFAULT_BOLD);c.drawText(label,x+ww/2f,y+hh/2f+p.getTextSize()*.35f,p);p.setTypeface(Typeface.DEFAULT);p.setTextAlign(Paint.Align.LEFT);
+                    }
+                }
                 if(i==selected){
                     p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
                     c.drawCircle(x+ww,y+hh,12,p);
