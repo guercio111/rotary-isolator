@@ -91,8 +91,8 @@ public class MainActivity extends Activity {
             layouts.get(layout).put(o);
         } catch (Exception ignored) {}
     }
-    private void tPanel(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"panel","",x,y,w,h,"#303640"); }
-    private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,"#FFFFFF"); }
+    private void tPanel(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"panel","",x,y,w,h,"#111317"); }
+    private void tText(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"text",title,x,y,w,h,id.endsWith("_title") ? "#DC464B" : "#FFFFFF"); }
     private void tButton(String l,String id,String title,double x,double y,double w,double h) { templateItem(l,id,"button",title,x,y,w,h,"#E2B832"); }
     private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
     private void seedHeader(String l,boolean compact) {
@@ -252,12 +252,19 @@ public class MainActivity extends Activity {
         final ArrayList<ChildSnapshot> resizeChildren=new ArrayList<>();
         class ChildSnapshot { int index; double x,y,w,h; ChildSnapshot(int i,JSONObject o){index=i;x=o.optDouble("x");y=o.optDouble("y");w=o.optDouble("w");h=o.optDouble("h");} }
         EditorView(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
-        protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(18,20,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
+        protected void onDraw(Canvas c){super.onDraw(c);c.drawColor(Color.rgb(17,19,23));float pad=18, cw=getWidth()-pad*2,ch=getHeight()-pad*2;float ratio=mode.startsWith("S25") ? (mode.contains("ORIZZONTALE") ? (2340f/1080f) : (1080f/2340f)) : (mode.contains("ORIZZONTALE") ? (1920f/1200f) : (1200f/1920f));float w=cw,h=ch;if(w/h>ratio)w=h*ratio;else h=w/ratio;float left=(getWidth()-w)/2,top=(getHeight()-h)/2;
             p.setColor(Color.rgb(235,235,235));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);c.drawRoundRect(left,top,left+w,top+h,12,12,p);
             p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(35,38,43));c.drawRoundRect(left+2,top+2,left+w-2,top+h-2,10,10,p);
             JSONArray a=current();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;float x=left+(float)o.optDouble("x")*w,y=top+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;
                 int color;try{color=Color.parseColor(o.optString("color","#DDB833"));}catch(Exception e){color=Color.YELLOW;}
-                String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){float rad=Math.min(ww,hh)*.34f;c.drawCircle(x+ww/2,y+hh*.43f,rad,p);p.setColor(Color.DKGRAY);c.drawCircle(x+ww/2,y+hh*.43f,rad*.72f,p);p.setColor(Color.WHITE);c.drawLine(x+ww/2,y+hh*.43f,x+ww/2,y+hh*.43f-rad*.58f,p);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(9,Math.min(ww,hh)*.17f));c.drawText(o.optString("text"),x+ww/2,y+hh*.94f,p);p.setTextAlign(Paint.Align.LEFT);}else if(type.equals("text")){p.setColor(Color.WHITE);p.setTextSize(Math.max(12,hh*.55f));c.drawText(o.optString("text"),x,y+hh*.7f,p);}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
+                String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){float rad=Math.min(ww,hh)*.36f, cx=x+ww/2, cy=y+hh*.43f;
+                    RectF arc=new RectF(cx-rad+2,cy-rad+2,cx+rad-2,cy+rad-2);
+                    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(Math.max(2,rad*.10f));p.setColor(Color.rgb(67,73,82));c.drawArc(arc,135,270,false,p);
+                    for(int tick=0;tick<=20;tick++){double a=Math.toRadians(135+tick*13.5);float inner=rad*(tick%5==0?.76f:.84f),outer=rad*.98f;p.setColor(tick%5==0?color:Color.rgb(150,158,168));p.setStrokeWidth(Math.max(1,rad*.025f));c.drawLine(cx+(float)Math.cos(a)*inner,cy+(float)Math.sin(a)*inner,cx+(float)Math.cos(a)*outer,cy+(float)Math.sin(a)*outer,p);}
+                    p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(41,46,54));c.drawCircle(cx,cy,rad*.70f,p);
+                    p.setColor(Color.WHITE);p.setStrokeWidth(Math.max(2,rad*.055f));c.drawLine(cx,cy,cx,cy-rad*.52f,p);
+                    p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(6,Math.min(ww,hh)*.14f));p.setColor(Color.WHITE);c.drawText(o.optString("text"),cx,y+hh*.86f,p);
+                    p.setTextSize(Math.max(5,Math.min(ww,hh)*.105f));p.setColor(color);c.drawText("0.0",cx,y+hh*.99f,p);p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);}else if(type.equals("text")){p.setColor(Color.WHITE);p.setTextSize(Math.max(12,hh*.55f));c.drawText(o.optString("text"),x,y+hh*.7f,p);}else{c.drawRoundRect(x,y,x+ww,y+hh,12,12,p);p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(12,Math.min(ww,hh)*.22f));c.drawText(o.optString("text"),x+ww/2,y+hh/2+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);}
                 if(i==selected){
                     p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
                     c.drawCircle(x+ww,y+hh,12,p);
@@ -301,6 +308,7 @@ public class MainActivity extends Activity {
                 invalidate(); return true;
             }
             if(e.getAction()==MotionEvent.ACTION_MOVE && selected>=0) {
+                if(deleteTap) return true;
                 try {
                     JSONObject o=current().getJSONObject(selected);
                     float dx=(x-downX)/sw, dy=(y-downY)/sh;
