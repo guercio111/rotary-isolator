@@ -111,7 +111,7 @@ public class MainActivity extends Activity {
     private void seedLayoutsIfEmpty() {
         // Replace only the original blank-prototype project once. From this point
         // onward the user's edited layouts are always preserved across upgrades.
-        if (getPreferences(0).getBoolean("frequalizer_template_seeded_build918", false)) return;
+        if (getPreferences(0).getBoolean("frequalizer_template_seeded_build918_v2", false)) return;
         // Build 918 becomes the new starting reference for all four profiles.
         // This one-time migration intentionally replaces the older prototype maps.
         for (String m : modes) layouts.put(m, new JSONArray());
@@ -119,7 +119,7 @@ public class MainActivity extends Activity {
         ensureDelayKeyboardGroups();
         constrainLayoutsToCanvas();
         saveLocal();
-        getPreferences(0).edit().putBoolean("frequalizer_template_seeded_build918", true).apply();
+        getPreferences(0).edit().putBoolean("frequalizer_template_seeded_build918_v2", true).apply();
     }
     private void templateItem(String layout,String id,String type,String text,double x,double y,double w,double h,String color) {
         try {
