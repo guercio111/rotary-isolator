@@ -11,6 +11,8 @@ import android.widget.*;
 import org.json.*;
 
 import java.io.OutputStream;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -21,6 +23,7 @@ public class MainActivity extends Activity {
     private EditorView editor;
     private TextView status;
     private static final int EXPORT = 41;
+    private static final int IMPORT = 42;
     private static final int MAX_UNDO = 30;
     private final ArrayDeque<UndoEntry> undoHistory = new ArrayDeque<>();
     private static class UndoEntry { final String mode; final JSONArray snapshot; UndoEntry(String m, JSONArray a) { mode=m; snapshot=a; } }
@@ -59,6 +62,7 @@ public class MainActivity extends Activity {
         bottom.setPadding(8,5,8,8);
         addReturnButton(top);
         addTopButton(bottom, "SALVA", this::saveLocal);
+        addTopButton(bottom, "IMPORTA", this::importProject);
         addTopButton(bottom, "ESPORTA RECORD", this::export);
         root.addView(bottom);
         status = new TextView(this);
@@ -458,7 +462,47 @@ public class MainActivity extends Activity {
     private void loadLocal(){try{JSONObject p=new JSONObject(getPreferences(0).getString("project","{}"));for(String m:modes)if(p.has(m))layouts.put(m,p.getJSONArray(m));}catch(Exception ignored){}}
     private JSONObject toJson(){JSONObject p=new JSONObject();try{p.put("project","FREQUALIZER Layout Designer");p.put("version",1);p.put("devices",new JSONObject().put("tablet","Samsung Galaxy Tab A11+ SM-X230").put("smartphone","Samsung Galaxy S25 base"));for(String m:modes)p.put(m,layouts.get(m));}catch(Exception ignored){}return p;}
     private void export(){saveLocal();Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("application/json");i.putExtra(Intent.EXTRA_TITLE,"FREQUALIZER_layout_record.json");startActivityForResult(i,EXPORT);}
-    @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==EXPORT&&c==RESULT_OK&&d!=null){try(OutputStream os=getContentResolver().openOutputStream(d.getData())){os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show();}}}
+    private void importProject(){
+        Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.addCategory(Intent.CATEGORY_OPENABLE); i.setType("application/json");
+        try { startActivityForResult(i,IMPORT); } catch(Exception e) { Toast.makeText(this,"Impossibile aprire il selettore file",Toast.LENGTH_LONG).show(); }
+    }
+    private JSONObject readJson(Uri uri) throws Exception {
+        try(InputStream in=getContentResolver().openInputStream(uri); ByteArrayOutputStream out=new ByteArrayOutputStream()) {
+            if(in==null) throw new Exception("File non leggibile"); byte[] buffer=new byte[8192]; int n;
+            while((n=in.read(buffer))!=-1) out.write(buffer,0,n);
+            return new JSONObject(new String(out.toByteArray(),StandardCharsets.UTF_8));
+        }
+    }
+    private boolean validateProject(JSONObject project) {
+        if(project==null || !"FREQUALIZER Layout Designer".equals(project.optString("project"))) return false;
+        for(String profile:modes) { JSONArray a=project.optJSONArray(profile); if(a==null || a.length()==0) return false;
+            for(int i=0;i<a.length();i++) { JSONObject item=a.optJSONObject(i);
+                if(item==null || !item.has("id") || !item.has("type") || !item.has("x") || !item.has("y") || !item.has("w") || !item.has("h")) return false;
+                if(Double.isNaN(item.optDouble("x",Double.NaN)) || Double.isNaN(item.optDouble("y",Double.NaN)) || Double.isNaN(item.optDouble("w",Double.NaN)) || Double.isNaN(item.optDouble("h",Double.NaN))) return false;
+            }
+        } return true;
+    }
+    private void confirmImport(JSONObject project) {
+        new AlertDialog.Builder(this).setTitle("IMPORTA PROGETTO")
+            .setMessage("Il record contiene tutti e quattro i profili. Vuoi sostituire il progetto attualmente aperto? Puoi annullare senza perdere nulla.")
+            .setNegativeButton("ANNULLA",(dialog,which)->{})
+            .setPositiveButton("IMPORTA",(dialog,which)->{ try {
+                for(String profile:modes) layouts.put(profile,new JSONArray(project.getJSONArray(profile).toString()));
+                undoHistory.clear(); if(editor!=null){editor.selected=-1;editor.editUnlocked=false;editor.invalidate();}
+                saveLocal(); Toast.makeText(this,"Progetto importato correttamente",Toast.LENGTH_LONG).show();
+            } catch(Exception e) { Toast.makeText(this,"Importazione non riuscita",Toast.LENGTH_LONG).show(); } }).show();
+    }
+    @Override protected void onActivityResult(int r,int c,Intent d){
+        super.onActivityResult(r,c,d); if(c!=RESULT_OK || d==null || d.getData()==null) return;
+        if(r==EXPORT) { try(OutputStream os=getContentResolver().openOutputStream(d.getData())) {
+            if(os==null) throw new Exception("File non scrivibile"); os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));
+            Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();
+        } catch(Exception e) { Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show(); }
+        } else if(r==IMPORT) { try { JSONObject project=readJson(d.getData());
+            if(!validateProject(project)) { Toast.makeText(this,"Record non valido o incompleto: servono tutti e quattro i profili",Toast.LENGTH_LONG).show(); return; }
+            confirmImport(project);
+        } catch(Exception e) { Toast.makeText(this,"Impossibile leggere il record selezionato",Toast.LENGTH_LONG).show(); } }
+    }
 
     private class EditorView extends View {
         Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false; boolean editUnlocked=false, longPressTriggered=false, deleteOnUp=false; final android.os.Handler editHandler=new android.os.Handler(android.os.Looper.getMainLooper()); Runnable longPressRunnable;
@@ -607,7 +651,9 @@ public class MainActivity extends Activity {
                         invalidate();
                         Toast.makeText(MainActivity.this,resizing?"RIDIMENSIONA":"MODIFICA ATTIVA",Toast.LENGTH_SHORT).show();
                     };
-                    editHandler.postDelayed(longPressRunnable,550L);
+                    long delayMs=550L;
+                    if(target!=null) { String targetType=target.optString("type"); if("button".equals(targetType) || "fader".equals(targetType)) delayMs=1100L; }
+                    editHandler.postDelayed(longPressRunnable,delayMs);
                 } else {
                     longPressRunnable=null;
                 }
@@ -720,18 +766,6 @@ public class MainActivity extends Activity {
         // I controlli hanno priorità sui pannelli: il pannello si seleziona
         // soltanto toccando una zona libera al suo interno.
         int hitPanel(float x,float y,float left,float top,float sw,float sh) {
-            // Il tocco su qualsiasi controllo BPM/BEAT seleziona sempre il gruppo completo.
-            for(int i=0;i<current().length();i++) {
-                JSONObject panel=current().optJSONObject(i);
-                if(panel==null || !"beat_bpm_section_panel".equals(panel.optString("id"))) continue;
-                for(int j=0;j<current().length();j++) {
-                    JSONObject child=current().optJSONObject(j);
-                    if(child==null || !isBeatBpmChild(child.optString("id"))) continue;
-                    float cx=left+(float)child.optDouble("x")*sw, cy=top+(float)child.optDouble("y")*sh;
-                    float cw=(float)child.optDouble("w")*sw, ch=(float)child.optDouble("h")*sh;
-                    if(x>=cx-5 && x<=cx+cw+5 && y>=cy-5 && y<=cy+ch+5) return i;
-                }
-            }
             int best=-1; double bestArea=Double.MAX_VALUE;
             for(int i=0;i<current().length();i++) {
                 JSONObject o=current().optJSONObject(i);
@@ -774,7 +808,7 @@ public class MainActivity extends Activity {
                 JSONObject o=current().optJSONObject(i); if(o==null) continue;
                 String id=o.optString("id"), type=o.optString("type");
                 // La sezione BEAT/DELAY è indivisibile: i suoi elementi non si selezionano singolarmente.
-                if("panel".equals(type) || isBeatBpmChild(id)) continue;
+                if("panel".equals(type)) continue;
                 if(requiredPanel>=0) {
                     JSONObject panel=current().optJSONObject(requiredPanel);
                     if(panel==null) continue;
