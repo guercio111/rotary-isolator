@@ -200,29 +200,8 @@ public class MainActivity extends Activity {
         seedEffects(l,.500,.505,.488,.475);
     }
 
-    private void editSelected() {
-        if (editor.selected < 0 || editor.selected >= current().length()) return;
-        try {
-            JSONObject o=current().getJSONObject(editor.selected);
-            LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
-            EditText label=new EditText(this); label.setSingleLine(); label.setHint("Testo / etichetta"); label.setText(o.optString("text"));
-            EditText width=new EditText(this); width.setInputType(8194); width.setHint("Larghezza % (1-100)"); width.setText(String.valueOf((int)(o.optDouble("w")*100)));
-            EditText height=new EditText(this); height.setInputType(8194); height.setHint("Altezza % (1-100)"); height.setText(String.valueOf((int)(o.optDouble("h")*100)));
-            box.addView(label); box.addView(width); box.addView(height);
-            new AlertDialog.Builder(this).setTitle("Proprietà elemento").setView(box)
-                .setPositiveButton("APPLICA",(d,w)->{
-                    try {
-                        o.put("text",label.getText().toString());
-                        o.put("w",clamp(parse(width.getText().toString(),20)/100.0,0.01,1));
-                        o.put("h",clamp(parse(height.getText().toString(),14)/100.0,0.01,1));
-                        editor.invalidate(); saveLocal();
-                    } catch (Exception ignored) {}
-                }).setNegativeButton("ANNULLA",null).show();
-        } catch(Exception ignored) {}
-    }
-    private int parse(String s,int fallback){try{return Integer.parseInt(s);}catch(Exception e){return fallback;}}
     private double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
-    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" controlli originali  ·  Trascina per spostare, angolo per ridimensionare, ↶ per annullare");}
+    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" controlli originali  ·  Trascina per spostare, angolo per ridimensionare, X per annullare");}
     private void saveLocal(){getPreferences(0).edit().putString("project",toJson().toString()).apply(); if(status!=null)updateStatus();}
     private void loadLocal(){try{JSONObject p=new JSONObject(getPreferences(0).getString("project","{}"));for(String m:modes)if(p.has(m))layouts.put(m,p.getJSONArray(m));}catch(Exception ignored){}}
     private JSONObject toJson(){JSONObject p=new JSONObject();try{p.put("project","FREQUALIZER Layout Designer");p.put("version",1);p.put("devices",new JSONObject().put("tablet","Samsung Galaxy Tab A11+ SM-X230").put("smartphone","Samsung Galaxy S25 base"));for(String m:modes)p.put(m,layouts.get(m));}catch(Exception ignored){}return p;}
@@ -252,7 +231,7 @@ public class MainActivity extends Activity {
                     p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
                     c.drawCircle(x+ww,y+hh,12,p);
                     p.setColor(Color.rgb(205,45,50));c.drawCircle(x+ww,y,15,p);
-                    p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("↶",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
+                    p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("×",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
                 }
             }
             p.setColor(Color.LTGRAY);p.setTextSize(22);p.setTextAlign(Paint.Align.CENTER);c.drawText(mode,left+w/2,Math.max(26,top-8),p);p.setTextAlign(Paint.Align.LEFT);
