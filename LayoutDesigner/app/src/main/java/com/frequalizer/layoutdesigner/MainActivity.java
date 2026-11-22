@@ -45,17 +45,11 @@ public class MainActivity extends Activity {
             }
         });
         top.addView(chooser, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        addTopButton(top, "TESTO", () -> add("text"));
-        addTopButton(top, "PANNELLO", () -> add("panel"));
-        addTopButton(top, "TASTO", () -> add("button"));
-        addTopButton(top, "MANOPOLA", () -> add("knob"));
         root.addView(top);
         editor = new EditorView();
         root.addView(editor, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout bottom = new LinearLayout(this);
         bottom.setPadding(8,5,8,8);
-        addTopButton(bottom, "MODIFICA", this::editSelected);
-        addTopButton(bottom, "ELIMINA", this::deleteSelected);
         addTopButton(bottom, "SALVA", this::saveLocal);
         addTopButton(bottom, "ESPORTA RECORD", this::export);
         root.addView(bottom);
@@ -206,17 +200,6 @@ public class MainActivity extends Activity {
         seedEffects(l,.500,.505,.488,.475);
     }
 
-    private void add(String type) {
-        try {
-            JSONObject o = new JSONObject();
-            o.put("id", UUID.randomUUID().toString()); o.put("type", type);
-            o.put("x", 0.12); o.put("y", 0.12); o.put("w", type.equals("panel") ? 0.65 : 0.22);
-            o.put("h", type.equals("panel") ? 0.28 : 0.14);
-            o.put("text", type.equals("text") ? "TESTO" : type.equals("panel") ? "FINESTRA" : type.equals("button") ? "TASTO" : "KNOB");
-            o.put("color", type.equals("panel") ? "#343A40" : "#E2B832");
-            current().put(o); editor.selected = current().length()-1; editor.invalidate(); saveLocal();
-        } catch(Exception ignored) {}
-    }
     private void editSelected() {
         if (editor.selected < 0 || editor.selected >= current().length()) return;
         try {
@@ -239,8 +222,7 @@ public class MainActivity extends Activity {
     }
     private int parse(String s,int fallback){try{return Integer.parseInt(s);}catch(Exception e){return fallback;}}
     private double clamp(double x,double a,double b){return Math.max(a,Math.min(b,x));}
-    private void deleteSelected(){if(editor.selected>=0&&editor.selected<current().length()){JSONArray n=new JSONArray();for(int i=0;i<current().length();i++)if(i!=editor.selected)n.put(current().opt(i));layouts.put(mode,n);editor.selected=-1;editor.invalidate();saveLocal();}}
-    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" elementi  ·  Trascina per spostare, usa l'angolo per ridimensionare");}
+    private void updateStatus(){if(status!=null)status.setText(mode+"  ·  "+current().length()+" controlli originali  ·  Trascina per spostare, angolo per ridimensionare, ↶ per annullare");}
     private void saveLocal(){getPreferences(0).edit().putString("project",toJson().toString()).apply(); if(status!=null)updateStatus();}
     private void loadLocal(){try{JSONObject p=new JSONObject(getPreferences(0).getString("project","{}"));for(String m:modes)if(p.has(m))layouts.put(m,p.getJSONArray(m));}catch(Exception ignored){}}
     private JSONObject toJson(){JSONObject p=new JSONObject();try{p.put("project","FREQUALIZER Layout Designer");p.put("version",1);p.put("devices",new JSONObject().put("tablet","Samsung Galaxy Tab A11+ SM-X230").put("smartphone","Samsung Galaxy S25 base"));for(String m:modes)p.put(m,layouts.get(m));}catch(Exception ignored){}return p;}
@@ -248,7 +230,8 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int r,int c,Intent d){super.onActivityResult(r,c,d);if(r==EXPORT&&c==RESULT_OK&&d!=null){try(OutputStream os=getContentResolver().openOutputStream(d.getData())){os.write(toJson().toString(2).getBytes(StandardCharsets.UTF_8));Toast.makeText(this,"Record esportato",Toast.LENGTH_LONG).show();}catch(Exception e){Toast.makeText(this,"Errore esportazione",Toast.LENGTH_LONG).show();}}}
 
     private class EditorView extends View {
-        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, deleteTap=false;
+        Paint p=new Paint(3); int selected=-1; float downX,downY,startX,startY,startW,startH; boolean resizing=false, cancelTap=false;
+        JSONArray gestureSnapshot;
         final ArrayList<ChildSnapshot> resizeChildren=new ArrayList<>();
         class ChildSnapshot { int index; double x,y,w,h; ChildSnapshot(int i,JSONObject o){index=i;x=o.optDouble("x");y=o.optDouble("y");w=o.optDouble("w");h=o.optDouble("h");} }
         EditorView(){super(MainActivity.this);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
@@ -269,7 +252,7 @@ public class MainActivity extends Activity {
                     p.setColor(Color.CYAN);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);c.drawRect(x,y,x+ww,y+hh,p);p.setStyle(Paint.Style.FILL);
                     c.drawCircle(x+ww,y+hh,12,p);
                     p.setColor(Color.rgb(205,45,50));c.drawCircle(x+ww,y,15,p);
-                    p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("×",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
+                    p.setColor(Color.WHITE);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(19);c.drawText("↶",x+ww,y+7,p);p.setTextAlign(Paint.Align.LEFT);
                 }
             }
             p.setColor(Color.LTGRAY);p.setTextSize(22);p.setTextAlign(Paint.Align.CENTER);c.drawText(mode,left+w/2,Math.max(26,top-8),p);p.setTextAlign(Paint.Align.LEFT);
@@ -285,14 +268,15 @@ public class MainActivity extends Activity {
             float x=e.getX(),y=e.getY();
             float[] s=stage(); float left=s[0], top=s[1], sw=s[2], sh=s[3];
             if(e.getAction()==MotionEvent.ACTION_DOWN) {
-                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; deleteTap=false; resizeChildren.clear();
+                downX=x; downY=y; selected=hit(x,y,left,top,sw,sh); resizing=false; cancelTap=false; resizeChildren.clear();
+                try { gestureSnapshot=new JSONArray(current().toString()); } catch(Exception ignored) { gestureSnapshot=null; }
                 if(selected>=0) {
                     JSONObject o=current().optJSONObject(selected);
                     float ex=left+(float)o.optDouble("x")*sw, ey=top+(float)o.optDouble("y")*sh;
                     float ew=(float)o.optDouble("w")*sw, eh=(float)o.optDouble("h")*sh;
                     // X in alto a destra della cornice selezionata.
-                    deleteTap = x >= ex+ew-30 && x <= ex+ew+8 && y >= ey-12 && y <= ey+28;
-                    resizing=!deleteTap && Math.abs(x-(ex+ew))<28 && Math.abs(y-(ey+eh))<28;
+                    cancelTap = x >= ex+ew-30 && x <= ex+ew+8 && y >= ey-12 && y <= ey+28;
+                    resizing=!cancelTap && Math.abs(x-(ex+ew))<28 && Math.abs(y-(ey+eh))<28;
                     startX=(float)o.optDouble("x"); startY=(float)o.optDouble("y");
                     startW=(float)o.optDouble("w"); startH=(float)o.optDouble("h");
                     if(resizing && "panel".equals(o.optString("type"))) {
@@ -308,7 +292,7 @@ public class MainActivity extends Activity {
                 invalidate(); return true;
             }
             if(e.getAction()==MotionEvent.ACTION_MOVE && selected>=0) {
-                if(deleteTap) return true;
+                if(cancelTap) return true;
                 try {
                     JSONObject o=current().getJSONObject(selected);
                     float dx=(x-downX)/sw, dy=(y-downY)/sh;
@@ -334,7 +318,12 @@ public class MainActivity extends Activity {
                 } catch(Exception ignored) {}
                 return true;
             }
-            if(e.getAction()==MotionEvent.ACTION_UP) { if(deleteTap && selected>=0) deleteSelected(); else saveLocal(); deleteTap=false; return true; }
+            if(e.getAction()==MotionEvent.ACTION_UP) {
+                if(cancelTap && gestureSnapshot!=null) {
+                    layouts.put(mode,gestureSnapshot); editor.selected=-1; invalidate(); saveLocal();
+                } else saveLocal();
+                cancelTap=false; gestureSnapshot=null; return true;
+            }
             return true;
         }
         int hit(float x,float y,float left,float top,float sw,float sh) {
