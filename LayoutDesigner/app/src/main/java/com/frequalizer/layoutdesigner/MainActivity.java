@@ -314,7 +314,9 @@ public class MainActivity extends Activity {
                         for(int i=0;i<all.length();i++) if(i!=selected) {
                             JSONObject child=all.optJSONObject(i); if(child==null) continue;
                             double cx=child.optDouble("x"), cy=child.optDouble("y"), cw=child.optDouble("w"), ch=child.optDouble("h");
-                            if(cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001) {
+                            boolean delayKeyGroup="delay_keyboard_panel".equals(o.optString("id")) && child.optString("id").startsWith("division_");
+                            boolean insidePanel=cx>=startX-0.0001 && cy>=startY-0.0001 && cx+cw<=startX+startW+0.0001 && cy+ch<=startY+startH+0.0001;
+                            if(delayKeyGroup || insidePanel) {
                                 ChildSnapshot snap=new ChildSnapshot(i,child);
                                 resizeChildren.add(snap);
                                 groupChildren.add(snap);
