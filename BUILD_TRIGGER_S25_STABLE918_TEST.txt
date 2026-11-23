@@ -1,0 +1,1 @@
+Temporary S25 test build from stable tablet reference. Audio/control implementation intentionally restored from frequalizer-tablet-stable-revision; tablet branch remains untouched.
