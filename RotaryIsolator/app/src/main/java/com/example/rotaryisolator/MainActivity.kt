@@ -196,6 +196,9 @@ class MainActivity : Activity() {
     private var autoBpmLowpassState = 0f
     private var autoBpmLastAnalysisMs = 0L
     private var bpmUiLabel: TextView? = null
+    private var s25RecordBpmReadout: TextView? = null
+    private var s25RecordMasterBeat: TextView? = null
+    private var s25RecordFxBeat: TextView? = null
     private var autoBpmButton: TextView? = null
     private var lockBpmButton: TextView? = null
     @Volatile private var delayClockLocked = false
@@ -777,10 +780,13 @@ class MainActivity : Activity() {
     private data class RecordElement(val id:String,val type:String,val text:String,val x:Float,val y:Float,val w:Float,val h:Float,val color:String)
 
     private fun addS25RecordElements(canvas:FrameLayout,elements:List<RecordElement>,titleBar:View){
+        s25RecordBpmReadout=null;s25RecordMasterBeat=null;s25RecordFxBeat=null
         val views=ArrayList<Pair<View,RecordElement>>()
         (elements.filter{it.type=="panel"}+elements.filter{it.type!="panel"}).forEach{e->val v=createS25RecordView(e);views.add(v to e);canvas.addView(v,FrameLayout.LayoutParams(1,1))}
         fun place(){if(canvas.width<=0||canvas.height<=0)return;val full=canvas.height+titleBar.height
             views.forEach{(v,e)->v.layoutParams=FrameLayout.LayoutParams((e.w*canvas.width).roundToInt().coerceAtLeast(1),(e.h*full).roundToInt().coerceAtLeast(1)).apply{leftMargin=(e.x*canvas.width).roundToInt();topMargin=(e.y*full-titleBar.height).roundToInt()}}
+            // Bring touch controls above adjacent rotary hit areas without changing their recorded geometry.
+            views.filter{it.second.type=="button"}.forEach{it.first.bringToFront()}
         }
         canvas.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->place()};canvas.post{place()}
     }
@@ -788,7 +794,13 @@ class MainActivity : Activity() {
     private fun createS25RecordView(e:RecordElement):View{
         val c=try{Color.parseColor(e.color)}catch(_:Throwable){Color.WHITE}
         if(e.type=="panel")return View(this).apply{setBackgroundColor(c);isClickable=false}
-        if(e.type=="text")return TextView(this).apply{text=if(e.id=="delay_bpm")String.format(java.util.Locale.US,"%.1f BPM",delayBpm) else e.text;gravity=Gravity.CENTER;setTextColor(c);textSize=9f;setTypeface(typeface,if(e.id.endsWith("_title")||e.id=="master_title")Typeface.BOLD else Typeface.NORMAL)}
+        if(e.type=="text")return TextView(this).apply{
+            text=if(e.id=="delay_bpm")String.format(java.util.Locale.US,"%.1f BPM",delayBpm) else e.text
+            gravity=Gravity.CENTER;setTextColor(c)
+            textSize=when(e.id){"delay_bpm"->12f;"delay_master_beat","delay_fx_beat"->20f;else->9f}
+            setTypeface(typeface,if(e.id.endsWith("_title")||e.id=="master_title"||e.id=="delay_bpm")Typeface.BOLD else Typeface.NORMAL)
+            when(e.id){"delay_bpm"->s25RecordBpmReadout=this;"delay_master_beat"->s25RecordMasterBeat=this;"delay_fx_beat"->s25RecordFxBeat=this}
+        }
         if(e.type=="knob")return createS25Knob(e,c)
         if(e.type=="fader")return SeekBar(this).apply{max=200;progress=100;progressTintList=ColorStateList.valueOf(c);thumbTintList=ColorStateList.valueOf(Color.YELLOW);setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(b:SeekBar?,p:Int,u:Boolean){if(u){if(e.id=="delay_pitch_fader")validatedBeatEngine.setPitchPercent(50f+p/2f) else fxPhaseOffsetMs=(p-100)/100f*currentFxPeriodMs()*.5f;scheduleUpdate()}};override fun onStartTrackingTouch(b:SeekBar?){};override fun onStopTrackingTouch(b:SeekBar?){save()}})}
         return createS25Button(e,c)
@@ -799,7 +811,7 @@ class MainActivity : Activity() {
         var v=0f;var lo=0f;var hi=100f;var set:(Float)->Unit={};var read:()->String={v.toInt().toString()}
         when{
             id.startsWith("EQ_knob_")->{val i=id.substringAfterLast("_").toInt();v=eq[i];lo=-14f;hi=14f;set={eq[i]=it.coerceIn(lo,hi);scheduleUpdate()};read={fmt(eq[i])+" dB"}}
-            id.startsWith("ISOLATOR_knob_")->{val i=id.substringAfterLast("_").toInt();v=iso[i];lo=-24f;hi=24f;set={iso[i]=it.coerceIn(lo,hi);scheduleUpdate()};read={fmt(iso[i])+" dB"}}
+            id.startsWith("ISOLATOR_knob_")->{val visualIndex=id.substringAfterLast("_").toInt();val i=2-visualIndex;v=iso[i];lo=-24f;hi=24f;set={iso[i]=it.coerceIn(lo,hi);scheduleUpdate()};read={fmt(iso[i])+" dB"}}
             id=="filter_knob_0"->{v=filters[0];set={filters[0]=it.coerceIn(0f,1f);scheduleUpdate()};read={(filters[0]*100).toInt().toString()+"%"}}
             id=="filter_knob_1"->{v=resonance;set={resonance=it.coerceIn(0f,1f);scheduleUpdate()};read={(resonance*100).toInt().toString()+"%"}}
             id=="master_knob_0"->{v=gain;lo=-12f;hi=12f;set={gain=it;scheduleUpdate()};read={fmt(gain)+" dB"}}
@@ -813,7 +825,7 @@ class MainActivity : Activity() {
             id=="delay_knob_2"->{v=delayTonePercent.toFloat();set={delayTonePercent=it.toInt();scheduleUpdate()};read={delayTonePercent.toString()+"%"}}
             id=="delay_knob_3"->{v=delayManualTimePercent;set={delayManualMode=true;delayManualTimePercent=it;scheduleUpdate()};read={manualDelayDivisionLabel()}}
         }
-        return RotaryControl(this,e.text,v,lo,hi,c,{set(it);save()},{read()},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+        return RotaryControl(this,e.text,v,lo,hi,c,{set(it);save()},{read()},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},indicatorState=when(id){"master_knob_1"->{ { compMakeup>0f } };"master_knob_2"->{ { loudness>0f } };else->null})
     }
 
     private fun createS25Button(e:RecordElement,c:Int):View{
@@ -825,9 +837,9 @@ class MainActivity : Activity() {
             "EQ_flat"->b.setOnClickListener{for(i in 0..3){previousEq[i]=eq[i];eq[i]=0f};save();scheduleUpdate();refreshUi()}
             "ISOLATOR_power"->{state(isoOn);b.text=if(isoOn)"ON" else "OFF";b.setOnClickListener{isoOn=!isoOn;save();scheduleUpdate();refreshUi()}}
             "iso_limiter"->{state(isoLimiterOn);b.text=if(isoLimiterOn)"LIMITER ON" else "LIMITER OFF";b.setOnClickListener{isoLimiterOn=!isoLimiterOn;save();scheduleUpdate();refreshUi()}}
-            "ISOLATOR_flat"->b.setOnClickListener{for(i in 0..2)iso[i]=0f;save();scheduleUpdate();refreshUi()}
-            "reverb_power"->{state(reverbOn);b.text=if(reverbOn)"ON" else "OFF";b.setOnClickListener{reverbOn=!reverbOn;save();scheduleUpdate();if(reverbOn)updateEffectsCapture(true)}}
-            "delay_power"->{state(delayOn);b.text=if(delayOn)"ON" else "OFF";b.setOnClickListener{delayOn=!delayOn;save();scheduleUpdate();if(delayOn)updateEffectsCapture(true)}}
+            "ISOLATOR_flat"->b.setOnClickListener{for(i in 0..2){previousIso[i]=iso[i];iso[i]=0f};save();scheduleUpdate();refreshUi()}
+            "reverb_power"->{state(reverbOn);b.text=if(reverbOn)"ON" else "OFF";b.setOnClickListener{reverbOn=!reverbOn;state(reverbOn);b.text=if(reverbOn)"ON" else "OFF";save();scheduleUpdate();if(reverbOn)updateEffectsCapture(true)}}
+            "delay_power"->{state(delayOn);b.text=if(delayOn)"ON" else "OFF";b.setOnClickListener{delayOn=!delayOn;state(delayOn);b.text=if(delayOn)"ON" else "OFF";save();scheduleUpdate();if(delayOn&&delayMix>0)updateEffectsCapture(true)}}
             "reverb_band_0"->{state(reverbLowEnabled);b.setOnClickListener{reverbLowEnabled=!reverbLowEnabled;state(reverbLowEnabled);save();scheduleUpdate()}}
             "reverb_band_1"->{state(reverbMidEnabled);b.setOnClickListener{reverbMidEnabled=!reverbMidEnabled;state(reverbMidEnabled);save();scheduleUpdate()}}
             "reverb_band_2"->{state(reverbHighEnabled);b.setOnClickListener{reverbHighEnabled=!reverbHighEnabled;state(reverbHighEnabled);save();scheduleUpdate()}}
@@ -843,8 +855,8 @@ class MainActivity : Activity() {
             else->when{
                 e.id.startsWith("EQ_return_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{eq[i]=previousEq[i];save();scheduleUpdate();refreshUi()}}
                 e.id.startsWith("EQ_flat_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{eq[i]=0f;save();scheduleUpdate();refreshUi()}}
-                e.id.startsWith("ISOLATOR_return_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{iso[i]=previousIso[i];save();scheduleUpdate();refreshUi()}}
-                e.id.startsWith("ISOLATOR_flat_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{iso[i]=0f;save();scheduleUpdate();refreshUi()}}
+                e.id.startsWith("ISOLATOR_return_")-> {val i=2-e.id.substringAfterLast("_").toInt();b.setOnClickListener{iso[i]=previousIso[i];save();scheduleUpdate();refreshUi()}}
+                e.id.startsWith("ISOLATOR_flat_")-> {val i=2-e.id.substringAfterLast("_").toInt();b.setOnClickListener{previousIso[i]=iso[i];iso[i]=0f;save();scheduleUpdate();refreshUi()}}
                 e.id.startsWith("delay_mode_")-> {val i=e.id.substringAfterLast("_").toInt();state(selectedBeatFx==i);b.setOnClickListener{selectedBeatFx=i;delayMode=i;state(true);save();scheduleUpdate()}}
                 e.id.startsWith("division_")-> {val i=e.id.substringAfterLast("_").toInt();state(delayDivision==i&&!delayManualMode);b.setOnClickListener{delayManualMode=false;delayDivision=i;delayManualTimePercent=0f;state(true);save();scheduleUpdate()}}
             }
@@ -853,8 +865,6 @@ class MainActivity : Activity() {
     }
 
 private val s25MainRecord = listOf(
-    RecordElement("bpm_readout", "text", "— BPM", 0.4f, 0.02f, 0.19f, 0.03f, "#FFFFFF"),
-    RecordElement("options", "button", "⚙", 0.84f, 0.02f, 0.115f, 0.042f, "#FFCD00"),
     RecordElement("EQ_panel", "panel", "", 0f, 0.13f, 0.478f, 0.425f, "#111317"),
     RecordElement("EQ_title", "text", "EQ", 0.05f, 0.07f, 0.12f, 0.04f, "#DC464B"),
     RecordElement("EQ_power", "button", "ON", 0.14f, 0.08f, 0.08f, 0.03f, "#FFCD00"),
@@ -985,8 +995,15 @@ private val s25PopupRecord = listOf(
                     buildUi()
                 }
             }
-            titleBar.addView(exitButton, LinearLayout.LayoutParams(dp(82), dp(30)))
-            titleBar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+            titleBar.addView(exitButton, LinearLayout.LayoutParams(dp(72), dp(30)))
+            val popupBpmPanel=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;setPadding(dp(2),0,dp(2),0)}
+            bpmButton=TextView(this).apply{text=if(bpmAnalyzerOn)"BPM STOP" else "BPM START";textSize=8f;gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD);setTextColor(Color.WHITE);background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(6).toFloat();setColor(if(bpmAnalyzerOn)Color.rgb(155,45,48) else Color.rgb(38,105,70));setStroke(dp(1),if(bpmAnalyzerOn)Color.rgb(245,115,120) else Color.rgb(125,245,155))};setPadding(dp(3),0,dp(3),0);setOnClickListener{if(bpmAnalyzerOn)stopBpmAnalyzer() else startBpmAnalyzer()}}
+            popupBpmPanel.addView(bpmButton,LinearLayout.LayoutParams(dp(76),dp(28)))
+            bpmReadout=label(if(bpmAnalyzerOn||autoBpmEnabled)String.format(java.util.Locale.US,"%.1f BPM",delayBpm) else "— BPM",11f,Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
+            popupBpmPanel.addView(bpmReadout,LinearLayout.LayoutParams(0,-1,1f))
+            bpmBeat=label("●",22f,Color.rgb(75,85,95))
+            popupBpmPanel.addView(bpmBeat,LinearLayout.LayoutParams(dp(24),-1))
+            titleBar.addView(popupBpmPanel,LinearLayout.LayoutParams(0,dp(30),1f).apply{leftMargin=dp(5)})
         } else {
             titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(compactPhone)72 else 82),dp(if(compactPhone)30 else 36)).apply{rightMargin=dp(5)})
             val bpmPanel = LinearLayout(this).apply {
@@ -1009,9 +1026,10 @@ private val s25PopupRecord = listOf(
                 setOnClickListener { if (bpmAnalyzerOn) stopBpmAnalyzer() else startBpmAnalyzer() }
             }
             bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
-            bpmReadout = label("— BPM", if (compactPhone) 8f else 10f, Color.WHITE)
+            bpmReadout = label("— BPM", if (compactPhone) 11f else 10f, Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
             bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
-            bpmBeat = label("●", 30f, Color.rgb(75,85,95))
+            bpmBeat = label("●", 22f, Color.rgb(75,85,95))
+            bpmPanel.addView(bpmBeat,LinearLayout.LayoutParams(dp(24),-1))
             titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
             if (compactPhone) {
                 val effectsButton = TextView(this).apply {
@@ -1589,8 +1607,8 @@ private val s25PopupRecord = listOf(
             val beatIndex = kotlin.math.floor((nowMs - phase).toDouble() / period).toLong()
             if (bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex) {
                 handler.post {
-                    bpmBeat?.setTextColor(Color.rgb(45,235,105))
-                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                    bpmBeat?.setTextColor(Color.rgb(45,235,105));s25RecordMasterBeat?.setTextColor(Color.rgb(45,235,105))
+                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95));s25RecordMasterBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
                 }
             }
             bpmLastBeatIndex = beatIndex
@@ -1609,8 +1627,8 @@ private val s25PopupRecord = listOf(
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
             if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
                 handler.post {
-                    fxBpmBeat?.setTextColor(Color.rgb(255,205,0))
-                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                    fxBpmBeat?.setTextColor(Color.rgb(255,205,0));s25RecordFxBeat?.setTextColor(Color.rgb(255,205,0))
+                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(75,85,95));s25RecordFxBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
                 }
             }
             fxBpmLastBeatIndex = fxBeatIndex
@@ -1630,6 +1648,7 @@ private val s25PopupRecord = listOf(
             // The lower FX BPM readout is fed by this exact same detector.
             handler.post {
                 bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", detected)
+                s25RecordBpmReadout?.text=String.format(java.util.Locale.US,"%.1f BPM",detected)
             }
         }
         if (nowMs - bpmUiLastUpdate >= 250L) {
@@ -1639,6 +1658,7 @@ private val s25PopupRecord = listOf(
                     bpmReadout?.text = if (detected > 0f)
                         String.format(java.util.Locale.US, "%.1f BPM  %d%%", detected, (confidence * 100f).roundToInt().coerceIn(0,100))
                     else "RICERCA BPM…"
+                    s25RecordBpmReadout?.text=bpmReadout?.text
                     bpmButton?.text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
                     // Re-track the hand as the selected beat period and the DSP's
                     // smoothed phase delay change. Never fight a manual finger drag.
@@ -3454,7 +3474,8 @@ private class RotaryControl(
     private val spaciousText:Boolean = false,
     private val labelScale:Float = 1f,
     private val wheelStep:Float = 0f,
-    private val zeroCentered:Boolean = false
+    private val zeroCentered:Boolean = false,
+    private val indicatorState:(()->Boolean)? = null
 ):View(context){
     private val p=Paint(Paint.ANTI_ALIAS_FLAG)
     private var v=initial
@@ -3513,6 +3534,11 @@ private class RotaryControl(
         val titleSize=min(dp(11f*labelScale),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
         p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
         if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)25f else 17f)+bottomTextLift),p)}
+        indicatorState?.let { active ->
+            p.style=Paint.Style.FILL
+            p.color=if(active()) Color.rgb(45,235,105) else Color.rgb(75,85,95)
+            c.drawCircle(cx+rad*.48f,cy-rad*.48f,dp(4f),p)
+        }
         val value=valueText()
         p.color=accent;p.textSize=min(dp(10f*labelScale),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
     }
