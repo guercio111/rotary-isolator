@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
         loadLocal();
         seedLayoutsIfEmpty();
         migrateTabletPortraitLayout();
+        migrateTablet918GeometryOnce();
         ensureDelayKeyboardGroups();
         ensureBeatBpmGroup();
         ensurePopupProfileSeeded();
@@ -62,6 +63,7 @@ public class MainActivity extends Activity {
         LinearLayout bottom = new LinearLayout(this);
         bottom.setPadding(8,5,8,8);
         addReturnButton(top);
+        addTopButton(bottom, "AGGIUNGI", this::showAddElementDialog);
         addTopButton(bottom, "SALVA", this::saveLocal);
         addTopButton(bottom, "IMPORTA", this::importProject);
         addTopButton(bottom, "ESPORTA RECORD", this::export);
@@ -77,6 +79,45 @@ public class MainActivity extends Activity {
         Button b = new Button(this); b.setText(label); b.setTextSize(10);
         b.setPadding(3,0,3,0); b.setOnClickListener(v -> action.run());
         row.addView(b, new LinearLayout.LayoutParams(0, 48, 1));
+    }
+
+    private void showAddElementDialog() {
+        final String[] choices={"MANOPOLA","PULSANTE","FADER","TESTO","PANNELLO","LINEA DIVISORIA"};
+        new AlertDialog.Builder(this).setTitle("AGGIUNGI ELEMENTO")
+            .setItems(choices,(dialog,which)->{
+                EditText labelInput=new EditText(this);
+                labelInput.setSingleLine(true);
+                labelInput.setHint("Etichetta (es. REVERB)");
+                new AlertDialog.Builder(this).setTitle("ETICHETTA ELEMENTO")
+                    .setView(labelInput)
+                    .setNegativeButton("ANNULLA",null)
+                    .setPositiveButton("AGGIUNGI",(d,w)->{
+                        try {
+                            JSONArray before=new JSONArray(current().toString());
+                            String type=new String[]{"knob","button","fader","text","panel","divider"}[which];
+                            String id="custom_"+type+"_"+System.currentTimeMillis();
+                            String label=labelInput.getText().toString().trim();
+                            if(label.isEmpty()) label=choices[which];
+                            double x=.40,y=.42,width=.20,height=.08;
+                            String color="#46BE78";
+                            if("knob".equals(type)){x=.39;y=.39;width=.22;height=.22;}
+                            else if("fader".equals(type)){x=.25;y=.46;width=.50;height=.07;}
+                            else if("text".equals(type)){x=.35;y=.46;width=.30;height=.06;color="#FFFFFF";}
+                            else if("panel".equals(type)){x=.20;y=.25;width=.60;height=.50;color="#111317";label="";}
+                            else if("divider".equals(type)){x=.50;y=.15;width=.003;height=.70;color="#5C6670";label="";}
+                            else color="#FFCD00";
+                            JSONObject item=new JSONObject();
+                            item.put("id",id);item.put("type",type);item.put("text",label);
+                            item.put("x",x);item.put("y",y);item.put("w",width);item.put("h",height);item.put("color",color);
+                            current().put(item);
+                            if(undoHistory.size()>=MAX_UNDO) undoHistory.removeFirst();
+                            undoHistory.addLast(new UndoEntry(mode,before));
+                            if(editor!=null){editor.selected=current().length()-1;editor.editUnlocked=false;editor.invalidate();}
+                            saveLocal();
+                            Toast.makeText(this,"Elemento aggiunto: tieni premuto per spostarlo o ridimensionarlo",Toast.LENGTH_LONG).show();
+                        } catch(Exception ignored) { Toast.makeText(this,"Impossibile aggiungere l'elemento",Toast.LENGTH_SHORT).show(); }
+                    }).show();
+            }).show();
     }
     private JSONArray current() { return layouts.get(mode); }
 
@@ -312,17 +353,32 @@ public class MainActivity extends Activity {
     }
 
     private void migrateTabletPortraitLayout() {
-        // Rebuild only the tablet-portrait profile once. Preserve the user's
-        // horizontal tablet and both S25 profiles exactly as they are.
+        // Legacy Build 51 portrait migration; the newer two-orientation
+        // Build 918 geometry migration below now handles both tablet profiles.
         if(getPreferences(0).getBoolean("frequalizer_tablet_portrait_build918_v1",false)) return;
         layouts.put(modes[0],new JSONArray());
         seedTabletPortrait();
         getPreferences(0).edit().putBoolean("frequalizer_tablet_portrait_build918_v1",true).apply();
         saveLocal();
     }
+
+    private void migrateTablet918GeometryOnce() {
+        final String flag="frequalizer_tablet_build918_geometry_v1";
+        if(getPreferences(0).getBoolean(flag,false)) return;
+        try {
+            // Keep a local recovery copy before replacing the two tablet defaults.
+            getPreferences(0).edit().putString("project_before_build918_geometry_v1",toJson().toString()).apply();
+            layouts.put(modes[0],new JSONArray());
+            layouts.put(modes[1],new JSONArray());
+            seedTabletPortrait();
+            seedTabletLandscape();
+            getPreferences(0).edit().putBoolean(flag,true).apply();
+            saveLocal();
+        } catch(Exception ignored) {}
+    }
     private void seedTabletLandscape() {
         String l=modes[1]; seedHeader(l,false);
-        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedFilterSection(l,.012,.505,.19,.475,"#46BE78",true);
         seedEffects(l,.205,.505,.783,.475,false,true,false);
