@@ -590,7 +590,7 @@ public class MainActivity extends Activity {
             p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(17,19,23));c.drawRoundRect(left+2,top+2,left+w-2,top+h-2,10,10,p);
             JSONArray a=current();for(int i=0;i<a.length();i++){JSONObject o=a.optJSONObject(i);if(o==null)continue;float x=left+(float)o.optDouble("x")*w,y=top+(float)o.optDouble("y")*h,ww=(float)o.optDouble("w")*w,hh=(float)o.optDouble("h")*h;
                 int color;try{color=Color.parseColor(o.optString("color","#DDB833"));}catch(Exception e){color=Color.YELLOW;}
-                String type=o.optString("type");p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){
+                String type=o.optString("type");String elementId=o.optString("id");String lowerId=elementId.toLowerCase(Locale.ROOT);p.setColor(color);p.setStyle(type.equals("text")?Paint.Style.FILL:Paint.Style.FILL);if(type.equals("knob")){
                     // Port fedele del disegno RotaryControl originale:
                     // stessi margini dp, dimensionamento del quadrante, tacche e testi.
                     float refWidthDp=mode.startsWith("S25")?(mode.contains("ORIZZONTALE")?852f:393f):(mode.contains("ORIZZONTALE")?1280f:800f);
@@ -598,7 +598,7 @@ public class MainActivity extends Activity {
                     if(mode.startsWith("S25")&&mode.contains("ORIZZONTALE")) layoutScale=Math.max(.42f,Math.min(1f,Math.min(852f/1280f,393f/800f)));
                     float dp=(w/refWidthDp)*layoutScale;
                     String id=o.optString("id");
-                    String lowerId=id.toLowerCase(Locale.ROOT); boolean portraitFit=!mode.contains("ORIZZONTALE")&&(lowerId.startsWith("eq_knob_")||lowerId.startsWith("iso_knob_")||lowerId.startsWith("filter_knob_"));
+                    boolean portraitFit=!mode.contains("ORIZZONTALE")&&(lowerId.startsWith("eq_knob_")||lowerId.startsWith("iso_knob_")||lowerId.startsWith("filter_knob_"));
                     float textReserve=dp*(portraitFit?27f:18f);
                     float side=Math.min(ww,Math.max(1f,hh-textReserve))*.94f;
                     float cy=y+(portraitFit?(hh-dp*27f)/2f:(hh-dp*26f)/2f);
