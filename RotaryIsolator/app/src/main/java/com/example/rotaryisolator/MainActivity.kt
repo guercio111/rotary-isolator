@@ -830,7 +830,35 @@ class MainActivity : Activity() {
             when(e.id){"delay_bpm"->{s25RecordBpmReadout=this;bpmReadout=this};"bpm_readout"->bpmReadout=this;"delay_master_beat"->s25RecordMasterBeat=this;"delay_fx_beat"->s25RecordFxBeat=this}
         }
         if(e.type=="knob")return createS25Knob(e,c)
-        if(e.type=="fader")return SeekBar(this).apply{max=200;progress=100;progressTintList=ColorStateList.valueOf(c);thumbTintList=ColorStateList.valueOf(Color.YELLOW);setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(b:SeekBar?,p:Int,u:Boolean){if(u){if(e.id=="delay_pitch_fader")validatedBeatEngine.setPitchPercent(50f+p/2f) else fxPhaseOffsetMs=(p-100)/100f*currentFxPeriodMs()*.5f;scheduleUpdate()}};override fun onStartTrackingTouch(b:SeekBar?){};override fun onStopTrackingTouch(b:SeekBar?){save()}})}
+        if(e.type=="fader"){
+            var lastPhaseProgress=100
+            return SeekBar(this).apply{
+                max=200;progress=100;progressTintList=ColorStateList.valueOf(c);thumbTintList=ColorStateList.valueOf(Color.YELLOW)
+                setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+                    override fun onProgressChanged(b:SeekBar?,p:Int,u:Boolean){
+                        if(!u)return
+                        if(e.id=="delay_pitch_fader"){
+                            delayBpmCorrection=((p-100)/10f).coerceIn(-10f,10f)
+                            validatedBeatEngine.setPitchPercent(delayBpmCorrection)
+                            delayBpm=(delayTapBpm*(1f+delayBpmCorrection/100f)).coerceIn(60f,180f)
+                        }else{
+                            val delta=p-lastPhaseProgress
+                            val period=validatedBeatEngine.getPeriodMs()
+                            if(delta!=0&&period>0.0){
+                                val stepMs=(-delta*period/128.0).toFloat()
+                                validatedBeatEngine.nudgePhase(stepMs)
+                                delaySyncOffsetMs=(delaySyncOffsetMs+stepMs).coerceIn(-250f,250f)
+                                autoBpmNextBeatMs=validatedBeatEngine.getPhaseMs()+period.toLong()
+                            }
+                            lastPhaseProgress=p
+                        }
+                        scheduleUpdate()
+                    }
+                    override fun onStartTrackingTouch(b:SeekBar?){lastPhaseProgress=b?.progress?:100}
+                    override fun onStopTrackingTouch(b:SeekBar?){save()}
+                })
+            }
+        }
         return createS25Button(e,c)
     }
 
@@ -873,11 +901,12 @@ class MainActivity : Activity() {
             "reverb_band_1"->{state(reverbMidEnabled);b.setOnClickListener{reverbMidEnabled=!reverbMidEnabled;state(reverbMidEnabled);save();scheduleUpdate()}}
             "reverb_band_2"->{state(reverbHighEnabled);b.setOnClickListener{reverbHighEnabled=!reverbHighEnabled;state(reverbHighEnabled);save();scheduleUpdate()}}
             "delay_tap"->b.setOnClickListener{autoBpmEnabled=false;delayBpm=registerDelayTap();save();scheduleUpdate()}
-            "delay_auto"->{state(autoBpmEnabled);b.setOnClickListener{autoBpmEnabled=!autoBpmEnabled;state(autoBpmEnabled);refreshS25RecordButtons();save();if(autoBpmEnabled)updateEffectsCapture(true)}}
-            "delay_lock"->{state(delayClockLocked);b.setOnClickListener{delayClockLocked=!delayClockLocked;validatedBeatEngine.setClockLocked(delayClockLocked);if(delayClockLocked)delayBpm=validatedBeatEngine.getClockBpm().coerceIn(60f,180f);state(delayClockLocked);refreshS25RecordButtons();save();scheduleUpdate()}}
-            "delay_back","delay_forward"->b.setOnClickListener{val p=currentFxPeriodMs().coerceAtLeast(1f);fxPhaseOffsetMs=(fxPhaseOffsetMs+(if(e.id=="delay_back")1f else -1f)*p/128f).coerceIn(-p*.5f,p*.5f);scheduleUpdate()}
-            "delay_skip"->b.setOnClickListener{validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime());scheduleUpdate()}
-            "delay_rst"->b.setOnClickListener{validatedBeatEngine.reset();fxPhaseOffsetMs=0f;delayClockLocked=false;validatedBeatEngine.setClockLocked(false);save();scheduleUpdate()}
+            "delay_auto"->{state(autoBpmEnabled);b.setOnClickListener{autoBpmEnabled=!autoBpmEnabled;state(autoBpmEnabled);if(autoBpmEnabled){autoPhaseSynced=false;validatedBeatEngine.reset();bpmLastBeatIndex=Long.MIN_VALUE;autoBpmNextBeatMs=0L;delaySyncOffsetMs=0f};refreshS25RecordButtons();save();if(autoBpmEnabled)updateEffectsCapture(true)}}
+            "delay_lock"->{state(delayClockLocked);b.setOnClickListener{if(!delayClockLocked&&validatedBeatEngine.getPeriodMs()<=0.0){bpmReadout?.text="ATTENDI BPM";return@setOnClickListener};delayClockLocked=!delayClockLocked;validatedBeatEngine.setClockLocked(delayClockLocked);if(delayClockLocked){autoPhaseSynced=true;delayBpm=validatedBeatEngine.getClockBpm().coerceIn(60f,180f)};state(delayClockLocked);refreshS25RecordButtons();save();scheduleUpdate()}}
+            "delay_back","delay_forward"->b.setOnClickListener{phaseNudge(if(e.id=="delay_back")-1f else 1f)}
+            "delay_align"->b.setOnClickListener{val now=android.os.SystemClock.elapsedRealtime();validatedBeatEngine.sync(now);val phase=validatedBeatEngine.getPhaseMs();val period=validatedBeatEngine.getPeriodMs();if(phase>0L&&period>0.0){autoBpmNextBeatMs=phase+period.toLong();bpmLastBeatIndex=Long.MIN_VALUE;delaySyncOffsetMs=0f;autoPhaseSynced=true;save();scheduleUpdate()}else{bpmReadout?.text="ATTENDI BPM STABILE"}}
+            "delay_skip"->b.setOnClickListener{val period=validatedBeatEngine.getPeriodMs();if(period>0.0){val stepMs=(period*.5).toFloat();validatedBeatEngine.nudgePhase(stepMs);delaySyncOffsetMs=(delaySyncOffsetMs+stepMs).coerceIn(-250f,250f);autoBpmNextBeatMs=validatedBeatEngine.getPhaseMs()+period.toLong();scheduleUpdate()}}
+            "delay_rst"->b.setOnClickListener{delayBpmCorrection=0f;validatedBeatEngine.setPitchPercent(0f);delayClockLocked=false;validatedBeatEngine.setClockLocked(false);validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime());delaySyncOffsetMs=0f;fxPhaseOffsetMs=0f;autoPhaseSynced=false;bpmLastBeatIndex=Long.MIN_VALUE;delayBpm=validatedBeatEngine.getClockBpm().takeIf{it>0f}?.coerceIn(60f,180f)?:delayBpm;refreshS25RecordButtons();save();scheduleUpdate()}
             "fx_low"->{state(fxLowEnabled);b.setOnClickListener{fxLowEnabled=!fxLowEnabled;state(fxLowEnabled);save();scheduleUpdate()}}
             "fx_mid"->{state(fxMidEnabled);b.setOnClickListener{fxMidEnabled=!fxMidEnabled;state(fxMidEnabled);save();scheduleUpdate()}}
             "fx_high"->{state(fxHighEnabled);b.setOnClickListener{fxHighEnabled=!fxHighEnabled;state(fxHighEnabled);save();scheduleUpdate()}}
