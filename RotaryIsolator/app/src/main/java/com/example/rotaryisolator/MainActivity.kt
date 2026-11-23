@@ -199,6 +199,7 @@ class MainActivity : Activity() {
     private var s25RecordBpmReadout: TextView? = null
     private var s25RecordMasterBeat: TextView? = null
     private var s25RecordFxBeat: TextView? = null
+    private val s25RecordButtons = mutableMapOf<String, Pair<TextView, Int>>()
     private var autoBpmButton: TextView? = null
     private var lockBpmButton: TextView? = null
     @Volatile private var delayClockLocked = false
@@ -780,15 +781,42 @@ class MainActivity : Activity() {
     private data class RecordElement(val id:String,val type:String,val text:String,val x:Float,val y:Float,val w:Float,val h:Float,val color:String)
 
     private fun addS25RecordElements(canvas:FrameLayout,elements:List<RecordElement>,titleBar:View){
-        s25RecordBpmReadout=null;s25RecordMasterBeat=null;s25RecordFxBeat=null
+        s25RecordBpmReadout=null;s25RecordMasterBeat=null;s25RecordFxBeat=null;s25RecordButtons.clear()
         val views=ArrayList<Pair<View,RecordElement>>()
-        (elements.filter{it.type=="panel"}+elements.filter{it.type!="panel"}).forEach{e->val v=createS25RecordView(e);views.add(v to e);canvas.addView(v,FrameLayout.LayoutParams(1,1))}
+        (elements.filter{it.type=="panel"}+elements.filter{it.type!="panel"}).forEach{e->val v=createS25RecordView(e);views.add(v to e);canvas.addView(v,FrameLayout.LayoutParams(1,1))};refreshS25RecordButtons()
         fun place(){if(canvas.width<=0||canvas.height<=0)return;val full=canvas.height+titleBar.height
             views.forEach{(v,e)->v.layoutParams=FrameLayout.LayoutParams((e.w*canvas.width).roundToInt().coerceAtLeast(1),(e.h*full).roundToInt().coerceAtLeast(1)).apply{leftMargin=(e.x*canvas.width).roundToInt();topMargin=(e.y*full-titleBar.height).roundToInt()}}
             // Bring touch controls above adjacent rotary hit areas without changing their recorded geometry.
             views.filter{it.second.type=="button"}.forEach{it.first.bringToFront()}
         }
         canvas.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->place()};canvas.post{place()}
+    }
+
+    private fun refreshS25RecordButtons() {
+        s25RecordButtons.forEach { (id, entry) ->
+            val active = when {
+                id.startsWith("delay_mode_") -> selectedBeatFx == id.substringAfterLast("_").toInt()
+                id.startsWith("division_") -> !delayManualMode && delayDivision == id.substringAfterLast("_").toInt()
+                id == "delay_auto" -> autoBpmEnabled
+                id == "delay_lock" -> delayClockLocked
+                id == "delay_power" -> delayOn
+                id == "reverb_power" -> reverbOn
+                id == "reverb_band_0" -> reverbLowEnabled
+                id == "reverb_band_1" -> reverbMidEnabled
+                id == "reverb_band_2" -> reverbHighEnabled
+                id == "fx_low" -> fxLowEnabled
+                id == "fx_mid" -> fxMidEnabled
+                id == "fx_high" -> fxHighEnabled
+                else -> null
+            } ?: return@forEach
+            val (button, color) = entry
+            button.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(4).toFloat()
+                setColor(if (active) color else Color.DKGRAY)
+                setStroke(dp(1), color)
+            }
+            button.setTextColor(if (active) Color.BLACK else Color.WHITE)
+        }
     }
 
     private fun createS25RecordView(e:RecordElement):View{
@@ -823,13 +851,14 @@ class MainActivity : Activity() {
             id=="delay_knob_0"->{v=delayMix.toFloat();set={delayMix=it.toInt();scheduleUpdate();if(delayOn&&delayMix>0)updateEffectsCapture(true)};read={delayMix.toString()+"%"}}
             id=="delay_knob_1"->{v=delayFeedbackPercent.toFloat();hi=90f;set={delayFeedbackPercent=it.toInt();scheduleUpdate()};read={delayFeedbackPercent.toString()+"%"}}
             id=="delay_knob_2"->{v=delayTonePercent.toFloat();set={delayTonePercent=it.toInt();scheduleUpdate()};read={delayTonePercent.toString()+"%"}}
-            id=="delay_knob_3"->{v=delayManualTimePercent;set={delayManualMode=true;delayManualTimePercent=it;scheduleUpdate()};read={manualDelayDivisionLabel()}}
+            id=="delay_knob_3"->{v=delayManualTimePercent;set={delayManualMode=true;delayManualTimePercent=it;refreshS25RecordButtons();scheduleUpdate()};read={manualDelayDivisionLabel()}}
         }
         return RotaryControl(this,e.text,v,lo,hi,c,{set(it);save()},{read()},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},indicatorState=when(id){"master_knob_1"->{ { compMakeup>0f } };"master_knob_2"->{ { loudness>0f } };else->null})
     }
 
     private fun createS25Button(e:RecordElement,c:Int):View{
         val b=TextView(this).apply{text=e.text;gravity=Gravity.CENTER;textSize=8.5f;setTypeface(typeface,Typeface.BOLD);setTextColor(Color.BLACK);background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(4).toFloat();setColor(c);setStroke(dp(1),Color.YELLOW)}}
+        s25RecordButtons[e.id] = b to c
         fun state(on:Boolean){b.background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(4).toFloat();setColor(if(on)c else Color.DKGRAY);setStroke(dp(1),c)};b.setTextColor(if(on)Color.BLACK else Color.WHITE)}
         when(e.id){
             "options"->b.setOnClickListener{showOptions()}
@@ -844,8 +873,8 @@ class MainActivity : Activity() {
             "reverb_band_1"->{state(reverbMidEnabled);b.setOnClickListener{reverbMidEnabled=!reverbMidEnabled;state(reverbMidEnabled);save();scheduleUpdate()}}
             "reverb_band_2"->{state(reverbHighEnabled);b.setOnClickListener{reverbHighEnabled=!reverbHighEnabled;state(reverbHighEnabled);save();scheduleUpdate()}}
             "delay_tap"->b.setOnClickListener{autoBpmEnabled=false;delayBpm=registerDelayTap();save();scheduleUpdate()}
-            "delay_auto"->{state(autoBpmEnabled);b.setOnClickListener{autoBpmEnabled=!autoBpmEnabled;state(autoBpmEnabled);save();if(autoBpmEnabled)updateEffectsCapture(true)}}
-            "delay_lock"->{state(delayClockLocked);b.setOnClickListener{delayClockLocked=!delayClockLocked;validatedBeatEngine.setClockLocked(delayClockLocked);if(delayClockLocked)delayBpm=validatedBeatEngine.getClockBpm().coerceIn(60f,180f);state(delayClockLocked);save();scheduleUpdate()}}
+            "delay_auto"->{state(autoBpmEnabled);b.setOnClickListener{autoBpmEnabled=!autoBpmEnabled;state(autoBpmEnabled);refreshS25RecordButtons();save();if(autoBpmEnabled)updateEffectsCapture(true)}}
+            "delay_lock"->{state(delayClockLocked);b.setOnClickListener{delayClockLocked=!delayClockLocked;validatedBeatEngine.setClockLocked(delayClockLocked);if(delayClockLocked)delayBpm=validatedBeatEngine.getClockBpm().coerceIn(60f,180f);state(delayClockLocked);refreshS25RecordButtons();save();scheduleUpdate()}}
             "delay_back","delay_forward"->b.setOnClickListener{val p=currentFxPeriodMs().coerceAtLeast(1f);fxPhaseOffsetMs=(fxPhaseOffsetMs+(if(e.id=="delay_back")1f else -1f)*p/128f).coerceIn(-p*.5f,p*.5f);scheduleUpdate()}
             "delay_skip"->b.setOnClickListener{validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime());scheduleUpdate()}
             "delay_rst"->b.setOnClickListener{validatedBeatEngine.reset();fxPhaseOffsetMs=0f;delayClockLocked=false;validatedBeatEngine.setClockLocked(false);save();scheduleUpdate()}
@@ -1597,41 +1626,22 @@ private val s25PopupRecord = listOf(
         // AUTO is a phase-acquisition mode, not just a BPM display switch.
         // Wait for a stable tempo estimate, then align once to the same onset
         // engine used by the main clock. Never run a second independent detector.
-        if (autoBpmEnabled && !delayClockLocked && !autoPhaseSynced && detected > 0f &&
+        if (autoBpmEnabled && !autoPhaseSynced && detected > 0f &&
             period > 0.0 && confidence >= 0.30f) {
-            autoPhaseSynced = validatedBeatEngine.sync(nowMs)
+            validatedBeatEngine.sync(nowMs)
             phase = validatedBeatEngine.getPhaseMs()
             period = validatedBeatEngine.getPeriodMs()
+            autoPhaseSynced = phase > 0L
         }
         if (detected > 0f && period > 0.0 && phase > 0L) {
             val beatIndex = kotlin.math.floor((nowMs - phase).toDouble() / period).toLong()
             if (bpmLastBeatIndex != Long.MIN_VALUE && beatIndex > bpmLastBeatIndex) {
                 handler.post {
-                    bpmBeat?.setTextColor(Color.rgb(45,235,105));s25RecordMasterBeat?.setTextColor(Color.rgb(45,235,105))
-                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95));s25RecordMasterBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
+                    bpmBeat?.setTextColor(Color.rgb(45,235,105));s25RecordMasterBeat?.setTextColor(Color.rgb(45,235,105));s25RecordFxBeat?.setTextColor(Color.rgb(45,235,105))
+                    bpmBeat?.postDelayed({ bpmBeat?.setTextColor(Color.rgb(75,85,95));s25RecordMasterBeat?.setTextColor(Color.rgb(75,85,95));s25RecordFxBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
                 }
             }
             bpmLastBeatIndex = beatIndex
-            // The FX lamp follows its own phase reference. The master phase and
-            // period remain untouched; only this visual FX phase includes the
-            // independent manual trim.
-            // The FX indicator is a phase reference, not an effect-division
-            // indicator: it must always flash once per full master beat.
-            val fxPeriodMs = period.toFloat().coerceAtLeast(1f)
-            val fxPhaseDelay = if (fxOutputLatencyMs.isFinite()) {
-                fxOutputLatencyMs + fxAppliedPhaseDelayMs + delaySyncOffsetMs
-            } else {
-                fxPhaseOffsetMs
-            }
-            val fxPhase = phase + fxPhaseDelay.roundToLong()
-            val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
-            if (fxBpmLastBeatIndex != Long.MIN_VALUE && fxBeatIndex > fxBpmLastBeatIndex) {
-                handler.post {
-                    fxBpmBeat?.setTextColor(Color.rgb(255,205,0));s25RecordFxBeat?.setTextColor(Color.rgb(255,205,0))
-                    fxBpmBeat?.postDelayed({ fxBpmBeat?.setTextColor(Color.rgb(75,85,95));s25RecordFxBeat?.setTextColor(Color.rgb(75,85,95)) }, 110L)
-                }
-            }
-            fxBpmLastBeatIndex = fxBeatIndex
             autoBpmNextBeatMs = phase + ((beatIndex + 1).coerceAtLeast(0) * period).toLong()
             // LOCK owns the tempo supplied to every beat effect. The analyser
             // may keep observing the track, but it must never retune the locked
@@ -1648,7 +1658,7 @@ private val s25PopupRecord = listOf(
             // The lower FX BPM readout is fed by this exact same detector.
             handler.post {
                 bpmUiLabel?.text = String.format(java.util.Locale.US, "%.1f", detected)
-                s25RecordBpmReadout?.text=String.format(java.util.Locale.US,"%.1f BPM",detected)
+                s25RecordBpmReadout?.text = String.format(java.util.Locale.US, "%.1f BPM", detected)
             }
         }
         if (nowMs - bpmUiLastUpdate >= 250L) {
@@ -1656,13 +1666,10 @@ private val s25PopupRecord = listOf(
             handler.post {
                 if (bpmAnalyzerOn || autoBpmEnabled) {
                     bpmReadout?.text = if (detected > 0f)
-                        String.format(java.util.Locale.US, "%.1f BPM", detected)
+                        String.format(java.util.Locale.US, "%.1f BPM  %d%%", detected, (confidence * 100f).roundToInt().coerceIn(0,100))
                     else "RICERCA BPM…"
-                    s25RecordBpmReadout?.text=bpmReadout?.text
                     bpmButton?.text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
-                    // Re-track the hand as the selected beat period and the DSP's
-                    // smoothed phase delay change. Never fight a manual finger drag.
-                    syncFxPhaseSeekToMeasuredPhase()
+                    s25RecordBpmReadout?.text = bpmReadout?.text
                 }
             }
         }
