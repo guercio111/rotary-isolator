@@ -141,10 +141,19 @@ public class MainActivity extends Activity {
     private void tKnob(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"knob",title,x,y,w,h,color); }
     private void tFader(String l,String id,String title,double x,double y,double w,double h,String color) { templateItem(l,id,"fader",title,x,y,w,h,color); }
     private void seedHeader(String l,boolean compact) {
-        tButton(l,"app_power","● ON",.012,.010,.105,.038);
-        tButton(l,"bpm_start","BPM START",compact ? .235 : .270,.012,compact ? .18 : .20,.034);
-        tText(l,"bpm_readout","— BPM",compact ? .425 : .485,.012,.13,.034);
-        tButton(l,"options","⚙",.915,.008,.065,.042);
+        // Normalized proportions follow the real title bar: app power, BPM
+        // start/readout occupying the flexible center, then the options gear.
+        if(compact) {
+            tButton(l,"app_power","● ON",.010,.010,.180,.038);
+            tButton(l,"bpm_start","BPM START",.195,.012,.195,.034);
+            tText(l,"bpm_readout","— BPM",.395,.012,.465,.034);
+            tButton(l,"options","⚙",.875,.008,.115,.042);
+        } else {
+            tButton(l,"app_power","● ON",.010,.010,.065,.038);
+            tButton(l,"bpm_start","BPM START",.080,.012,.075,.034);
+            tText(l,"bpm_readout","— BPM",.160,.012,.770,.034);
+            tButton(l,"options","⚙",.940,.008,.050,.042);
+        }
     }
     private void seedBandSection(String l,String key,String title,double x,double y,double w,double h,String[] bands,String color,boolean portraitRows) {
         tPanel(l,key+"_panel",title,x,y,w,h);
@@ -295,13 +304,8 @@ public class MainActivity extends Activity {
         if (getPreferences(0).getBoolean(flag, false)) return;
         try {
             layouts.put(modes[4], new JSONArray(layouts.get(modes[0]).toString()));
-            JSONArray main = layouts.get(modes[2]);
-            boolean hasButton=false;
-            for(int i=0;i<main.length();i++) {
-                JSONObject item=main.optJSONObject(i);
-                if(item!=null && "popup_open_button".equals(item.optString("id"))) { hasButton=true; break; }
-            }
-            if(!hasButton) templateItem(modes[2],"popup_open_button","button","POP UP",.735,.010,.145,.038,"#FFCD00");
+            // The pop-up is selected as its own workspace in the profile chooser.
+            // The production app will expose its launcher button when the record is integrated.
             getPreferences(0).edit().putBoolean(flag,true).apply();
             saveLocal();
         } catch(Exception ignored) {}
@@ -330,11 +334,10 @@ public class MainActivity extends Activity {
         seedFilterSection(l,.012,.505,.235,.475,"#46BE78",true);
         seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
         seedEffects(l,.500,.505,.488,.475,false,false,false);
-        templateItem(l,"popup_open_button","button","POP UP",.735,.010,.145,.038,"#FFCD00");
     }
     private void seedPhoneLandscape() {
         String l=modes[3]; seedHeader(l,true);
-        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedFilterSection(l,.012,.505,.235,.475,"#46BE78",false);
         seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
