@@ -823,11 +823,11 @@ class MainActivity : Activity() {
         val c=try{Color.parseColor(e.color)}catch(_:Throwable){Color.WHITE}
         if(e.type=="panel")return View(this).apply{setBackgroundColor(c);isClickable=false}
         if(e.type=="text")return TextView(this).apply{
-            text=if(e.id=="delay_bpm")String.format(java.util.Locale.US,"%.1f BPM",delayBpm) else e.text
+            text=when(e.id){"delay_bpm"->String.format(java.util.Locale.US,"%.1f BPM",delayBpm);"bpm_readout"->if(bpmAnalyzerOn)String.format(java.util.Locale.US,"%.1f BPM",delayBpm) else "— BPM";else->e.text}
             gravity=Gravity.CENTER;setTextColor(c)
             textSize=when(e.id){"delay_bpm"->12f;"delay_master_beat","delay_fx_beat"->20f;else->9f}
             setTypeface(typeface,if(e.id.endsWith("_title")||e.id=="master_title"||e.id=="delay_bpm")Typeface.BOLD else Typeface.NORMAL)
-            when(e.id){"delay_bpm"->s25RecordBpmReadout=this;"delay_master_beat"->s25RecordMasterBeat=this;"delay_fx_beat"->s25RecordFxBeat=this}
+            when(e.id){"delay_bpm"->{s25RecordBpmReadout=this;bpmReadout=this};"bpm_readout"->bpmReadout=this;"delay_master_beat"->s25RecordMasterBeat=this;"delay_fx_beat"->s25RecordFxBeat=this}
         }
         if(e.type=="knob")return createS25Knob(e,c)
         if(e.type=="fader")return SeekBar(this).apply{max=200;progress=100;progressTintList=ColorStateList.valueOf(c);thumbTintList=ColorStateList.valueOf(Color.YELLOW);setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(b:SeekBar?,p:Int,u:Boolean){if(u){if(e.id=="delay_pitch_fader")validatedBeatEngine.setPitchPercent(50f+p/2f) else fxPhaseOffsetMs=(p-100)/100f*currentFxPeriodMs()*.5f;scheduleUpdate()}};override fun onStartTrackingTouch(b:SeekBar?){};override fun onStopTrackingTouch(b:SeekBar?){save()}})}
@@ -894,6 +894,8 @@ class MainActivity : Activity() {
     }
 
 private val s25MainRecord = listOf(
+    RecordElement("bpm_readout", "text", "— BPM", 0.4f, 0.02f, 0.19f, 0.03f, "#FFFFFF"),
+    RecordElement("options", "button", "⚙", 0.84f, 0.02f, 0.115f, 0.042f, "#FFCD00"),
     RecordElement("EQ_panel", "panel", "", 0f, 0.13f, 0.478f, 0.425f, "#111317"),
     RecordElement("EQ_title", "text", "EQ", 0.05f, 0.07f, 0.12f, 0.04f, "#DC464B"),
     RecordElement("EQ_power", "button", "ON", 0.14f, 0.08f, 0.08f, 0.03f, "#FFCD00"),
@@ -1028,8 +1030,6 @@ private val s25PopupRecord = listOf(
             val popupBpmPanel=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;setPadding(dp(2),0,dp(2),0)}
             bpmButton=TextView(this).apply{text=if(bpmAnalyzerOn)"BPM STOP" else "BPM START";textSize=8f;gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD);setTextColor(Color.WHITE);background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(6).toFloat();setColor(if(bpmAnalyzerOn)Color.rgb(155,45,48) else Color.rgb(38,105,70));setStroke(dp(1),if(bpmAnalyzerOn)Color.rgb(245,115,120) else Color.rgb(125,245,155))};setPadding(dp(3),0,dp(3),0);setOnClickListener{if(bpmAnalyzerOn)stopBpmAnalyzer() else startBpmAnalyzer()}}
             popupBpmPanel.addView(bpmButton,LinearLayout.LayoutParams(dp(76),dp(28)))
-            bpmReadout=label(String.format(java.util.Locale.US,"%.1f BPM",delayBpm),11f,Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
-            popupBpmPanel.addView(bpmReadout,LinearLayout.LayoutParams(0,-1,1f))
             bpmBeat=label("●",22f,Color.rgb(75,85,95))
             popupBpmPanel.addView(bpmBeat,LinearLayout.LayoutParams(dp(24),-1))
             titleBar.addView(popupBpmPanel,LinearLayout.LayoutParams(0,dp(30),1f).apply{leftMargin=dp(5)})
@@ -1055,8 +1055,6 @@ private val s25PopupRecord = listOf(
                 setOnClickListener { if (bpmAnalyzerOn) stopBpmAnalyzer() else startBpmAnalyzer() }
             }
             bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
-            bpmReadout = label(String.format(java.util.Locale.US,"%.1f BPM",delayBpm), if (compactPhone) 11f else 10f, Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
-            bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
             bpmBeat = label("●", 22f, Color.rgb(75,85,95))
             bpmPanel.addView(bpmBeat,LinearLayout.LayoutParams(dp(24),-1))
             titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
@@ -1079,7 +1077,6 @@ private val s25PopupRecord = listOf(
                 }
                 titleBar.addView(effectsButton, LinearLayout.LayoutParams(dp(72), dp(30)).apply { leftMargin = dp(4) })
             }
-            titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         }
         root.addView(titleBar)
         content=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;clipChildren=false;clipToPadding=false}
