@@ -392,7 +392,7 @@ public class MainActivity extends Activity {
         seedEffects(l,.500,.505,.488,.475,false,false,false);
     }
     private void seedPhoneLandscape() {
-        String l=modes[3]; seedHeader(l,true);
+        String l=modes[3]; seedHeader(l,false);
         seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedFilterSection(l,.012,.505,.235,.475,"#46BE78",false);
