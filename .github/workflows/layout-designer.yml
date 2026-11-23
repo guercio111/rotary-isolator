@@ -6,6 +6,10 @@ on:
       - '.github/workflows/layout-designer.yml'
     branches:
       - 'feature/frequalizer-layout-designer'
+  pull_request:
+    paths:
+      - 'LayoutDesigner/**'
+      - '.github/workflows/layout-designer.yml'
   workflow_dispatch:
 jobs:
   build:
