@@ -695,7 +695,7 @@ public class MainActivity extends Activity {
                     }else if(id.endsWith("_flat")||id.contains("_return_")||id.startsWith("master_return_")){
                         float radius=Math.min(ww,hh)*.47f;p.setColor(Color.rgb(255,205,0));c.drawCircle(x+ww/2f,y+hh/2f,radius,p);p.setColor(Color.rgb(255,235,100));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.max(1f,radius*.07f));c.drawCircle(x+ww/2f,y+hh/2f,radius,p);p.setStyle(Paint.Style.FILL);p.setColor(Color.BLACK);p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.max(8f,Math.min(ww,hh)*.42f));c.drawText(label,x+ww/2f,y+hh/2f+p.getTextSize()*.35f,p);p.setTextAlign(Paint.Align.LEFT);
                     }else{
-                        boolean toggle=id.equals("app_power")||id.equals("bpm_start")||id.endsWith("_power")||id.startsWith("master_on_");
+                        boolean toggle=id.equals("app_power")||id.equals("bpm_start")||id.endsWith("_power")||id.equals("iso_limiter")||id.startsWith("master_on_");
                         boolean off=id.equals("reverb_power")||id.equals("delay_power")||id.startsWith("master_on_")||id.startsWith("fx_");
                         boolean beatControl=id.startsWith("delay_")||id.startsWith("division_")||id.startsWith("fx_")||id.startsWith("reverb_band_");
                         if(toggle || beatControl){
