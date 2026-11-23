@@ -773,6 +773,197 @@ class MainActivity : Activity() {
             }.apply()
     }
 
+
+    private data class RecordElement(val id:String,val type:String,val text:String,val x:Float,val y:Float,val w:Float,val h:Float,val color:String)
+
+    private fun addS25RecordElements(canvas:FrameLayout,elements:List<RecordElement>,titleBar:View){
+        val views=ArrayList<Pair<View,RecordElement>>()
+        (elements.filter{it.type=="panel"}+elements.filter{it.type!="panel"}).forEach{e->val v=createS25RecordView(e);views.add(v to e);canvas.addView(v,FrameLayout.LayoutParams(1,1))}
+        fun place(){if(canvas.width<=0||canvas.height<=0)return;val full=canvas.height+titleBar.height
+            views.forEach{(v,e)->v.layoutParams=FrameLayout.LayoutParams((e.w*canvas.width).roundToInt().coerceAtLeast(1),(e.h*full).roundToInt().coerceAtLeast(1)).apply{leftMargin=(e.x*canvas.width).roundToInt();topMargin=(e.y*full-titleBar.height).roundToInt()}}
+        }
+        canvas.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->place()};canvas.post{place()}
+    }
+
+    private fun createS25RecordView(e:RecordElement):View{
+        val c=try{Color.parseColor(e.color)}catch(_:Throwable){Color.WHITE}
+        if(e.type=="panel")return View(this).apply{setBackgroundColor(c);isClickable=false}
+        if(e.type=="text")return TextView(this).apply{text=if(e.id=="delay_bpm")String.format(java.util.Locale.US,"%.1f BPM",delayBpm) else e.text;gravity=Gravity.CENTER;setTextColor(c);textSize=9f;setTypeface(typeface,if(e.id.endsWith("_title")||e.id=="master_title")Typeface.BOLD else Typeface.NORMAL)}
+        if(e.type=="knob")return createS25Knob(e,c)
+        if(e.type=="fader")return SeekBar(this).apply{max=200;progress=100;progressTintList=ColorStateList.valueOf(c);thumbTintList=ColorStateList.valueOf(Color.YELLOW);setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{override fun onProgressChanged(b:SeekBar?,p:Int,u:Boolean){if(u){if(e.id=="delay_pitch_fader")validatedBeatEngine.setPitchPercent(50f+p/2f) else fxPhaseOffsetMs=(p-100)/100f*currentFxPeriodMs()*.5f;scheduleUpdate()}};override fun onStartTrackingTouch(b:SeekBar?){};override fun onStopTrackingTouch(b:SeekBar?){save()}})}
+        return createS25Button(e,c)
+    }
+
+    private fun createS25Knob(e:RecordElement,c:Int):View{
+        val id=e.id
+        var v=0f;var lo=0f;var hi=100f;var set:(Float)->Unit={};var read:()->String={v.toInt().toString()}
+        when{
+            id.startsWith("EQ_knob_")->{val i=id.substringAfterLast("_").toInt();v=eq[i];lo=-14f;hi=14f;set={eq[i]=it.coerceIn(lo,hi);scheduleUpdate()};read={fmt(eq[i])+" dB"}}
+            id.startsWith("ISOLATOR_knob_")->{val i=id.substringAfterLast("_").toInt();v=iso[i];lo=-24f;hi=24f;set={iso[i]=it.coerceIn(lo,hi);scheduleUpdate()};read={fmt(iso[i])+" dB"}}
+            id=="filter_knob_0"->{v=filters[0];set={filters[0]=it.coerceIn(0f,1f);scheduleUpdate()};read={(filters[0]*100).toInt().toString()+"%"}}
+            id=="filter_knob_1"->{v=resonance;set={resonance=it.coerceIn(0f,1f);scheduleUpdate()};read={(resonance*100).toInt().toString()+"%"}}
+            id=="master_knob_0"->{v=gain;lo=-12f;hi=12f;set={gain=it;scheduleUpdate()};read={fmt(gain)+" dB"}}
+            id=="master_knob_1"->{v=compMakeup;set={compMakeup=it;scheduleUpdate()};read={compMakeup.toInt().toString()+"%"}}
+            id=="master_knob_2"->{v=loudness;set={loudness=it;scheduleUpdate()};read={loudness.toInt().toString()+"%"}}
+            id=="reverb_0"->{v=reverbMix.toFloat();set={reverbMix=it.toInt();scheduleUpdate()};read={reverbMix.toString()+"%"}}
+            id=="reverb_1"->{v=reverbColorPercent.toFloat();set={reverbColorPercent=it.toInt();scheduleUpdate()};read={reverbColorPercent.toString()+"%"}}
+            id=="reverb_2"->{v=reverbFeedbackPercent.toFloat();set={reverbFeedbackPercent=it.toInt();scheduleUpdate()};read={reverbFeedbackPercent.toString()+"%"}}
+            id=="delay_knob_0"->{v=delayMix.toFloat();set={delayMix=it.toInt();scheduleUpdate();if(delayOn&&delayMix>0)updateEffectsCapture(true)};read={delayMix.toString()+"%"}}
+            id=="delay_knob_1"->{v=delayFeedbackPercent.toFloat();hi=90f;set={delayFeedbackPercent=it.toInt();scheduleUpdate()};read={delayFeedbackPercent.toString()+"%"}}
+            id=="delay_knob_2"->{v=delayTonePercent.toFloat();set={delayTonePercent=it.toInt();scheduleUpdate()};read={delayTonePercent.toString()+"%"}}
+            id=="delay_knob_3"->{v=delayManualTimePercent;set={delayManualMode=true;delayManualTimePercent=it;scheduleUpdate()};read={manualDelayDivisionLabel()}}
+        }
+        return RotaryControl(this,e.text,v,lo,hi,c,{set(it);save()},{read()},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+    }
+
+    private fun createS25Button(e:RecordElement,c:Int):View{
+        val b=TextView(this).apply{text=e.text;gravity=Gravity.CENTER;textSize=8.5f;setTypeface(typeface,Typeface.BOLD);setTextColor(Color.BLACK);background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(4).toFloat();setColor(c);setStroke(dp(1),Color.YELLOW)}}
+        fun state(on:Boolean){b.background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(4).toFloat();setColor(if(on)c else Color.DKGRAY);setStroke(dp(1),c)};b.setTextColor(if(on)Color.BLACK else Color.WHITE)}
+        when(e.id){
+            "options"->b.setOnClickListener{showOptions()}
+            "EQ_power"->{state(eqOn);b.text=if(eqOn)"ON" else "OFF";b.setOnClickListener{eqOn=!eqOn;save();scheduleUpdate();refreshUi()}}
+            "EQ_flat"->b.setOnClickListener{for(i in 0..3){previousEq[i]=eq[i];eq[i]=0f};save();scheduleUpdate();refreshUi()}
+            "ISOLATOR_power"->{state(isoOn);b.text=if(isoOn)"ON" else "OFF";b.setOnClickListener{isoOn=!isoOn;save();scheduleUpdate();refreshUi()}}
+            "iso_limiter"->{state(isoLimiterOn);b.text=if(isoLimiterOn)"LIMITER ON" else "LIMITER OFF";b.setOnClickListener{isoLimiterOn=!isoLimiterOn;save();scheduleUpdate();refreshUi()}}
+            "ISOLATOR_flat"->b.setOnClickListener{for(i in 0..2)iso[i]=0f;save();scheduleUpdate();refreshUi()}
+            "reverb_power"->{state(reverbOn);b.text=if(reverbOn)"ON" else "OFF";b.setOnClickListener{reverbOn=!reverbOn;save();scheduleUpdate();if(reverbOn)updateEffectsCapture(true)}}
+            "delay_power"->{state(delayOn);b.text=if(delayOn)"ON" else "OFF";b.setOnClickListener{delayOn=!delayOn;save();scheduleUpdate();if(delayOn)updateEffectsCapture(true)}}
+            "reverb_band_0"->{state(reverbLowEnabled);b.setOnClickListener{reverbLowEnabled=!reverbLowEnabled;state(reverbLowEnabled);save();scheduleUpdate()}}
+            "reverb_band_1"->{state(reverbMidEnabled);b.setOnClickListener{reverbMidEnabled=!reverbMidEnabled;state(reverbMidEnabled);save();scheduleUpdate()}}
+            "reverb_band_2"->{state(reverbHighEnabled);b.setOnClickListener{reverbHighEnabled=!reverbHighEnabled;state(reverbHighEnabled);save();scheduleUpdate()}}
+            "delay_tap"->b.setOnClickListener{autoBpmEnabled=false;delayBpm=registerDelayTap();save();scheduleUpdate()}
+            "delay_auto"->{state(autoBpmEnabled);b.setOnClickListener{autoBpmEnabled=!autoBpmEnabled;state(autoBpmEnabled);save();if(autoBpmEnabled)updateEffectsCapture(true)}}
+            "delay_lock"->{state(delayClockLocked);b.setOnClickListener{delayClockLocked=!delayClockLocked;validatedBeatEngine.setClockLocked(delayClockLocked);if(delayClockLocked)delayBpm=validatedBeatEngine.getClockBpm().coerceIn(60f,180f);state(delayClockLocked);save();scheduleUpdate()}}
+            "delay_back","delay_forward"->b.setOnClickListener{val p=currentFxPeriodMs().coerceAtLeast(1f);fxPhaseOffsetMs=(fxPhaseOffsetMs+(if(e.id=="delay_back")1f else -1f)*p/128f).coerceIn(-p*.5f,p*.5f);scheduleUpdate()}
+            "delay_skip"->b.setOnClickListener{validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime());scheduleUpdate()}
+            "delay_rst"->b.setOnClickListener{validatedBeatEngine.reset();fxPhaseOffsetMs=0f;delayClockLocked=false;validatedBeatEngine.setClockLocked(false);save();scheduleUpdate()}
+            "fx_low"->{state(fxLowEnabled);b.setOnClickListener{fxLowEnabled=!fxLowEnabled;state(fxLowEnabled);save();scheduleUpdate()}}
+            "fx_mid"->{state(fxMidEnabled);b.setOnClickListener{fxMidEnabled=!fxMidEnabled;state(fxMidEnabled);save();scheduleUpdate()}}
+            "fx_high"->{state(fxHighEnabled);b.setOnClickListener{fxHighEnabled=!fxHighEnabled;state(fxHighEnabled);save();scheduleUpdate()}}
+            else->when{
+                e.id.startsWith("EQ_return_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{eq[i]=previousEq[i];save();scheduleUpdate();refreshUi()}}
+                e.id.startsWith("EQ_flat_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{eq[i]=0f;save();scheduleUpdate();refreshUi()}}
+                e.id.startsWith("ISOLATOR_return_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{iso[i]=previousIso[i];save();scheduleUpdate();refreshUi()}}
+                e.id.startsWith("ISOLATOR_flat_")-> {val i=e.id.substringAfterLast("_").toInt();b.setOnClickListener{iso[i]=0f;save();scheduleUpdate();refreshUi()}}
+                e.id.startsWith("delay_mode_")-> {val i=e.id.substringAfterLast("_").toInt();state(selectedBeatFx==i);b.setOnClickListener{selectedBeatFx=i;delayMode=i;state(true);save();scheduleUpdate()}}
+                e.id.startsWith("division_")-> {val i=e.id.substringAfterLast("_").toInt();state(delayDivision==i&&!delayManualMode);b.setOnClickListener{delayManualMode=false;delayDivision=i;delayManualTimePercent=0f;state(true);save();scheduleUpdate()}}
+            }
+        }
+        return b
+    }
+
+private val s25MainRecord = listOf(
+    RecordElement("bpm_readout", "text", "— BPM", 0.4f, 0.02f, 0.19f, 0.03f, "#FFFFFF"),
+    RecordElement("options", "button", "⚙", 0.84f, 0.02f, 0.115f, 0.042f, "#FFCD00"),
+    RecordElement("EQ_panel", "panel", "", 0f, 0.13f, 0.478f, 0.425f, "#111317"),
+    RecordElement("EQ_title", "text", "EQ", 0.05f, 0.07f, 0.12f, 0.04f, "#DC464B"),
+    RecordElement("EQ_power", "button", "ON", 0.14f, 0.08f, 0.08f, 0.03f, "#FFCD00"),
+    RecordElement("EQ_flat", "button", "F", 0.25f, 0.08f, 0.0478f, 0.027625f, "#FFCD00"),
+    RecordElement("EQ_knob_0", "knob", "HIGH", 0.09f, 0.13f, 0.21f, 0.11f, "#46BE78"),
+    RecordElement("EQ_return_0", "button", "↶", 0.33f, 0.17f, 0.05019f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("EQ_flat_0", "button", "F", 0.39f, 0.17f, 0.0717f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("EQ_knob_1", "knob", "MID HIGH", 0.06f, 0.25f, 0.26f, 0.11f, "#46BE78"),
+    RecordElement("EQ_return_1", "button", "↶", 0.32f, 0.29f, 0.05019f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("EQ_flat_1", "button", "F", 0.39f, 0.29f, 0.0717f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("EQ_knob_2", "knob", "MID LOW", 0.09f, 0.37f, 0.19f, 0.11f, "#46BE78"),
+    RecordElement("EQ_return_2", "button", "↶", 0.32f, 0.41f, 0.05019f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("EQ_flat_2", "button", "F", 0.39f, 0.41f, 0.0717f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("EQ_knob_3", "knob", "LOW", 0.1f, 0.48f, 0.17f, 0.12f, "#46BE78"),
+    RecordElement("EQ_return_3", "button", "↶", 0.31f, 0.52f, 0.05019f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("EQ_flat_3", "button", "F", 0.38f, 0.52f, 0.0717f, 0.045326250000000005f, "#FFCD00"),
+    RecordElement("ISOLATOR_panel", "panel", "", 0.51f, 0.065f, 0.478f, 0.425f, "#111317"),
+    RecordElement("ISOLATOR_title", "text", "ISOLATOR", 0.42f, 0.07f, 0.21f, 0.04f, "#DC464B"),
+    RecordElement("ISOLATOR_power", "button", "ON", 0.67f, 0.08f, 0.06692000000000001f, 0.027625f, "#FFCD00"),
+    RecordElement("iso_limiter", "button", "LIMITER ON", 0.76f, 0.08f, 0.1195f, 0.027625f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat", "button", "F", 0.89f, 0.08f, 0.05f, 0.03f, "#FFCD00"),
+    RecordElement("ISOLATOR_knob_0", "knob", "HIGH", 0.55f, 0.11f, 0.25f, 0.16f, "#46BE78"),
+    RecordElement("ISOLATOR_return_0", "button", "↶", 0.82548f, 0.16052583333333334f, 0.05019f, 0.06043500000000001f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat_0", "button", "F", 0.8876200000000001f, 0.16052583333333334f, 0.0717f, 0.06043500000000001f, "#FFCD00"),
+    RecordElement("ISOLATOR_knob_1", "knob", "MID", 0.56f, 0.27f, 0.24f, 0.16f, "#46BE78"),
+    RecordElement("ISOLATOR_return_1", "button", "↶", 0.82f, 0.33f, 0.05019f, 0.06043500000000001f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat_1", "button", "F", 0.89f, 0.33f, 0.0717f, 0.06043500000000001f, "#FFCD00"),
+    RecordElement("ISOLATOR_knob_2", "knob", "LOW", 0.54f, 0.44f, 0.28f, 0.13f, "#46BE78"),
+    RecordElement("ISOLATOR_return_2", "button", "↶", 0.81f, 0.48f, 0.05019f, 0.06043500000000001f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat_2", "button", "F", 0.88f, 0.48f, 0.0717f, 0.06043500000000001f, "#FFCD00"),
+    RecordElement("filter_panel", "panel", "", 0.64f, 0.6f, 0.2f, 0.3f, "#111317"),
+    RecordElement("filter_title", "text", "FILTER", 0.59f, 0.61f, 0.22f, 0.04f, "#DC464B"),
+    RecordElement("filter_knob_0", "knob", "HPF", 0.53f, 0.66f, 0.3f, 0.16f, "#46BE78"),
+    RecordElement("filter_knob_1", "knob", "RESONANCE", 0.55f, 0.82f, 0.25f, 0.13f, "#46BE78"),
+    RecordElement("master_panel", "panel", "", 0.06f, 0.52f, 0.24f, 0.48f, "#111317"),
+    RecordElement("master_title", "text", "MASTER", 0.08f, 0.61f, 0.24f, 0.04f, "#DC464B"),
+    RecordElement("master_knob_0", "knob", "GAIN", 0.07f, 0.66f, 0.21f, 0.1f, "#46BE78"),
+    RecordElement("master_knob_1", "knob", "COMP", 0.1f, 0.77f, 0.16f, 0.08f, "#46BE78"),
+    RecordElement("master_knob_2", "knob", "LOUDNESS", 0.09f, 0.86f, 0.17f, 0.08f, "#46BE78")
+)
+
+private val s25PopupRecord = listOf(
+    RecordElement("beat_bpm_section_panel", "panel", "", 0.002f, 0.762f, 0.998f, 0.236f, "#252A31"),
+    RecordElement("ISOLATOR_panel", "panel", "", 0.46f, 0.06f, 0.478f, 0.315f, "#111317"),
+    RecordElement("ISOLATOR_title", "text", "ISOLATOR", 0.37f, 0.04f, 0.27f, 0.04f, "#DC464B"),
+    RecordElement("ISOLATOR_power", "button", "ON", 0.63f, 0.05f, 0.08f, 0.02f, "#FFCD00"),
+    RecordElement("iso_limiter", "button", "LIMITER ON", 0.72f, 0.05f, 0.1195f, 0.020475f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat", "button", "F", 0.86f, 0.05f, 0.07f, 0.02f, "#FFCD00"),
+    RecordElement("ISOLATOR_knob_0", "knob", "HIGH", 0.5f, 0.09f, 0.29f, 0.13f, "#46BE78"),
+    RecordElement("ISOLATOR_return_0", "button", "↶", 0.79f, 0.12f, 0.05019f, 0.044793000000000006f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat_0", "button", "F", 0.86f, 0.12f, 0.0717f, 0.044793000000000006f, "#FFCD00"),
+    RecordElement("ISOLATOR_knob_1", "knob", "MID", 0.5f, 0.23f, 0.3f, 0.13f, "#46BE78"),
+    RecordElement("ISOLATOR_return_1", "button", "↶", 0.79f, 0.26f, 0.05019f, 0.044793000000000006f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat_1", "button", "F", 0.86f, 0.26f, 0.0717f, 0.044793000000000006f, "#FFCD00"),
+    RecordElement("ISOLATOR_knob_2", "knob", "LOW", 0.53f, 0.37f, 0.23f, 0.13f, "#46BE78"),
+    RecordElement("ISOLATOR_return_2", "button", "↶", 0.78f, 0.4f, 0.05f, 0.03f, "#FFCD00"),
+    RecordElement("ISOLATOR_flat_2", "button", "F", 0.85f, 0.39f, 0.0717f, 0.044793000000000006f, "#FFCD00"),
+    RecordElement("filter_panel", "panel", "", 0.012f, 0.375f, 0.9879999756813049f, 0.29f, "#111317"),
+    RecordElement("filter_title", "text", "FILTER", 0.11f, 0.04f, 0.19f, 0.04f, "#DC464B"),
+    RecordElement("filter_knob_0", "knob", "HPF", 0f, 0.09f, 0.41f, 0.18f, "#46BE78"),
+    RecordElement("filter_knob_1", "knob", "RESONANCE", 0.01f, 0.28f, 0.38f, 0.12f, "#46BE78"),
+    RecordElement("fx_panel", "panel", "", 0f, 0.71f, 0.976f, 0.28f, "#111317"),
+    RecordElement("reverb_panel", "panel", "", 0.04f, 0.44f, 0.36112f, 0.28f, "#111317"),
+    RecordElement("reverb_title", "text", "REVERB", 0.08f, 0.4f, 0.34f, 0.04f, "#DC464B"),
+    RecordElement("reverb_power", "button", "ON", 0.32f, 0.41f, 0.15f, 0.02f, "#FFCD00"),
+    RecordElement("reverb_0", "knob", "SEND", 0f, 0.45f, 0.41f, 0.13f, "#46BE78"),
+    RecordElement("reverb_1", "knob", "TONE", 0.3f, 0.48f, 0.35f, 0.09f, "#46BE78"),
+    RecordElement("reverb_2", "knob", "FEEDBACK", 0.7f, 0.48f, 0.2f, 0.09f, "#46BE78"),
+    RecordElement("reverb_band_0", "button", "LOW", 0.1f, 0.59f, 0.21f, 0.02f, "#FFCD00"),
+    RecordElement("reverb_band_1", "button", "MID", 0.4f, 0.59f, 0.21f, 0.02f, "#FFCD00"),
+    RecordElement("reverb_band_2", "button", "HIGH", 0.68f, 0.59f, 0.21f, 0.02f, "#FFCD00"),
+    RecordElement("delay_panel", "panel", "", 0.36f, 0.71f, 0.61488f, 0.09240000000000001f, "#111317"),
+    RecordElement("delay_title", "text", "BEAT EFFECTS", 0.05f, 0.62f, 0.34f, 0.04f, "#DC464B"),
+    RecordElement("delay_power", "button", "ON", 0.39f, 0.63f, 0.1352736f, 0.02f, "#FFCD00"),
+    RecordElement("delay_knob_0", "knob", "DELAY LEVEL", 0.03f, 0.66f, 0.27f, 0.12f, "#46BE78"),
+    RecordElement("delay_knob_1", "knob", "FEEDBACK", 0.2f, 0.66f, 0.37f, 0.12f, "#46BE78"),
+    RecordElement("delay_knob_2", "knob", "TONE", 0.47f, 0.66f, 0.3f, 0.12f, "#46BE78"),
+    RecordElement("delay_knob_3", "knob", "TIME", 0.71f, 0.66f, 0.28f, 0.12f, "#46BE78"),
+    RecordElement("delay_tap", "button", "TAP", 0.01f, 0.78f, 0.1f, 0.02f, "#FFCD00"),
+    RecordElement("delay_align", "button", "ALIGN", 0.13f, 0.78f, 0.1f, 0.02f, "#FFCD00"),
+    RecordElement("delay_master_beat", "text", "●", 0.26f, 0.76f, 0.15f, 0.06f, "#46BE78"),
+    RecordElement("delay_fx_beat", "text", "●", 0.34f, 0.76f, 0.13f, 0.06f, "#46BE78"),
+    RecordElement("delay_bpm", "text", "120.0 BPM", 0.41f, 0.78f, 0.48f, 0.02f, "#FFFFFF"),
+    RecordElement("delay_auto", "button", "AUTO", 0.02f, 0.81f, 0.15f, 0.02f, "#46BE78"),
+    RecordElement("delay_lock", "button", "LOCK", 0.18f, 0.81f, 0.15f, 0.02f, "#46BE78"),
+    RecordElement("delay_back", "button", "◀", 0.34f, 0.81f, 0.15f, 0.02f, "#46BE78"),
+    RecordElement("delay_forward", "button", "▶", 0.5f, 0.81f, 0.15f, 0.02f, "#46BE78"),
+    RecordElement("delay_skip", "button", "SKIP", 0.66f, 0.81f, 0.15f, 0.02f, "#46BE78"),
+    RecordElement("delay_rst", "button", "RST", 0.82f, 0.81f, 0.15f, 0.02f, "#46BE78"),
+    RecordElement("delay_pitch_fader", "fader", "PITCH", 0.04f, 0.84f, 0.93f, 0.02f, "#46BE78"),
+    RecordElement("delay_phase_fader", "fader", "FX PHASE JOG", 0.04f, 0.86f, 0.93f, 0.02f, "#46BE78"),
+    RecordElement("delay_mode_0", "button", "SHORT DELAY", 0.01f, 0.89f, 0.31f, 0.02f, "#46BE78"),
+    RecordElement("delay_mode_1", "button", "LONG DELAY", 0.33f, 0.89f, 0.31f, 0.02f, "#46BE78"),
+    RecordElement("delay_mode_2", "button", "DUB ECHO", 0.65f, 0.89f, 0.31f, 0.02f, "#46BE78"),
+    RecordElement("division_0", "button", "1/16", 0.02f, 0.92f, 0.08f, 0.04f, "#46BE78"),
+    RecordElement("division_1", "button", "1/8", 0.1f, 0.92f, 0.09f, 0.04f, "#46BE78"),
+    RecordElement("division_2", "button", "1/4", 0.19f, 0.92f, 0.09f, 0.04f, "#46BE78"),
+    RecordElement("division_3", "button", "1/2", 0.28f, 0.92f, 0.09f, 0.04f, "#46BE78"),
+    RecordElement("division_4", "button", "3/4", 0.37f, 0.92f, 0.09f, 0.04f, "#46BE78"),
+    RecordElement("division_5", "button", "1", 0.47f, 0.92f, 0.1f, 0.04f, "#46BE78"),
+    RecordElement("division_6", "button", "2", 0.57f, 0.92f, 0.1f, 0.04f, "#46BE78"),
+    RecordElement("division_7", "button", "4", 0.67f, 0.92f, 0.1f, 0.04f, "#46BE78"),
+    RecordElement("division_8", "button", "8", 0.77f, 0.92f, 0.1f, 0.04f, "#46BE78"),
+    RecordElement("division_9", "button", "16", 0.87f, 0.92f, 0.09f, 0.04f, "#46BE78"),
+    RecordElement("fx_low", "button", "FX LOW", 0.02f, 0.97f, 0.31f, 0.02f, "#46BE78"),
+    RecordElement("fx_mid", "button", "FX MID", 0.34f, 0.97f, 0.31f, 0.02f, "#46BE78"),
+    RecordElement("fx_high", "button", "FX HIGH", 0.66f, 0.97f, 0.31f, 0.02f, "#46BE78")
+)
+
     private fun buildUi() {
         val compactPhone = phonePortrait && !wideLayout
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone && showingEffectsScreen)10 else if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)12 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
@@ -851,90 +1042,14 @@ class MainActivity : Activity() {
         // Smartphone portrait: two full-window pages. All section builders and
         // all parameter/DSP state are reused unchanged from the tablet implementation.
         if (compactPhone && !showingEffectsScreen) {
-            // S25 MAIN: position the four live control sections from the user's
-            // normalized Layout Designer record. Only the visual hosts move;
-            // all controls continue to use the Build 918 parameter/DSP state.
-            val mainCanvas = FrameLayout(this).apply {
-                clipChildren = false
-                clipToPadding = false
-            }
-            content.addView(mainCanvas, LinearLayout.LayoutParams(-1, 0, 1f))
-            val recordViews = mutableListOf<Pair<View, FloatArray>>()
-            fun addRecordView(view: View, x: Float, y: Float, w: Float, h: Float) {
-                recordViews.add(view to floatArrayOf(x, y, w, h))
-                mainCanvas.addView(view, FrameLayout.LayoutParams(1, 1))
-            }
-            fun addRecordPanel(x: Float, y: Float, w: Float, h: Float) {
-                val panel = View(this).apply {
-                    setBackgroundColor(Color.rgb(17, 19, 23))
-                    isClickable = false
-                    isFocusable = false
-                }
-                addRecordView(panel, x, y, w, h)
-            }
-            fun sectionHost() = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                clipChildren = false
-                clipToPadding = false
-            }
-            // Panel bounds from S25 VERTICALE in the supplied record.
-            addRecordPanel(0.000f, 0.130f, 0.478f, 0.425f) // EQ
-            addRecordPanel(0.510f, 0.065f, 0.478f, 0.425f) // ISOLATOR
-            addRecordPanel(0.640f, 0.600f, 0.200f, 0.300f) // FILTER
-            addRecordPanel(0.060f, 0.520f, 0.240f, 0.480f) // MASTER
-
-            val eqHost = sectionHost()
-            addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, eqHost)
-            addRecordView(eqHost, 0.000f, 0.065f, 0.478f, 0.540f)
-
-            val isoHost = sectionHost()
-            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, isoHost)
-            addRecordView(isoHost, 0.510f, 0.065f, 0.478f, 0.540f)
-
-            val masterHost = sectionHost()
-            addPhoneMasterSection(masterHost)
-            addRecordView(masterHost, 0.060f, 0.600f, 0.240f, 0.400f)
-
-            val filterHost = sectionHost()
-            addFilterSection(filterHost)
-            addRecordView(filterHost, 0.530f, 0.600f, 0.300f, 0.350f)
-
-            fun updateRecordPositions() {
-                val canvasWidth = mainCanvas.width
-                val canvasHeight = mainCanvas.height
-                if (canvasWidth <= 0 || canvasHeight <= 0) return
-                // Coordinates are normalized to the usable screen above the
-                // diagnostic footer, so the final controls stay clear of it.
-                val totalHeight = canvasHeight + titleBar.height
-                for ((view, p) in recordViews) {
-                    val left = (p[0] * canvasWidth).roundToInt()
-                    val top = (p[1] * totalHeight - titleBar.height).roundToInt()
-                    val width = (p[2] * canvasWidth).roundToInt().coerceAtLeast(1)
-                    val height = (p[3] * totalHeight).roundToInt().coerceAtLeast(1)
-                    val current = view.layoutParams as? FrameLayout.LayoutParams
-                    if (current == null || current.leftMargin != left || current.topMargin != top ||
-                        current.width != width || current.height != height) {
-                        view.layoutParams = FrameLayout.LayoutParams(width, height).apply {
-                            leftMargin = left
-                            topMargin = top
-                        }
-                    }
-                }
-            }
-            mainCanvas.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateRecordPositions() }
-            mainCanvas.post { updateRecordPositions() }
+            val canvas = FrameLayout(this).apply { clipChildren = false; clipToPadding = false }
+            content.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
+            addS25RecordElements(canvas, s25MainRecord, titleBar)
         } else if (compactPhone && showingEffectsScreen) {
-            // S25 BEAT EFFECTS: FILTER + ISOLATOR above, REVERB + DELAY below.
-            // The same stateful section builders are reused, so RETURN only
-            // changes the visible page and never resets an audio parameter.
-            val upper = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
-            val lower = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
-            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.40f))
-            content.addView(lower, LinearLayout.LayoutParams(-1, 0, 0.60f))
-            addFilterSection(upper)
-            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
-            addEffectsSection(lower)
+            val canvas = FrameLayout(this).apply { clipChildren = false; clipToPadding = false }
+            content.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
+            addS25RecordElements(canvas, s25PopupRecord, titleBar)
+        }
         // Tablet portrait gets a dedicated vertical composition. Landscape and phone
         // layouts retain the established four-quadrant structure unchanged.
         } else if (!phonePortrait && !wideLayout) {
