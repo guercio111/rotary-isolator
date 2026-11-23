@@ -775,11 +775,11 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         val compactPhone = phonePortrait && !wideLayout
-        root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
+        root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone && showingEffectsScreen)10 else if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)12 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         if (compactPhone && showingEffectsScreen) {
             val exitButton = TextView(this).apply {
-                text = "EXIT"
+                text = "RETURN"
                 textSize = 11f
                 gravity = Gravity.CENTER
                 setTypeface(typeface, Typeface.BOLD)
@@ -794,7 +794,7 @@ class MainActivity : Activity() {
                     buildUi()
                 }
             }
-            titleBar.addView(exitButton, LinearLayout.LayoutParams(dp(72), dp(30)))
+            titleBar.addView(exitButton, LinearLayout.LayoutParams(dp(82), dp(30)))
             titleBar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
         } else {
             titleBar.addView(appPowerControl(),LinearLayout.LayoutParams(dp(if(compactPhone)72 else 82),dp(if(compactPhone)30 else 36)).apply{rightMargin=dp(5)})
@@ -824,7 +824,7 @@ class MainActivity : Activity() {
             titleBar.addView(bpmPanel, LinearLayout.LayoutParams(0, dp(if(compactPhone)34 else 40), 1f))
             if (compactPhone) {
                 val effectsButton = TextView(this).apply {
-                    text = "EFFECTS"
+                    text = "BEAT FX"
                     textSize = 8f
                     gravity = Gravity.CENTER
                     setTypeface(typeface, Typeface.BOLD)
@@ -839,7 +839,7 @@ class MainActivity : Activity() {
                         buildUi()
                     }
                 }
-                titleBar.addView(effectsButton, LinearLayout.LayoutParams(dp(64), dp(30)).apply { leftMargin = dp(4) })
+                titleBar.addView(effectsButton, LinearLayout.LayoutParams(dp(72), dp(30)).apply { leftMargin = dp(4) })
             }
             titleBar.addView(gearButton(),LinearLayout.LayoutParams(dp(54),dp(if(compactPhone)36 else 42)).apply{leftMargin=dp(5)})
         }
@@ -851,19 +851,86 @@ class MainActivity : Activity() {
         // Smartphone portrait: two full-window pages. All section builders and
         // all parameter/DSP state are reused unchanged from the tablet implementation.
         if (compactPhone && !showingEffectsScreen) {
-            val upper = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
-            val lower = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
-            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.58f))
-            content.addView(lower, LinearLayout.LayoutParams(-1, 0, 0.42f))
-            addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, upper)
-            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
-            addFilterSection(lower)
-            addPhoneMasterSection(lower)
+            // S25 MAIN: position the four live control sections from the user's
+            // normalized Layout Designer record. Only the visual hosts move;
+            // all controls continue to use the Build 918 parameter/DSP state.
+            val mainCanvas = FrameLayout(this).apply {
+                clipChildren = false
+                clipToPadding = false
+            }
+            content.addView(mainCanvas, LinearLayout.LayoutParams(-1, 0, 1f))
+            val recordViews = mutableListOf<Pair<View, FloatArray>>()
+            fun addRecordView(view: View, x: Float, y: Float, w: Float, h: Float) {
+                recordViews.add(view to floatArrayOf(x, y, w, h))
+                mainCanvas.addView(view, FrameLayout.LayoutParams(1, 1))
+            }
+            fun addRecordPanel(x: Float, y: Float, w: Float, h: Float) {
+                val panel = View(this).apply {
+                    setBackgroundColor(Color.rgb(17, 19, 23))
+                    isClickable = false
+                    isFocusable = false
+                }
+                addRecordView(panel, x, y, w, h)
+            }
+            fun sectionHost() = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                clipChildren = false
+                clipToPadding = false
+            }
+            // Panel bounds from S25 VERTICALE in the supplied record.
+            addRecordPanel(0.000f, 0.130f, 0.478f, 0.425f) // EQ
+            addRecordPanel(0.510f, 0.065f, 0.478f, 0.425f) // ISOLATOR
+            addRecordPanel(0.640f, 0.600f, 0.200f, 0.300f) // FILTER
+            addRecordPanel(0.060f, 0.520f, 0.240f, 0.480f) // MASTER
+
+            val eqHost = sectionHost()
+            addSection("EQ", "EQ", eq, -14f..14f, { eqOn }, eqHost)
+            addRecordView(eqHost, 0.000f, 0.065f, 0.478f, 0.540f)
+
+            val isoHost = sectionHost()
+            addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, isoHost)
+            addRecordView(isoHost, 0.510f, 0.065f, 0.478f, 0.540f)
+
+            val masterHost = sectionHost()
+            addPhoneMasterSection(masterHost)
+            addRecordView(masterHost, 0.060f, 0.600f, 0.240f, 0.400f)
+
+            val filterHost = sectionHost()
+            addFilterSection(filterHost)
+            addRecordView(filterHost, 0.530f, 0.600f, 0.300f, 0.350f)
+
+            fun updateRecordPositions() {
+                val canvasWidth = mainCanvas.width
+                val canvasHeight = mainCanvas.height
+                if (canvasWidth <= 0 || canvasHeight <= 0) return
+                val totalHeight = canvasHeight + titleBar.height +
+                    (if (::status.isInitialized) status.height else dp(13))
+                for ((view, p) in recordViews) {
+                    val left = (p[0] * canvasWidth).roundToInt()
+                    val top = (p[1] * totalHeight - titleBar.height).roundToInt()
+                    val width = (p[2] * canvasWidth).roundToInt().coerceAtLeast(1)
+                    val height = (p[3] * totalHeight).roundToInt().coerceAtLeast(1)
+                    val current = view.layoutParams as? FrameLayout.LayoutParams
+                    if (current == null || current.leftMargin != left || current.topMargin != top ||
+                        current.width != width || current.height != height) {
+                        view.layoutParams = FrameLayout.LayoutParams(width, height).apply {
+                            leftMargin = left
+                            topMargin = top
+                        }
+                    }
+                }
+            }
+            mainCanvas.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateRecordPositions() }
+            mainCanvas.post { updateRecordPositions() }
         } else if (compactPhone && showingEffectsScreen) {
+            // S25 BEAT EFFECTS: FILTER + ISOLATOR above, REVERB + DELAY below.
+            // The same stateful section builders are reused, so RETURN only
+            // changes the visible page and never resets an audio parameter.
             val upper = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
             val lower = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; clipChildren = false; clipToPadding = false }
-            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.34f))
-            content.addView(lower, LinearLayout.LayoutParams(-1, 0, 0.66f))
+            content.addView(upper, LinearLayout.LayoutParams(-1, 0, 0.40f))
+            content.addView(lower, LinearLayout.LayoutParams(-1, 0, 0.60f))
             addFilterSection(upper)
             addSection("ISOLATOR", "ISOLATOR", iso, -24f..24f, { isoOn }, upper)
             addEffectsSection(lower)
@@ -1232,9 +1299,9 @@ class MainActivity : Activity() {
                 save()
                 scheduleUpdate()
             }
-            frame.addView(dot, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                leftMargin = dp(44)
-                bottomMargin = dp(25)
+            frame.addView(dot, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.TOP or Gravity.END).apply {
+                rightMargin = dp(4)
+                topMargin = dp(12)
             })
             return frame
         }
@@ -2127,6 +2194,15 @@ class MainActivity : Activity() {
         refreshFxPhaseUi()
         phaseJogSeek = PhaseMarkerSeekBar().apply {
             max = 200
+            // A distinct physical fader grip; the green MASTER and yellow FX
+            // phase dots are painted by PhaseMarkerSeekBar.onDraw() below it.
+            thumb = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = dp(3).toFloat()
+                setColor(Color.rgb(255, 205, 0))
+                setStroke(dp(1), Color.WHITE)
+                setSize(dp(16), dp(24))
+            }
             contentDescription = "Allineamento fase: riferimento MASTER verde e riferimento FX giallo"
             progress = 100
             setPadding(0, 0, 0, 0)
