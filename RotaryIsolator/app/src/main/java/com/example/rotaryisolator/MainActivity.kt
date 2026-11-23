@@ -999,7 +999,7 @@ private val s25PopupRecord = listOf(
             val popupBpmPanel=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;setPadding(dp(2),0,dp(2),0)}
             bpmButton=TextView(this).apply{text=if(bpmAnalyzerOn)"BPM STOP" else "BPM START";textSize=8f;gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD);setTextColor(Color.WHITE);background=android.graphics.drawable.GradientDrawable().apply{cornerRadius=dp(6).toFloat();setColor(if(bpmAnalyzerOn)Color.rgb(155,45,48) else Color.rgb(38,105,70));setStroke(dp(1),if(bpmAnalyzerOn)Color.rgb(245,115,120) else Color.rgb(125,245,155))};setPadding(dp(3),0,dp(3),0);setOnClickListener{if(bpmAnalyzerOn)stopBpmAnalyzer() else startBpmAnalyzer()}}
             popupBpmPanel.addView(bpmButton,LinearLayout.LayoutParams(dp(76),dp(28)))
-            bpmReadout=label(if(bpmAnalyzerOn||autoBpmEnabled)String.format(java.util.Locale.US,"%.1f BPM",delayBpm) else "— BPM",11f,Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
+            bpmReadout=label(String.format(java.util.Locale.US,"%.1f BPM",delayBpm),11f,Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
             popupBpmPanel.addView(bpmReadout,LinearLayout.LayoutParams(0,-1,1f))
             bpmBeat=label("●",22f,Color.rgb(75,85,95))
             popupBpmPanel.addView(bpmBeat,LinearLayout.LayoutParams(dp(24),-1))
@@ -1026,7 +1026,7 @@ private val s25PopupRecord = listOf(
                 setOnClickListener { if (bpmAnalyzerOn) stopBpmAnalyzer() else startBpmAnalyzer() }
             }
             bpmPanel.addView(bpmButton, LinearLayout.LayoutParams(dp(if(compactPhone)76 else 90), dp(if(compactPhone)30 else 36)))
-            bpmReadout = label("— BPM", if (compactPhone) 11f else 10f, Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
+            bpmReadout = label(String.format(java.util.Locale.US,"%.1f BPM",delayBpm), if (compactPhone) 11f else 10f, Color.WHITE).apply{setSingleLine(true);gravity=Gravity.CENTER;setTypeface(typeface,Typeface.BOLD)}
             bpmPanel.addView(bpmReadout, LinearLayout.LayoutParams(0, -1, 1f))
             bpmBeat = label("●", 22f, Color.rgb(75,85,95))
             bpmPanel.addView(bpmBeat,LinearLayout.LayoutParams(dp(24),-1))
@@ -1570,7 +1570,7 @@ private val s25PopupRecord = listOf(
         bpmAnalyzerOn = false
         bpmButton?.text = "BPM START"
         bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), colorDelay) }
-        bpmReadout?.text = "— BPM"
+        bpmReadout?.text = String.format(java.util.Locale.US,"%.1f BPM",delayBpm)
         bpmBeat?.setTextColor(Color.rgb(75,85,95))
         if (!captureNeeded()) stopAudioCaptureTest()
     }
@@ -1656,7 +1656,7 @@ private val s25PopupRecord = listOf(
             handler.post {
                 if (bpmAnalyzerOn || autoBpmEnabled) {
                     bpmReadout?.text = if (detected > 0f)
-                        String.format(java.util.Locale.US, "%.1f BPM  %d%%", detected, (confidence * 100f).roundToInt().coerceIn(0,100))
+                        String.format(java.util.Locale.US, "%.1f BPM", detected)
                     else "RICERCA BPM…"
                     s25RecordBpmReadout?.text=bpmReadout?.text
                     bpmButton?.text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
