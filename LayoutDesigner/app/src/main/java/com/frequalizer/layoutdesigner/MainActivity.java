@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class MainActivity extends Activity {
+    // Build 918 fidelity preview; the production audio engine is intentionally untouched.
     private final String[] modes = {"TABLET VERTICALE", "TABLET ORIZZONTALE", "S25 VERTICALE", "S25 ORIZZONTALE", "S25 VERTICALE POP UP"};
     private final Map<String, JSONArray> layouts = new LinkedHashMap<>();
     private String mode = modes[0];
