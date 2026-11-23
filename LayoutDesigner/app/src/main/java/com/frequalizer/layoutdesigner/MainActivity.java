@@ -649,7 +649,7 @@ public class MainActivity extends Activity {
                     if(mode.startsWith("S25")&&mode.contains("ORIZZONTALE")) layoutScale=Math.max(.42f,Math.min(1f,Math.min(852f/1280f,393f/800f)));
                     float dp=(w/refWidthDp)*layoutScale;
                     String id=o.optString("id");
-                    boolean portraitFit=!mode.contains("ORIZZONTALE")&&(id.startsWith("eq_knob_")||id.startsWith("iso_knob_")||id.startsWith("filter_knob_"));
+                    String lowerId=id.toLowerCase(Locale.ROOT); boolean portraitFit=!mode.contains("ORIZZONTALE")&&(lowerId.startsWith("eq_knob_")||lowerId.startsWith("iso_knob_")||lowerId.startsWith("filter_knob_"));
                     float textReserve=dp*(portraitFit?27f:18f);
                     float side=Math.min(ww,Math.max(1f,hh-textReserve))*.94f;
                     float cy=y+(portraitFit?(hh-dp*27f)/2f:(hh-dp*26f)/2f);
@@ -679,7 +679,7 @@ public class MainActivity extends Activity {
                     float titleSize=Math.min(dp*11f,rad*2f*.86f/(Math.max(1,dialTitle.length())*.58f));
                     p.setTextSize(Math.max(dp*5.5f,titleSize));p.setColor(Color.WHITE);
                     c.drawText(dialTitle,cx,y+hh-dp*17f,p);
-                    String valueText=(id.startsWith("eq_knob_")||id.startsWith("iso_knob_")||id.equals("master_knob_0"))?"0.0 dB":"0%";
+                    String valueText=(lowerId.startsWith("eq_knob_")||lowerId.startsWith("iso_knob_")||lowerId.equals("master_knob_0"))?"0.0 dB":"0%";
                     float valueSize=Math.min(dp*10f,rad*2f*.86f/(Math.max(1,valueText.length())*.58f));
                     p.setColor(color);p.setTextSize(Math.max(dp*5.5f,valueSize));
                     c.drawText(valueText,cx,y+hh-dp*4f,p);
