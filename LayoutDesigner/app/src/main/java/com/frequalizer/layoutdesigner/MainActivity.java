@@ -508,7 +508,8 @@ public class MainActivity extends Activity {
             JSONArray a = layouts.get(l);
             for (int i=0;i<a.length();i++) {
                 JSONObject o=a.optJSONObject(i); if(o==null) continue;
-                double w=clamp(o.optDouble("w",0.02),0.02,1.0);
+                boolean divider="divider".equals(o.optString("type"));
+                double w=clamp(o.optDouble("w",divider?0.003:0.02),divider?0.001:0.02,divider?0.02:1.0);
                 double h=clamp(o.optDouble("h",0.02),0.02,1.0);
                 double x=clamp(o.optDouble("x",0),0,1.0-w);
                 double y=clamp(o.optDouble("y",0),0,1.0-h);
@@ -737,7 +738,8 @@ public class MainActivity extends Activity {
                     JSONObject item=current().getJSONObject(selected);
                     double dx=(x-downX)/sw, dy=(y-downY)/sh;
                     if(resizing) {
-                        double newW=clamp(snapToGrid(startW+dx),0.02,1-startX);
+                        boolean divider="divider".equals(item.optString("type"));
+                        double newW=divider?clamp(startW+dx,0.001,0.02):clamp(snapToGrid(startW+dx),0.02,1-startX);
                         double newH=clamp(snapToGrid(startH+dy),0.02,1-startY);
                         item.put("w",newW); item.put("h",newH);
                         if("panel".equals(item.optString("type")) && startW>0 && startH>0) {
@@ -746,8 +748,13 @@ public class MainActivity extends Activity {
                                 JSONObject member=current().optJSONObject(child.index); if(member==null) continue;
                                 member.put("x",snapToGrid(startX+(child.x-startX)*sx));
                                 member.put("y",snapToGrid(startY+(child.y-startY)*sy));
-                                member.put("w",Math.max(0.01,snapToGrid(child.w*sx)));
-                                member.put("h",Math.max(0.01,snapToGrid(child.h*sy)));
+                                if("divider".equals(member.optString("type"))) {
+                                    member.put("w",Math.max(0.001,child.w*sx));
+                                    member.put("h",Math.max(0.01,snapToGrid(child.h*sy)));
+                                } else {
+                                    member.put("w",Math.max(0.01,snapToGrid(child.w*sx)));
+                                    member.put("h",Math.max(0.01,snapToGrid(child.h*sy)));
+                                }
                             }
                         }
                     } else {
