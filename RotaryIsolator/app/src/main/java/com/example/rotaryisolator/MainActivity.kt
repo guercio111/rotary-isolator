@@ -2108,19 +2108,14 @@ private val s25PopupRecord = listOf(
         }
         lockBpmButton = lockButton
         fun phaseNudge(direction: Float) {
-            if (validatedBeatEngine.getPeriodMs() <= 0.0) return
-            // Arrows and FX PHASE JOG use the same FX period as the DSP/marker.
-            // Do not derive the step from the MASTER detector: AUTO/LOCK can
-            // hold a slightly different effective FX BPM, amplified at the extremes.
-            val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
-            val stepMs = -fxPeriodMs * direction / 128f
-            fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
-            refreshFxPhaseUi()
-            // Keep the jog handle locked to the same measured phase used by
-            // the yellow FX marker. The requested trim alone can point the hand
-            // the wrong way while DSP smoothing/latency is still being applied.
-            syncFxPhaseSeekToMeasuredPhase()
-            fxBpmLastBeatIndex = Long.MIN_VALUE
+            val period = validatedBeatEngine.getPeriodMs()
+            if (period <= 0.0) return
+            // A fine 1/64-beat jog: right advances and left retards. Apply it to the shared clock AND
+            // the delay tap, otherwise the lamps move but the audible FX do not.
+            val stepMs = (-period * direction / 64.0).toFloat()
+            validatedBeatEngine.nudgePhase(stepMs)
+            delaySyncOffsetMs = (delaySyncOffsetMs + stepMs).coerceIn(-250f, 250f)
+            autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
             scheduleUpdate()
         }
         fun autoCenterFxPhase() {
