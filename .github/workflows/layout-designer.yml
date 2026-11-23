@@ -6,6 +6,7 @@ on:
       - '.github/workflows/layout-designer.yml'
     branches:
       - 'feature/frequalizer-layout-designer'
+      - 'feature/layout-designer-build918-fidelity'
   workflow_dispatch:
 jobs:
   build:
