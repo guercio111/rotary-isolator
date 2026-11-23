@@ -904,8 +904,9 @@ class MainActivity : Activity() {
                 val canvasWidth = mainCanvas.width
                 val canvasHeight = mainCanvas.height
                 if (canvasWidth <= 0 || canvasHeight <= 0) return
-                val totalHeight = canvasHeight + titleBar.height +
-                    (if (::status.isInitialized) status.height else dp(13))
+                // Coordinates are normalized to the usable screen above the
+                // diagnostic footer, so the final controls stay clear of it.
+                val totalHeight = canvasHeight + titleBar.height
                 for ((view, p) in recordViews) {
                     val left = (p[0] * canvasWidth).roundToInt()
                     val top = (p[1] * totalHeight - titleBar.height).roundToInt()
