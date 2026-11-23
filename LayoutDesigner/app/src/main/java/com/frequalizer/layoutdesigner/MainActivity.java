@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class MainActivity extends Activity {
-    private final String[] modes = {"TABLET VERTICALE", "TABLET ORIZZONTALE", "S25 VERTICALE", "S25 ORIZZONTALE"};
+    private final String[] modes = {"TABLET VERTICALE", "TABLET ORIZZONTALE", "S25 VERTICALE", "S25 ORIZZONTALE", "S25 VERTICALE POP UP"};
     private final Map<String, JSONArray> layouts = new LinkedHashMap<>();
     private String mode = modes[0];
     private EditorView editor;
@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
         migrateTabletPortraitLayout();
         ensureDelayKeyboardGroups();
         ensureBeatBpmGroup();
+        ensurePopupProfileSeeded();
         constrainLayoutsToCanvas();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -176,9 +177,9 @@ public class MainActivity extends Activity {
         String[] names={"HPF","RESONANCE"};
         for(int i=0;i<2;i++) {
             if(vertical) {
-                double ry=y+.12*h+i*.43*h;
-                tText(l,"filter_label_"+i,names[i],x+.04*w,ry,.28*w,.16*h);
-                tKnob(l,"filter_knob_"+i,names[i],x+.33*w,ry-.015*h,.42*w,.32*h,color);
+                double ry=y+.07*h+i*.46*h;
+                tText(l,"filter_label_"+i,names[i],x+.04*w,ry,.92*w,.10*h);
+                tKnob(l,"filter_knob_"+i,names[i],x+.08*w,ry+.09*h,.84*w,.34*h,color);
             } else {
                 double cx=x+i*w*.5;
                 tText(l,"filter_label_"+i,names[i],cx+.02*w,y+.13*h,.46*w,.12*h);
@@ -207,6 +208,7 @@ public class MainActivity extends Activity {
             double revW=w*.25, delayHeaderW=w*.25, controlsW=w*.30, masterW=w*.20;
             tPanel(l,"reverb_panel","REVERB",x,y,revW,h);
             seedReverb(l,x,y,revW,h,true);
+            templateItem(l,"divider_reverb_delay","divider","",x+revW-.0015,y,.003,h,"#5C6670");
             double dx=x+revW;
             tPanel(l,"delay_panel","DELAY",dx,y,delayHeaderW,h);
             tText(l,"delay_title","BEAT EFFECTS",dx+.02*delayHeaderW,y+.02*h,.60*delayHeaderW,.07*h);
@@ -220,12 +222,14 @@ public class MainActivity extends Activity {
             tPanel(l,"delay_keyboard_panel","BEAT FX",kx,y,controlsW,h);
             seedDelayKeyboard(l,kx,y,controlsW,h);
             double mx=kx+controlsW;
+            templateItem(l,"divider_beatfx_master","divider","",mx-.0015,y,.003,h,"#5C6670");
             seedMaster(l,mx,y,masterW,h,"#46BE78",true);
         } else {
             double revW=w*(tabletPortrait?.37:.43);
             double delayW=w-revW;
             tPanel(l,"reverb_panel","REVERB",x,y,revW,h);
             seedReverb(l,x,y,revW,h,false);
+            templateItem(l,"divider_reverb_delay","divider","",x+revW-.0015,y,.003,h,"#5C6670");
             double dx=x+revW;
             tPanel(l,"delay_panel","DELAY",dx,y,delayW,h*.33);
             tText(l,"delay_title","BEAT EFFECTS",dx+.02*delayW,y+.02*h,.60*delayW,.07*h);
@@ -242,9 +246,9 @@ public class MainActivity extends Activity {
         tText(l,"reverb_title","REVERB",x+.025*w,y+.015*h,.48*w,.07*h);
         tButton(l,"reverb_power","ON",x+.58*w,y+.015*h,.18*w,.065*h);
         String[] names={"SEND","TONE","FEEDBACK"};
-        tKnob(l,"reverb_0",names[0],x+.04*w,y+.10*h,.42*w,.34*h,"#46BE78");
-        tKnob(l,"reverb_1",names[1],x+.53*w,y+.10*h,.42*w,.34*h,"#46BE78");
-        tKnob(l,"reverb_2",names[2],x+.29*w,y+.48*h,.42*w,.30*h,"#46BE78");
+        tKnob(l,"reverb_0",names[0],x+.04*w,y+.12*h,.42*w,.34*h,"#46BE78");
+        tKnob(l,"reverb_1",names[1],x+.53*w,y+.12*h,.42*w,.34*h,"#46BE78");
+        tKnob(l,"reverb_2",names[2],x+.29*w,y+.49*h,.42*w,.28*h,"#46BE78");
         String[] bands={"LOW","MID","HIGH"};
         for(int i=0;i<3;i++) tButton(l,"reverb_band_"+i,bands[i],x+.04*w+i*.31*w,y+.82*h,.28*w,.10*h);
     }
@@ -273,41 +277,36 @@ public class MainActivity extends Activity {
     private void seedTabletPortrait() {
         String l=modes[0];
         seedHeader(l,false);
-
-        // Portrait tablet: keep the same mixer identity as the landscape
-        // reference, but use full-width horizontal band rows so every rotary
-        // remains large and the lower effects area has enough vertical room.
-        seedBandSection(l,"EQ","EQ",.012,.065,.976,.180,
-            new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
-        seedBandSection(l,"ISOLATOR","ISOLATOR",.012,.250,.976,.160,
-            new String[]{"HIGH","MID","LOW"},"#46BE78",false);
-
-        seedFilterSection(l,.012,.415,.478,.145,"#46BE78",false);
-        seedMaster(l,.510,.415,.478,.145,"#46BE78",false);
-
-        // Reverb gets a dedicated full-width row with three equally sized dials.
-        tPanel(l,"reverb_panel","REVERB",.012,.565,.976,.135);
-        tText(l,"reverb_title","REVERB",.035,.567,.24,.045);
-        tButton(l,"reverb_power","ON",.265,.567,.10,.045);
-        String[] rv={"SEND","TONE","FEEDBACK"};
-        for(int i=0;i<3;i++)
-            tKnob(l,"reverb_"+i,rv[i],.025+i*.325,.590,.285,.082,"#46BE78");
-        String[] bands={"LOW","MID","HIGH"};
-        for(int i=0;i<3;i++)
-            tButton(l,"reverb_band_"+i,bands[i],.705+i*.095,.666,.085,.028);
-
-        // BEAT EFFECTS occupies the remaining lower area. Its BPM/beat controls
-        // remain one unified movable/resizable group, as in the other profiles.
-        tPanel(l,"fx_panel","BEAT FX",.012,.705,.976,.285);
-        tPanel(l,"delay_panel","DELAY",.012,.705,.976,.108);
-        tText(l,"delay_title","BEAT EFFECTS",.032,.710,.42,.035);
-        tButton(l,"delay_power","ON",.755,.710,.12,.035);
-        String[] d={"DELAY LEVEL","FEEDBACK","TONE","TIME"};
-        for(int i=0;i<4;i++)
-            tKnob(l,"delay_knob_"+i,d[i],.025+i*.245,.748,.215,.064,"#46BE78");
-        tPanel(l,"delay_keyboard_panel","BEAT FX",.020,.815,.960,.175);
-        seedDelayKeyboard(l,.020,.815,.960,.175);
+        // Build 918 tablet portrait composition: EQ/ISOLATOR above,
+        // FILTER/MASTER in the middle, REVERB/DELAY across the lower band.
+        seedBandSection(l,"EQ","EQ",.012,.055,.478,.315,
+            new String[]{"HIGH","MID","LOW"},"#46BE78",true);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.055,.478,.315,
+            new String[]{"HIGH","MID","LOW"},"#46BE78",true);
+        seedFilterSection(l,.012,.375,.478,.325,"#46BE78",true);
+        seedMaster(l,.510,.375,.478,.325,"#46BE78",false);
+        seedEffects(l,.012,.710,.976,.280,true,false,false);
     }
+
+    // Independent S25 portrait pop-up workspace. Its initial contents are
+    // copied from the current tablet-portrait profile, then edited separately.
+    private void ensurePopupProfileSeeded() {
+        final String flag = "frequalizer_s25_portrait_popup_seeded_v1";
+        if (getPreferences(0).getBoolean(flag, false)) return;
+        try {
+            layouts.put(modes[4], new JSONArray(layouts.get(modes[0]).toString()));
+            JSONArray main = layouts.get(modes[2]);
+            boolean hasButton=false;
+            for(int i=0;i<main.length();i++) {
+                JSONObject item=main.optJSONObject(i);
+                if(item!=null && "popup_open_button".equals(item.optString("id"))) { hasButton=true; break; }
+            }
+            if(!hasButton) templateItem(modes[2],"popup_open_button","button","POP UP",.735,.010,.145,.038,"#FFCD00");
+            getPreferences(0).edit().putBoolean(flag,true).apply();
+            saveLocal();
+        } catch(Exception ignored) {}
+    }
+
     private void migrateTabletPortraitLayout() {
         // Rebuild only the tablet-portrait profile once. Preserve the user's
         // horizontal tablet and both S25 profiles exactly as they are.
@@ -326,11 +325,12 @@ public class MainActivity extends Activity {
     }
     private void seedPhonePortrait() {
         String l=modes[2]; seedHeader(l,true);
-        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID HIGH","MID LOW","LOW"},"#46BE78",false);
-        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
-        seedFilterSection(l,.012,.505,.235,.475,"#46BE78",false);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",true);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",true);
+        seedFilterSection(l,.012,.505,.235,.475,"#46BE78",true);
         seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
         seedEffects(l,.500,.505,.488,.475,false,false,false);
+        templateItem(l,"popup_open_button","button","POP UP",.735,.010,.145,.038,"#FFCD00");
     }
     private void seedPhoneLandscape() {
         String l=modes[3]; seedHeader(l,true);
@@ -475,7 +475,13 @@ public class MainActivity extends Activity {
     }
     private boolean validateProject(JSONObject project) {
         if(project==null || !"FREQUALIZER Layout Designer".equals(project.optString("project"))) return false;
-        for(String profile:modes) { JSONArray a=project.optJSONArray(profile); if(a==null || a.length()==0) return false;
+        for(int profileIndex=0;profileIndex<modes.length;profileIndex++) {
+            String profile=modes[profileIndex];
+            JSONArray a=project.optJSONArray(profile);
+            // Four-profile Build 51 records remain importable; the new popup
+            // profile is initialized from tablet portrait when it is absent.
+            if(a==null && profileIndex==4) continue;
+            if(a==null || a.length()==0) return false;
             for(int i=0;i<a.length();i++) { JSONObject item=a.optJSONObject(i);
                 if(item==null || !item.has("id") || !item.has("type") || !item.has("x") || !item.has("y") || !item.has("w") || !item.has("h")) return false;
                 if(Double.isNaN(item.optDouble("x",Double.NaN)) || Double.isNaN(item.optDouble("y",Double.NaN)) || Double.isNaN(item.optDouble("w",Double.NaN)) || Double.isNaN(item.optDouble("h",Double.NaN))) return false;
@@ -487,7 +493,12 @@ public class MainActivity extends Activity {
             .setMessage("Il record contiene tutti e quattro i profili. Vuoi sostituire il progetto attualmente aperto? Puoi annullare senza perdere nulla.")
             .setNegativeButton("ANNULLA",(dialog,which)->{})
             .setPositiveButton("IMPORTA",(dialog,which)->{ try {
-                for(String profile:modes) layouts.put(profile,new JSONArray(project.getJSONArray(profile).toString()));
+                for(int profileIndex=0;profileIndex<modes.length;profileIndex++) {
+                    String profile=modes[profileIndex];
+                    JSONArray imported=project.optJSONArray(profile);
+                    if(imported!=null) layouts.put(profile,new JSONArray(imported.toString()));
+                    else if(profileIndex==4) layouts.put(profile,new JSONArray(project.getJSONArray(modes[0]).toString()));
+                }
                 undoHistory.clear(); if(editor!=null){editor.selected=-1;editor.editUnlocked=false;editor.invalidate();}
                 saveLocal(); Toast.makeText(this,"Progetto importato correttamente",Toast.LENGTH_LONG).show();
             } catch(Exception e) { Toast.makeText(this,"Importazione non riuscita",Toast.LENGTH_LONG).show(); } }).show();
@@ -561,7 +572,7 @@ public class MainActivity extends Activity {
                     p.setColor(color);p.setTextSize(Math.max(dp*5.5f,valueSize));
                     c.drawText(valueText,cx,y+hh-dp*4f,p);
                     p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);
-                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("fader")){float cy=y+hh/2f;p.setColor(Color.rgb(75,85,95));p.setStrokeWidth(Math.max(2f,hh*.12f));p.setStrokeCap(Paint.Cap.ROUND);c.drawLine(x+ww*.06f,cy,x+ww*.94f,cy,p);p.setColor(color);p.setStrokeWidth(Math.max(2f,hh*.16f));c.drawLine(x+ww*.06f,cy,x+ww*.50f,cy,p);p.setStyle(Paint.Style.FILL);p.setColor(Color.WHITE);c.drawCircle(x+ww*.50f,cy,Math.max(3f,hh*.34f),p);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{
+                }else if(type.equals("text")){p.setColor(color);p.setTextSize(Math.max(12,hh*.55f));boolean title=o.optString("id").endsWith("_title")||o.optString("id").equals("master_title");p.setTypeface(title?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);c.drawText(o.optString("text"),x,y+hh*.7f,p);p.setTypeface(Typeface.DEFAULT);}else if(type.equals("fader")){float cy=y+hh/2f;p.setColor(Color.rgb(75,85,95));p.setStrokeWidth(Math.max(2f,hh*.12f));p.setStrokeCap(Paint.Cap.ROUND);c.drawLine(x+ww*.06f,cy,x+ww*.94f,cy,p);p.setColor(color);p.setStrokeWidth(Math.max(2f,hh*.16f));c.drawLine(x+ww*.06f,cy,x+ww*.50f,cy,p);p.setStyle(Paint.Style.FILL);p.setColor(Color.WHITE);c.drawCircle(x+ww*.50f,cy,Math.max(3f,hh*.34f),p);}else if(type.equals("divider")){p.setColor(color);p.setStrokeWidth(Math.max(1f,Math.min(ww,hh)*.20f));p.setStrokeCap(Paint.Cap.BUTT);c.drawLine(x+ww/2f,y+hh*.02f,x+ww/2f,y+hh*.98f,p);}else if(type.equals("panel")){/* Layout group: original FREQUALIZER sections have no filled card background. */}else{
                     String id=o.optString("id"),label=o.optString("text");
                     p.setStyle(Paint.Style.FILL);
                     if(id.equals("options")){
