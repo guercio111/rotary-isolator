@@ -1049,7 +1049,6 @@ private val s25PopupRecord = listOf(
             val canvas = FrameLayout(this).apply { clipChildren = false; clipToPadding = false }
             content.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
             addS25RecordElements(canvas, s25PopupRecord, titleBar)
-        }
         // Tablet portrait gets a dedicated vertical composition. Landscape and phone
         // layouts retain the established four-quadrant structure unchanged.
         } else if (!phonePortrait && !wideLayout) {
