@@ -903,7 +903,7 @@ class MainActivity : Activity() {
             "delay_tap"->b.setOnClickListener{autoBpmEnabled=false;delayBpm=registerDelayTap();save();scheduleUpdate()}
             "delay_auto"->{state(autoBpmEnabled);b.setOnClickListener{autoBpmEnabled=!autoBpmEnabled;state(autoBpmEnabled);if(autoBpmEnabled){autoPhaseSynced=false;validatedBeatEngine.reset();bpmLastBeatIndex=Long.MIN_VALUE;autoBpmNextBeatMs=0L;delaySyncOffsetMs=0f};refreshS25RecordButtons();save();if(autoBpmEnabled)updateEffectsCapture(true)}}
             "delay_lock"->{state(delayClockLocked);b.setOnClickListener{if(!delayClockLocked&&validatedBeatEngine.getPeriodMs()<=0.0){bpmReadout?.text="ATTENDI BPM";return@setOnClickListener};delayClockLocked=!delayClockLocked;validatedBeatEngine.setClockLocked(delayClockLocked);if(delayClockLocked){autoPhaseSynced=true;delayBpm=validatedBeatEngine.getClockBpm().coerceIn(60f,180f)};state(delayClockLocked);refreshS25RecordButtons();save();scheduleUpdate()}}
-            "delay_back","delay_forward"->b.setOnClickListener{phaseNudge(if(e.id=="delay_back")-1f else 1f)}
+            "delay_back","delay_forward"->b.setOnClickListener{nudgeStablePhase(if(e.id=="delay_back")-1f else 1f)}
             "delay_align"->b.setOnClickListener{val now=android.os.SystemClock.elapsedRealtime();validatedBeatEngine.sync(now);val phase=validatedBeatEngine.getPhaseMs();val period=validatedBeatEngine.getPeriodMs();if(phase>0L&&period>0.0){autoBpmNextBeatMs=phase+period.toLong();bpmLastBeatIndex=Long.MIN_VALUE;delaySyncOffsetMs=0f;autoPhaseSynced=true;save();scheduleUpdate()}else{bpmReadout?.text="ATTENDI BPM STABILE"}}
             "delay_skip"->b.setOnClickListener{val period=validatedBeatEngine.getPeriodMs();if(period>0.0){val stepMs=(period*.5).toFloat();validatedBeatEngine.nudgePhase(stepMs);delaySyncOffsetMs=(delaySyncOffsetMs+stepMs).coerceIn(-250f,250f);autoBpmNextBeatMs=validatedBeatEngine.getPhaseMs()+period.toLong();scheduleUpdate()}}
             "delay_rst"->b.setOnClickListener{delayBpmCorrection=0f;validatedBeatEngine.setPitchPercent(0f);delayClockLocked=false;validatedBeatEngine.setClockLocked(false);validatedBeatEngine.sync(android.os.SystemClock.elapsedRealtime());delaySyncOffsetMs=0f;fxPhaseOffsetMs=0f;autoPhaseSynced=false;bpmLastBeatIndex=Long.MIN_VALUE;delayBpm=validatedBeatEngine.getClockBpm().takeIf{it>0f}?.coerceIn(60f,180f)?:delayBpm;refreshS25RecordButtons();save();scheduleUpdate()}
@@ -1699,6 +1699,17 @@ private val s25PopupRecord = listOf(
                 }
             }
         }
+    }
+
+    private fun nudgeStablePhase(direction: Float) {
+        val period = validatedBeatEngine.getPeriodMs()
+        if (period <= 0.0) return
+        // Keep the S25 clock and the audible delay tap on the same phase reference.
+        val stepMs = (-period * direction / 64.0).toFloat()
+        validatedBeatEngine.nudgePhase(stepMs)
+        delaySyncOffsetMs = (delaySyncOffsetMs + stepMs).coerceIn(-250f, 250f)
+        autoBpmNextBeatMs = validatedBeatEngine.getPhaseMs() + period.toLong()
+        scheduleUpdate()
     }
 
     private fun paintAutoBpmButton() {
