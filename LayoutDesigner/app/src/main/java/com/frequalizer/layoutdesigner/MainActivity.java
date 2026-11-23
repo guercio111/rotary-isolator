@@ -43,6 +43,7 @@ public class MainActivity extends Activity {
         ensureDelayKeyboardGroups();
         ensureBeatBpmGroup();
         ensurePopupProfileSeeded();
+        migrateEqToFourBands();
         constrainLayoutsToCanvas();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -331,7 +332,7 @@ public class MainActivity extends Activity {
         // Build 918 tablet portrait composition: EQ/ISOLATOR above,
         // FILTER/MASTER in the middle, REVERB/DELAY across the lower band.
         seedBandSection(l,"EQ","EQ",.012,.055,.478,.315,
-            new String[]{"HIGH","MID","LOW"},"#46BE78",true);
+            new String[]{"LOW","MID LOW","MID HIGH","HIGH"},"#46BE78",true);
         seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.055,.478,.315,
             new String[]{"HIGH","MID","LOW"},"#46BE78",true);
         seedFilterSection(l,.012,.375,.478,.325,"#46BE78",true);
@@ -348,6 +349,56 @@ public class MainActivity extends Activity {
             layouts.put(modes[4], new JSONArray(layouts.get(modes[0]).toString()));
             // The pop-up is selected as its own workspace in the profile chooser.
             // The production app will expose its launcher button when the record is integrated.
+            getPreferences(0).edit().putBoolean(flag,true).apply();
+            saveLocal();
+        } catch(Exception ignored) {}
+    }
+
+    // One-time migration: EQ is always four-band; ISOLATOR remains three-band.
+    // Rebuild only EQ band controls inside each existing EQ panel, preserving
+    // all other profile elements and the user's panel geometry.
+    private void migrateEqToFourBands() {
+        final String flag = "frequalizer_eq_four_bands_v1";
+        if (getPreferences(0).getBoolean(flag, false)) return;
+        try {
+            String[] bands = {"LOW", "MID LOW", "MID HIGH", "HIGH"};
+            for (String layoutName : modes) {
+                JSONArray old = layouts.get(layoutName);
+                JSONObject panel = null;
+                for (int i=0;i<old.length();i++) {
+                    JSONObject o=old.optJSONObject(i);
+                    if(o!=null && "EQ_panel".equals(o.optString("id"))) { panel=o; break; }
+                }
+                if(panel==null) continue;
+                double x=panel.optDouble("x"), y=panel.optDouble("y");
+                double w=panel.optDouble("w"), h=panel.optDouble("h");
+                JSONArray kept=new JSONArray();
+                for(int i=0;i<old.length();i++) {
+                    JSONObject o=old.optJSONObject(i);
+                    if(o==null) continue;
+                    String id=o.optString("id");
+                    boolean eqBand=id.matches("EQ_(label|knob|return|flat)_\\\\d+");
+                    if(!eqBand) kept.put(o);
+                }
+                layouts.put(layoutName,kept);
+                boolean portrait=layoutName.equals(modes[0]) || layoutName.equals(modes[2]) || layoutName.equals(modes[4]);
+                double head=.18, rowH=.79/bands.length;
+                for(int i=0;i<bands.length;i++) {
+                    double ry=y+h*(head+i*rowH);
+                    if(portrait) {
+                        tText(layoutName,"EQ_label_"+i,bands[i],x+.025*w,ry,.23*w,rowH*h*.72);
+                        tKnob(layoutName,"EQ_knob_"+i,bands[i],x+.28*w,ry+.02*rowH*h,.31*w,rowH*h*.76,"#46BE78");
+                        tButton(layoutName,"EQ_return_"+i,"↶",x+.66*w,ry+.17*rowH*h,.105*w,rowH*h*.54);
+                        tButton(layoutName,"EQ_flat_"+i,"F",x+.79*w,ry+.17*rowH*h,.15*w,rowH*h*.54);
+                    } else {
+                        double bandW=w/bands.length, bx=x+i*bandW;
+                        tText(layoutName,"EQ_label_"+i,bands[i],bx, y+h*.18,.95*bandW,.12*h);
+                        tKnob(layoutName,"EQ_knob_"+i,bands[i],bx+.05*bandW,y+.31*h,.88*bandW,.42*h,"#46BE78");
+                        tButton(layoutName,"EQ_return_"+i,"↶",bx+.17*bandW,y+.77*h,.25*bandW,.12*h);
+                        tButton(layoutName,"EQ_flat_"+i,"F",bx+.53*bandW,y+.77*h,.25*bandW,.12*h);
+                    }
+                }
+            }
             getPreferences(0).edit().putBoolean(flag,true).apply();
             saveLocal();
         } catch(Exception ignored) {}
@@ -379,23 +430,23 @@ public class MainActivity extends Activity {
     }
     private void seedTabletLandscape() {
         String l=modes[1]; seedHeader(l,false);
-        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"LOW","MID LOW","MID HIGH","HIGH"},"#46BE78",false);
         seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
         seedFilterSection(l,.012,.505,.19,.475,"#46BE78",true);
         seedEffects(l,.205,.505,.783,.475,false,true,false);
     }
     private void seedPhonePortrait() {
         String l=modes[2]; seedHeader(l,true);
-        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",true);
-        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",true);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"LOW","MID LOW","MID HIGH","HIGH"},"#46BE78",true);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"LOW","MID LOW","MID HIGH","HIGH"},"#46BE78",true);
         seedFilterSection(l,.012,.505,.235,.475,"#46BE78",true);
         seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
         seedEffects(l,.500,.505,.488,.475,false,false,false);
     }
     private void seedPhoneLandscape() {
         String l=modes[3]; seedHeader(l,false);
-        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
-        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"HIGH","MID","LOW"},"#46BE78",false);
+        seedBandSection(l,"EQ","EQ",.012,.065,.478,.425,new String[]{"LOW","MID LOW","MID HIGH","HIGH"},"#46BE78",false);
+        seedBandSection(l,"ISOLATOR","ISOLATOR",.510,.065,.478,.425,new String[]{"LOW","MID LOW","MID HIGH","HIGH"},"#46BE78",false);
         seedFilterSection(l,.012,.505,.235,.475,"#46BE78",false);
         seedMaster(l,.255,.505,.235,.475,"#46BE78",false);
         seedEffects(l,.500,.505,.488,.475,false,false,false);
