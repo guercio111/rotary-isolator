@@ -259,7 +259,7 @@ public class MainActivity extends Activity {
             double revW=w*.25, delayHeaderW=w*.25, controlsW=w*.30, masterW=w*.20;
             tPanel(l,"reverb_panel","REVERB",x,y,revW,h);
             seedReverb(l,x,y,revW,h,true);
-            templateItem(l,"divider_reverb_delay","divider","",x+revW-.0015,y,.003,h,"#5C6670");
+            templateItem(l,"divider_reverb_delay","divider","",x+revW-.0015,y,.0015,h,"#D95C6670");
             double dx=x+revW;
             tPanel(l,"delay_panel","DELAY",dx,y,delayHeaderW,h);
             tText(l,"delay_title","BEAT EFFECTS",dx+.02*delayHeaderW,y+.02*h,.60*delayHeaderW,.07*h);
@@ -273,14 +273,14 @@ public class MainActivity extends Activity {
             tPanel(l,"delay_keyboard_panel","BEAT FX",kx,y,controlsW,h);
             seedDelayKeyboard(l,kx,y,controlsW,h);
             double mx=kx+controlsW;
-            templateItem(l,"divider_beatfx_master","divider","",mx-.0015,y,.003,h,"#5C6670");
+            templateItem(l,"divider_beatfx_master","divider","",mx-.0015,y,.0015,h,"#D95C6670");
             seedMaster(l,mx,y,masterW,h,"#46BE78",true);
         } else {
             double revW=w*(tabletPortrait?.37:.43);
             double delayW=w-revW;
             tPanel(l,"reverb_panel","REVERB",x,y,revW,h);
             seedReverb(l,x,y,revW,h,false);
-            templateItem(l,"divider_reverb_delay","divider","",x+revW-.0015,y,.003,h,"#5C6670");
+            templateItem(l,"divider_reverb_delay","divider","",x+revW-.0015,y,.0015,h,"#D95C6670");
             double dx=x+revW;
             tPanel(l,"delay_panel","DELAY",dx,y,delayW,h*.33);
             tText(l,"delay_title","BEAT EFFECTS",dx+.02*delayW,y+.02*h,.60*delayW,.07*h);
