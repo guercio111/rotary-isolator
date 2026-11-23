@@ -1625,7 +1625,7 @@ private val s25PopupRecord = listOf(
         bpmAnalyzerOn = false
         bpmButton?.text = "BPM START"
         bpmButton?.background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(6).toFloat(); setColor(Color.rgb(38,105,70)); setStroke(dp(1), colorDelay) }
-        bpmReadout?.text = String.format(java.util.Locale.US,"%.1f BPM",delayBpm)
+        bpmReadout?.text = "— BPM"
         bpmBeat?.setTextColor(Color.rgb(75,85,95))
         if (!captureNeeded()) stopAudioCaptureTest()
     }
@@ -3325,7 +3325,7 @@ private val s25PopupRecord = listOf(
                 for(i in 0 until eqCount){
                     val valueIndex = if(eqDoubleMid) listOf(0,1,3,2)[i] else i
                     var eqGain=if(eqOn && eqControlOn[valueIndex])eq[valueIndex].coerceIn(-14f,14f) else 0f
-                    val hpfActive = filters[0]>.01f
+                    val hpfActive = filtersOn && filters[0]>.01f
                     if(hpfActive && valueIndex==0) {
                         // Keep the original EQ layout, but turn its LOW band into
                         // a cutoff-tracking resonant peak while HPF resonance is raised.
@@ -3345,10 +3345,10 @@ private val s25PopupRecord = listOf(
                     fx.setPostEqBandByChannelIndex(ch,i,DynamicsProcessing.EqBand(true,isoFreqs[i],isoGain))
                 }
             }
-            // LOUDNESS is bypassed at zero.
-            val loudnessLevel=if(loudnessOn) loudness.coerceIn(0f,100f)/100f else 0f
-            val masterLow=if(loudnessLevel>0f)loudnessLevel*12f else 0f
-            val masterHigh=if(loudnessLevel>0f)loudnessLevel*8f else 0f
+            // Restore the stable tablet master tone: independent BASS BOOST and LOUDNESS contributions.
+            val bassBoostDb = 8f * (bassBoost.coerceIn(0f,100f)/100f).pow(1.4f)
+            val masterLow=(if(bassBoostOn)bassBoostDb else 0f)+(if(loudnessOn)loudness/100f*12f else 0f)
+            val masterHigh=if(loudnessOn)loudness/100f*8f else 0f
             for(ch in 0..1){
                 val lowCeiling = if (isoLimiterOn) 0f else 24f
                 val midHighCeiling = if (isoLimiterOn) 6f else 24f
@@ -3380,7 +3380,7 @@ private val s25PopupRecord = listOf(
                 val lim=DynamicsProcessing.Limiter(true,true,0,5f,80f,20f,-1f,0f)
                 fx.setLimiterAllChannelsTo(lim)
             }
-            fx.enabled=appEnabled && (eqOn||isoOn||filters[0]>.01f||resonance>.001f||abs(gain)>.01f||limiterOn||(loudnessOn && loudness>0.001f)||compActive)
+            fx.enabled=appEnabled && (eqOn||isoOn||filtersOn||abs(gain)>.01f||limiterOn||bassBoostOn||loudnessOn||compressorOn)
 
             val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
             runOnUiThread { if(::status.isInitialized) status.text=message }
