@@ -3221,9 +3221,12 @@ private class RotaryControl(
         p.textAlign=Paint.Align.CENTER
         val titleSize=min(dp(11f*labelScale),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
         p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
-        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)25f else 17f)+bottomTextLift),p)}
+        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)28f else 20f)+bottomTextLift),p)}
         val value=valueText()
-        p.color=accent;p.textSize=min(dp(10f*labelScale),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
+        // Keep the lower text baseline safely above the view edge. This margin
+        // prevents descenders and anti-aliased glyphs from being clipped when
+        // the MASTER rotary controls are resized in the layout designer.
+        p.color=accent;p.textSize=min(dp(10f*labelScale),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)10f else 10f)+bottomTextLift),p)
     }
     fun setValueExternally(value:Float) {
         v = quantize(value)

@@ -25,6 +25,10 @@ class LayoutDesignerOverlay(
 ) : FrameLayout(context) {
     private val density = resources.displayMetrics.density
     private val prefix = "layout_designer_" + profile + "_"
+    private val deletedPrefix = "layout_designer_deleted_" + profile + "_"
+    private val initialVisibility = HashMap<View, Int>()
+    private data class ViewState(val x: Float, val y: Float, val sx: Float, val sy: Float, val visibility: Int)
+    private val undoHistory = java.util.ArrayDeque<Map<View, ViewState>>()
     private var selected: View? = null
     private val selectedViews = ArrayList<View>()
     private var moving: View? = null
@@ -77,6 +81,8 @@ class LayoutDesignerOverlay(
         action("SALVA") { saveAll(); Toast.makeText(context, "Layout salvato", Toast.LENGTH_SHORT).show() }
         action("RIPRISTINA") { resetAll(); Toast.makeText(context, "Layout originale ripristinato", Toast.LENGTH_SHORT).show() }
         action("GRUPPO") { selectParentGroup() }
+        action("X") { deleteSelected() }
+        action("ANNULLA") { undoLast() }
         action("SNAP 8dp") {
             snapEnabled = !snapEnabled
             Toast.makeText(context, if (snapEnabled) "Aggancio griglia attivo (8 dp)" else "Aggancio griglia disattivato", Toast.LENGTH_SHORT).show()
@@ -84,6 +90,13 @@ class LayoutDesignerOverlay(
         action("FINE") { saveAll(); onExit() }
         // Keep the action bar away from the lower resize handles and content.
         addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (48*density).toInt(), Gravity.TOP))
+        walk(targetRoot, "") { v, _ ->
+            if (v !== targetRoot) {
+                initialVisibility[v] = v.visibility
+                (v as? ViewGroup)?.let { it.clipChildren = false; it.clipToPadding = false }
+            }
+        }
+        (targetRoot as? ViewGroup)?.let { it.clipChildren = false; it.clipToPadding = false }
         applySaved()
     }
 
@@ -131,6 +144,7 @@ class LayoutDesignerOverlay(
                     marqueeStartX=x; marqueeStartY=y; marqueeX=x; marqueeY=y
                     moving=null; resizing=false; moveOrigins.clear()
                 } else if (alreadySelected) {
+                    pushUndo()
                     moving = if (selectedViews.size == 1) selectedViews.first() else null
                     val current = moving
                     resizing = false
@@ -201,6 +215,53 @@ class LayoutDesignerOverlay(
             }
         }
         return true
+    }
+
+    private fun pushUndo() {
+        val snapshot = LinkedHashMap<View, ViewState>()
+        walk(targetRoot, "") { v, _ ->
+            if (v !== targetRoot) snapshot[v] = ViewState(v.translationX, v.translationY, v.scaleX, v.scaleY, v.visibility)
+        }
+        undoHistory.addLast(snapshot)
+        while (undoHistory.size > 30) undoHistory.removeFirst()
+    }
+
+    private fun undoLast() {
+        if (undoHistory.isEmpty()) {
+            Toast.makeText(context, "Nessuna modifica da annullare", Toast.LENGTH_SHORT).show()
+            return
+        }
+        undoHistory.removeLast().forEach { (v, state) ->
+            v.translationX = state.x
+            v.translationY = state.y
+            v.scaleX = state.sx
+            v.scaleY = state.sy
+            v.visibility = state.visibility
+        }
+        saveAll()
+        selectedViews.clear()
+        selected = null
+        moving = null
+        resizing = false
+        invalidate()
+        Toast.makeText(context, "Ultima modifica annullata", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun deleteSelected() {
+        val targets = selectedViews.toList().ifEmpty { listOfNotNull(selected) }
+        if (targets.isEmpty()) {
+            Toast.makeText(context, "Seleziona prima un elemento", Toast.LENGTH_SHORT).show()
+            return
+        }
+        pushUndo()
+        targets.forEach { it.visibility = View.INVISIBLE }
+        saveAll()
+        selectedViews.clear()
+        selected = null
+        moving = null
+        resizing = false
+        invalidate()
+        Toast.makeText(context, if (targets.size == 1) "Elemento rimosso" else "${targets.size} elementi rimossi", Toast.LENGTH_SHORT).show()
     }
 
     private fun resizeSnapped(v: View, dx: Float, dy: Float) {
@@ -350,6 +411,9 @@ class LayoutDesignerOverlay(
                 if (v.translationX!=0f || v.translationY!=0f || v.scaleX!=1f || v.scaleY!=1f)
                     editor.putString(k,listOf(v.translationX,v.translationY,v.scaleX,v.scaleY).joinToString(","))
                 else editor.remove(k)
+                val baseline = initialVisibility[v] ?: View.VISIBLE
+                if (v.visibility != baseline) editor.putBoolean(deletedPrefix+key, v.visibility == View.INVISIBLE || v.visibility == View.GONE)
+                else editor.remove(deletedPrefix+key)
             }
         }
         editor.apply()
@@ -357,6 +421,10 @@ class LayoutDesignerOverlay(
 
     private fun applySaved() {
         walk(targetRoot,"") { v,key ->
+            if (v !== targetRoot) {
+                val baseline = initialVisibility[v] ?: v.visibility
+                v.visibility = if (preferences.getBoolean(deletedPrefix+key, false)) View.INVISIBLE else baseline
+            }
             val raw=preferences.getString(prefix+key,null) ?: return@walk
             val a=raw.split(",").mapNotNull { it.toFloatOrNull() }
             if (a.size==4) { v.translationX=a[0]; v.translationY=a[1]; v.scaleX=a[2].coerceIn(0.45f,2.5f); v.scaleY=a[3].coerceIn(0.45f,2.5f) }
@@ -364,10 +432,16 @@ class LayoutDesignerOverlay(
     }
 
     private fun resetAll() {
+        pushUndo()
         val editor=preferences.edit()
-        preferences.all.keys.filter { it.startsWith(prefix) }.forEach { editor.remove(it) }
+        preferences.all.keys.filter { it.startsWith(prefix) || it.startsWith(deletedPrefix) }.forEach { editor.remove(it) }
         editor.apply()
-        walk(targetRoot,"") { v,_ -> if (v !== targetRoot) { v.translationX=0f; v.translationY=0f; v.scaleX=1f; v.scaleY=1f } }
+        walk(targetRoot,"") { v,_ ->
+            if (v !== targetRoot) {
+                v.translationX=0f; v.translationY=0f; v.scaleX=1f; v.scaleY=1f
+                v.visibility=initialVisibility[v] ?: View.VISIBLE
+            }
+        }
         selected=null; selectedViews.clear(); moving=null; marqueeSelecting=false; marqueeActive=false; invalidate()
     }
 }
