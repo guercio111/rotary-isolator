@@ -176,7 +176,7 @@ class LayoutDesignerOverlay(
         val editor=preferences.edit()
         preferences.all.keys.filter { it.startsWith(prefix) }.forEach { editor.remove(it) }
         editor.apply()
-        walk(targetRoot,"") { v,_ -> v.translationX=0f; v.translationY=0f; v.scaleX=1f; v.scaleY=1f }
+        walk(targetRoot,"") { v,_ -> if (v !== targetRoot) { v.translationX=0f; v.translationY=0f; v.scaleX=1f; v.scaleY=1f } }
         selected=null; invalidate()
     }
 }
