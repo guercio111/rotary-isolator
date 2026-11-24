@@ -247,7 +247,7 @@ class LayoutDesignerOverlay(
                         val isStillSelected = selectedViews.any { it === hit || isDescendant(hit, it) }
                         if (isStillSelected) {
                             // Tap a selected item to remove it from the multi-selection.
-                            selectedViews.removeAll { it === hit || isDescendant(it, hit) }
+                            selectedViews.removeAll { it === hit || isDescendant(it, hit) || isDescendant(hit, it) }
                         } else {
                             // Additional center taps add items to the current selection.
                             selectedViews.removeAll { isDescendant(it, hit) }
