@@ -18,7 +18,7 @@ import kotlin.math.max
 /** Visual editor for existing tablet views; audio controls and listeners are never replaced. */
 class LayoutDesignerOverlay(
     context: Context,
-    private val targetRoot: View,
+    private val targetRoot: ViewGroup,
     private val preferences: SharedPreferences,
     private val profile: String,
     private val onExit: () -> Unit
