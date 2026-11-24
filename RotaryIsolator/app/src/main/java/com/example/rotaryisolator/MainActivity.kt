@@ -3289,6 +3289,7 @@ private class RotaryControl(
         (titleLabel.layoutParams as FrameLayout.LayoutParams).also{it.height=titleHeight;it.topMargin=titleTop;titleLabel.layoutParams=it}
         (valueLabel.layoutParams as FrameLayout.LayoutParams).also{it.height=valueHeight;it.topMargin=valueTop;valueLabel.layoutParams=it}
     }
+    override fun setEnabled(enabled:Boolean){super.setEnabled(enabled);dialFace.isEnabled=enabled;titleLabel.isEnabled=enabled;valueLabel.isEnabled=enabled}
     override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);updateLabelLayout()}
     fun setValueExternally(value:Float){v=quantize(value);dialFace.invalidate();refreshValueLabel()}
     private fun quantize(value:Float):Float{
