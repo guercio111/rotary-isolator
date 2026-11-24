@@ -2294,19 +2294,26 @@ class MainActivity : Activity() {
             val gainKnob=RotaryControl(this,"GAIN",gain,-12f,12f,colorMaster,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compKnob=RotaryControl(this,"COMP",compMakeup,0f,100f,colorMaster,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val loudKnob=RotaryControl(this,"LOUDNESS",loudness,0f,100f,colorMaster,{v->loudness=v.coerceIn(0f,100f);scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-            fun masterKnobWithSwitch(knob: View, isOn: () -> Boolean, setOn: (Boolean) -> Unit): View {
+            fun masterKnobWithSwitch(knob: View, selectionTag: String, isOn: () -> Boolean, setOn: (Boolean) -> Unit): View {
                 val frame = FrameLayout(this)
                 frame.addView(knob, FrameLayout.LayoutParams(-1, -1))
-                val dot = View(this)
+                // The visible 14dp status dot sits inside a larger 30dp editor hit target.
+                // This keeps the on-screen appearance unchanged while making it easy to select.
+                val dot = FrameLayout(this).apply {
+                    tag = selectionTag
+                    isClickable = true
+                    isFocusable = true
+                    contentDescription = if (isOn()) "ON" else "OFF"
+                }
+                val indicator = View(this)
                 fun refreshDot() {
-                    dot.background = android.graphics.drawable.GradientDrawable().apply {
+                    indicator.background = android.graphics.drawable.GradientDrawable().apply {
                         shape = android.graphics.drawable.GradientDrawable.OVAL
                         setColor(if (isOn()) Color.rgb(40, 220, 90) else Color.rgb(225, 45, 45))
                         setStroke(dp(1), Color.WHITE)
                     }
                 }
                 refreshDot()
-                dot.contentDescription = if (isOn()) "COMPRESSOR ON" else "COMPRESSOR OFF"
                 dot.setOnClickListener {
                     setOn(!isOn())
                     refreshDot()
@@ -2314,14 +2321,15 @@ class MainActivity : Activity() {
                     save()
                     scheduleUpdate()
                 }
-                frame.addView(dot, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                    leftMargin = dp(44)
-                    bottomMargin = dp(25)
+                dot.addView(indicator, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.CENTER))
+                frame.addView(dot, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                    leftMargin = dp(36)
+                    bottomMargin = dp(17)
                 })
                 return frame
             }
-            val compSlot = masterKnobWithSwitch(compKnob, { compressorOn }) { compressorOn = it }
-            val loudSlot = masterKnobWithSwitch(loudKnob, { loudnessOn }) { loudnessOn = it }
+            val compSlot = masterKnobWithSwitch(compKnob, "designer_selectable_comp_dot", { compressorOn }) { compressorOn = it }
+            val loudSlot = masterKnobWithSwitch(loudKnob, "designer_selectable_loud_dot", { loudnessOn }) { loudnessOn = it }
             masterColumn.addView(gainKnob, LinearLayout.LayoutParams(-1, 0, 1f))
             masterColumn.addView(compSlot, LinearLayout.LayoutParams(-1, 0, 1f))
             masterColumn.addView(loudSlot, LinearLayout.LayoutParams(-1, 0, 1f))
