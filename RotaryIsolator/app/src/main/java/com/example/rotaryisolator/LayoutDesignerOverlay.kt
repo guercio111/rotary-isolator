@@ -50,6 +50,7 @@ class LayoutDesignerOverlay(
     private var moveBoundsLeft = 0f
     private var moveBoundsTop = 0f
     private var resizing = false
+    private var rightButtonMoving = false
     private var resizeLeft = false
     private var resizeRight = false
     private var resizeTop = false
@@ -181,23 +182,38 @@ class LayoutDesignerOverlay(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val hit = findHit(targetRoot,x,y)
+                val rightButton = (event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0
                 val alreadySelected = hit != null && selectedViews.any { it === hit || isDescendant(hit,it) }
                 if (hit == null) {
                     marqueeSelecting = true; marqueeActive = false
                     marqueeStartX=x; marqueeStartY=y; marqueeX=x; marqueeY=y
-                    moving=null; resizing=false; moveOrigins.clear()
+                    moving=null; resizing=false; rightButtonMoving=false; moveOrigins.clear()
+                } else if (rightButton) {
+                    // Right mouse button is reserved for moving the selected element.
+                    if (!alreadySelected) {
+                        selectedViews.clear(); selectedViews.add(hit); selected=hit
+                    }
+                    pushUndo()
+                    moving = if (selectedViews.size == 1) selectedViews.first() else null
+                    resizing = false; rightButtonMoving = moving != null
+                    moveOrigins.clear()
+                    selectedViews.forEach { moveOrigins[it]=it.translationX to it.translationY }
+                    val bounds = selectionBounds(selectedViews)
+                    moveBoundsLeft=bounds?.left ?: x; moveBoundsTop=bounds?.top ?: y
+                    gestureStartX=x; gestureStartY=y
                 } else if (alreadySelected) {
                     pushUndo()
                     moving = if (selectedViews.size == 1) selectedViews.first() else null
-                    val current = moving
+                    rightButtonMoving = false
                     resizing = false
+                    val current = moving
                     if (current != null) {
                         val p = IntArray(2); current.getLocationOnScreen(p)
                         val left=p[0].toFloat(); val top=p[1].toFloat()
                         val right=left+current.width*current.scaleX
                         val bottom=top+current.height*current.scaleY
-                        val edgeX=minOf(22f*density,current.width*current.scaleX*0.25f)
-                        val edgeY=minOf(22f*density,current.height*current.scaleY*0.25f)
+                        val edgeX=minOf(26f*density,current.width*current.scaleX*0.30f)
+                        val edgeY=minOf(26f*density,current.height*current.scaleY*0.30f)
                         val isDivider=(current.tag as? String)?.startsWith("designer_divider_")==true
                         resizeLeft=!isDivider && x<=left+edgeX
                         resizeRight=!isDivider && x>=right-edgeX
@@ -205,6 +221,8 @@ class LayoutDesignerOverlay(
                         resizeBottom=!isDivider && y>=bottom-edgeY
                         resizing=resizeLeft||resizeRight||resizeTop||resizeBottom
                     }
+                    // Left-button dragging on the body no longer moves the element.
+                    if (!resizing) moving = null
                     moveOrigins.clear()
                     selectedViews.forEach { moveOrigins[it]=it.translationX to it.translationY }
                     val bounds = selectionBounds(selectedViews)
@@ -212,7 +230,7 @@ class LayoutDesignerOverlay(
                     gestureStartX=x; gestureStartY=y
                 } else {
                     selectedViews.clear(); selectedViews.add(hit); selected=hit
-                    moving=null; resizing=false
+                    moving=null; resizing=false; rightButtonMoving=false
                     val title = (hit as? TextView)?.text?.toString()?.take(22)
                         ?: hit.contentDescription?.toString()?.take(22) ?: hit.javaClass.simpleName
                     Toast.makeText(context,"Selezionato: "+title,Toast.LENGTH_SHORT).show()
@@ -231,7 +249,7 @@ class LayoutDesignerOverlay(
                     val v=moving!!
                     resizeSnapped(v,x-lastX,y-lastY)
                     lastX=x; lastY=y
-                } else if (moveOrigins.isNotEmpty()) {
+                } else if (rightButtonMoving && moveOrigins.isNotEmpty()) {
                     val dx=x-gestureStartX; val dy=y-gestureStartY
                     var snappedDx=dx; var snappedDy=dy
                     if (snapEnabled) {
@@ -253,7 +271,7 @@ class LayoutDesignerOverlay(
                 } else if (selectedViews.isNotEmpty()) {
                     saveSelected()
                 }
-                moving=null; resizing=false; moveOrigins.clear()
+                moving=null; resizing=false; rightButtonMoving=false; moveOrigins.clear()
                 performClick(); invalidate(); return true
             }
         }
