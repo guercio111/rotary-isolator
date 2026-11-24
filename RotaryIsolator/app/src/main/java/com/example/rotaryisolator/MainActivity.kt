@@ -1662,6 +1662,7 @@ class MainActivity : Activity() {
         val delayControls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            tag = "designer_group_delay_keyboard"
         }
         val delayTop = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2239,6 +2240,7 @@ class MainActivity : Activity() {
         val delayRow = LinearLayout(this).apply {
             orientation = if (!phonePortrait && wideLayout) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            tag = "designer_group_delay_dials"
         }
         if (!phonePortrait && wideLayout) {
             val topDials=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
@@ -2259,6 +2261,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(2), dp(if (!phonePortrait && wideLayout) 4 else 2), dp(2), dp(2))
+            tag = "designer_group_reverb"
         }
         if (!phonePortrait && wideLayout) {
             reverbColumn.addView(header, LinearLayout.LayoutParams(-1, dp(32)))
@@ -2286,7 +2289,7 @@ class MainActivity : Activity() {
             delaySection.setPadding(0, dp(4), 0, 0)
             delaySection.addView(delayHeader, LinearLayout.LayoutParams(-1, dp(32)))
             delaySection.addView(delayRow, LinearLayout.LayoutParams(-1, 0, 1f))
-            val masterColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(2),dp(4),dp(2),dp(2))}
+            val masterColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(2),dp(4),dp(2),dp(2));tag="designer_group_master"}
             masterColumn.addView(sectionLabel("MASTER",13f,titleTint(colorMaster)),LinearLayout.LayoutParams(-1,dp(32)))
             val gainKnob=RotaryControl(this,"GAIN",gain,-12f,12f,colorMaster,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,spaciousText=true,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
             val compKnob=RotaryControl(this,"COMP",compMakeup,0f,100f,colorMaster,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,spaciousText=true,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
@@ -2330,6 +2333,7 @@ class MainActivity : Activity() {
             val effectsDivider = View(this).apply {
                 setBackgroundColor(Color.rgb(92, 102, 112))
                 alpha = 0.85f
+                tag = "designer_divider_reverb_delay"
             }
             effectsBody.addView(effectsDivider, LinearLayout.LayoutParams(dp(1), -1).apply {
                 leftMargin = dp(5)
@@ -2351,6 +2355,7 @@ class MainActivity : Activity() {
                 alpha = 0.9f
                 isClickable = false
                 isFocusable = false
+                tag = "designer_divider_delay_master"
             }
             // The divider sits in the exact center of a balanced 16dp gutter
             // between the BEAT FX keyboard and MASTER controls.
@@ -2367,6 +2372,7 @@ class MainActivity : Activity() {
             val effectsDivider = View(this).apply {
                 setBackgroundColor(Color.rgb(92, 102, 112))
                 alpha = 0.85f
+                tag = "designer_divider_reverb_delay"
             }
             effectsBody.addView(effectsDivider, LinearLayout.LayoutParams(dp(1), -1).apply {
                 leftMargin = dp(5)
