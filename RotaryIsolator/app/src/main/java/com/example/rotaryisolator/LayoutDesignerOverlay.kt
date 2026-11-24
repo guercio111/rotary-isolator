@@ -55,6 +55,9 @@ class LayoutDesignerOverlay(
     private var resizeRight = false
     private var resizeTop = false
     private var resizeBottom = false
+    private var pendingHit: View? = null
+    private var dragStarted = false
+    private var hitWasSelected = false
     private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFFFC928.toInt(); style = Paint.Style.STROKE; strokeWidth = 2.5f*density
     }
@@ -84,6 +87,7 @@ class LayoutDesignerOverlay(
         action("SALVA") { saveAll(); Toast.makeText(context, "Layout salvato", Toast.LENGTH_SHORT).show() }
         action("RIPRISTINA") { resetAll(); Toast.makeText(context, "Layout originale ripristinato", Toast.LENGTH_SHORT).show() }
         action("GRUPPO") { selectParentGroup() }
+        action("DESELEZIONA") { selectedViews.clear(); selected = null; invalidate() }
         action("X") { deleteSelected() }
         fun sizeAction(title: String, factor: Float) {
             val repeatHandler = Handler(Looper.getMainLooper())
@@ -104,11 +108,11 @@ class LayoutDesignerOverlay(
                 setOnTouchListener { view, event ->
                     when (event.actionMasked) {
                         MotionEvent.ACTION_DOWN -> {
-                            if (selectedViews.size == 1) {
+                            if (selectedViews.isNotEmpty()) {
                                 resizeSelectedByStep(factor, true)
                                 repeatHandler.postDelayed(repeatAction, 420L)
                             } else {
-                                resizeSelectedByStep(factor, true)
+                                Toast.makeText(context, "Seleziona uno o più elementi", Toast.LENGTH_SHORT).show()
                             }
                             true
                         }
@@ -153,21 +157,6 @@ class LayoutDesignerOverlay(
             val l = (p[0]-o[0]).toFloat(); val t = (p[1]-o[1]).toFloat()
             val r = l + v.width*v.scaleX; val b = t + v.height*v.scaleY
             canvas.drawRect(RectF(l,t,r,b), outline)
-            val tag = v.tag as? String
-            val isDivider = tag?.startsWith("designer_divider_") == true
-            if (isDivider) {
-                val half = 7f*density
-                canvas.drawRect(l-half,t,r+half,b,outline)
-                canvas.drawRect(l-half,t,r+half,b,handle)
-            } else if (selectedViews.size == 1) {
-                val h = 5f*density
-                canvas.drawRect(l-h,t-h,r+h,t+h,handle)
-                canvas.drawRect(l-h,b-h,r+h,b+h,handle)
-                canvas.drawRect(l-h,t-h,l+h,b+h,outline)
-                canvas.drawRect(r-h,t-h,r+h,b+h,outline)
-                canvas.drawRect(l-h,t-h,r+h,t+h,handle)
-                canvas.drawRect(l-h,b-h,r+h,b+h,handle)
-            }
         }
         if (marqueeSelecting && marqueeActive) {
             val rect = RectF(minOf(marqueeStartX,marqueeX)-o[0], minOf(marqueeStartY,marqueeY)-o[1],
@@ -325,28 +314,44 @@ class LayoutDesignerOverlay(
         Toast.makeText(context, if (targets.size == 1) "Elemento rimosso" else "${targets.size} elementi rimossi", Toast.LENGTH_SHORT).show()
     }
 
-    /** Resize a single selected control in predictable 5% steps, keeping its center fixed. */
+    /** Resize all selected items as one visual group, preserving relative spacing and shape. */
     private fun resizeSelectedByStep(factor: Float, recordUndo: Boolean = true) {
-        if (selectedViews.size != 1) {
-            if (recordUndo) Toast.makeText(context, "Seleziona una sola finestra o un solo elemento", Toast.LENGTH_SHORT).show()
+        val targets = selectedViews.toList()
+        if (targets.isEmpty()) {
+            if (recordUndo) Toast.makeText(context, "Seleziona uno o più elementi", Toast.LENGTH_SHORT).show()
             return
         }
-        val v = selectedViews.first()
-        if (v.width <= 0 || v.height <= 0) return
+        if (targets.any { it.width <= 0 || it.height <= 0 }) return
         if (recordUndo) pushUndo()
-        val newX = (v.scaleX * factor).coerceIn(0.45f, 2.5f)
-        val newY = (v.scaleY * factor).coerceIn(0.45f, 2.5f)
-        if (newX == v.scaleX && newY == v.scaleY) {
+        val bounds = selectionBounds(targets) ?: return
+        val centerX = bounds.centerX()
+        val centerY = bounds.centerY()
+        var changed = false
+        targets.forEach { v ->
+            val oldScaleX = v.scaleX
+            val oldScaleY = v.scaleY
+            val newScaleX = (oldScaleX * factor).coerceIn(0.45f, 2.5f)
+            val newScaleY = (oldScaleY * factor).coerceIn(0.45f, 2.5f)
+            if (newScaleX == oldScaleX && newScaleY == oldScaleY) return@forEach
+            val p = IntArray(2); v.getLocationOnScreen(p)
+            val itemCenterX = p[0] + v.width * oldScaleX / 2f
+            val itemCenterY = p[1] + v.height * oldScaleY / 2f
+            val newCenterX = centerX + (itemCenterX - centerX) * factor
+            val newCenterY = centerY + (itemCenterY - centerY) * factor
+            v.scaleX = newScaleX
+            v.scaleY = newScaleY
+            v.translationX += newCenterX - itemCenterX
+            v.translationY += newCenterY - itemCenterY
+            changed = true
+        }
+        if (!changed) {
             if (recordUndo && undoHistory.isNotEmpty()) undoHistory.removeLast()
             if (recordUndo) Toast.makeText(context, "Dimensione massima o minima raggiunta", Toast.LENGTH_SHORT).show()
             return
         }
-        v.scaleX = newX
-        v.scaleY = newY
         saveSelected()
         invalidate()
     }
-
     private fun resizeSnapped(v: View, dx: Float, dy: Float) {
         if (resizeLeft || resizeRight) {
             val oldSize=v.width*v.scaleX
