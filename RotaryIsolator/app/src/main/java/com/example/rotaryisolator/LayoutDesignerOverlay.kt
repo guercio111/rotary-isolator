@@ -465,7 +465,9 @@ class LayoutDesignerOverlay(
     }
 
     private fun findHit(group: ViewGroup,x: Float,y: Float): View? {
-        // Dividers are only 1dp wide, so give their expanded touch zones priority.
+        // Selectable rotary labels and dial faces can extend beyond the measured
+        // bounds of their parent control. Search visible descendants even when
+        // the pointer is outside the parent's own rectangle.
         for (i in group.childCount-1 downTo 0) {
             val child=group.getChildAt(i)
             val tag=child.tag as? String
@@ -475,13 +477,16 @@ class LayoutDesignerOverlay(
         }
         for (i in group.childCount-1 downTo 0) {
             val child=group.getChildAt(i)
-            if (child.visibility!=View.VISIBLE || child.alpha<0.05f || child.width<=0 || child.height<=0 || !inside(child,x,y)) continue
+            if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
+                child.width<=0 || child.height<=0) continue
             val nested=child as? ViewGroup
+            // Do not require the pointer to be inside the parent: labels placed
+            // at the edge/outside a rotary's frame must remain independently editable.
             val deeper=nested?.let { findHit(it,x,y) }
             if (deeper!=null) return deeper
-            // Untagged containers with no child under the pointer are empty canvas,
-            // allowing a drag there to begin a marquee instead of selecting the whole panel.
-            if (nested==null || (child.tag as? String)?.startsWith("designer_group_")==true) return child
+            val tag=child.tag as? String
+            if (inside(child,x,y) &&
+                (nested==null || tag?.startsWith("designer_group_")==true)) return child
         }
         return null
     }
