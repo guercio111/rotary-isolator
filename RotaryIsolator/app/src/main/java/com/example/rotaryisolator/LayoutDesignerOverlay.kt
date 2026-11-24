@@ -311,7 +311,9 @@ class LayoutDesignerOverlay(
             val nested=child as? ViewGroup
             val deeper=nested?.let { findHit(it,x,y) }
             if (deeper!=null) return deeper
-            return child
+            // Untagged containers with no child under the pointer are empty canvas,
+            // allowing a drag there to begin a marquee instead of selecting the whole panel.
+            if (nested==null || (child.tag as? String)?.startsWith("designer_group_")==true) return child
         }
         return null
     }
