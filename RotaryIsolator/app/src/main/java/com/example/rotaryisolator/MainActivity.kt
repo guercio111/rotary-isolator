@@ -3,6 +3,12 @@ package com.example.rotaryisolator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.pm.ActivityInfo
+import android.content.Intent
+import android.net.Uri
+import android.util.Xml
+import org.json.JSONArray
+import org.json.JSONObject
+import org.xmlpull.v1.XmlPullParser
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Canvas
@@ -72,6 +78,8 @@ class MainActivity : Activity() {
         }
     }
     private val prefs by lazy { getSharedPreferences("rotary_options_v3", MODE_PRIVATE) }
+    private val layoutExportRequest = 6101
+    private val layoutImportRequest = 6102
     private var dpEffect: DynamicsProcessing? = null
     // Validated RMX-1000 tempo engine, fed from the same capture stream as the FX return.
     private val validatedBeatEngine = BeatEngine()
@@ -3046,10 +3054,140 @@ class MainActivity : Activity() {
         }catch(t:Throwable){runOnUiThread { if(::status.isInitialized) status.text="Audio DSP non supportato dal driver del dispositivo" }}
     }
 
+
+    private fun startLayoutExport() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "FREQUALIZER_LAYOUT_BACKUP.json")
+        }
+        startActivityForResult(intent, layoutExportRequest)
+    }
+
+    private fun startLayoutImport() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/xml", "application/xml", "text/plain"))
+        }
+        startActivityForResult(intent, layoutImportRequest)
+    }
+
+    private fun layoutBackupKeys(): Set<String> = prefs.all.keys.filter {
+        it.startsWith("layout_designer_tablet_") || it.startsWith("layout_designer_deleted_tablet_")
+    }.toSet()
+
+    private fun writeLayoutBackup(uri: Uri) {
+        val entries = JSONArray()
+        layoutBackupKeys().sorted().forEach { key ->
+            val value = prefs.all[key] ?: return@forEach
+            val entry = JSONObject().put("key", key)
+            when (value) {
+                is String -> entry.put("type", "string").put("value", value)
+                is Boolean -> entry.put("type", "boolean").put("value", value)
+                else -> return@forEach
+            }
+            entries.put(entry)
+        }
+        require(entries.length() > 0) { "Nessun layout salvato da esportare" }
+        val backup = JSONObject().put("format", "frequalizer-layout-backup").put("version", 1).put("entries", entries)
+        contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(backup.toString(2)) }
+            ?: throw IllegalStateException("Impossibile creare il file di backup")
+        Toast.makeText(this, "Backup layout esportato (${entries.length()} elementi)", Toast.LENGTH_LONG).show()
+    }
+
+    private fun isLayoutBackupKey(key: String): Boolean =
+        key.startsWith("layout_designer_tablet_") || key.startsWith("layout_designer_deleted_tablet_")
+
+    private fun readLayoutBackup(uri: Uri): Map<String, Any> {
+        val raw = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+            ?: throw IllegalStateException("Impossibile leggere il file")
+        val result = linkedMapOf<String, Any>()
+        if (raw.trimStart().startsWith("{")) {
+            val root = JSONObject(raw)
+            require(root.optString("format") == "frequalizer-layout-backup") { "Formato backup non riconosciuto" }
+            require(root.optInt("version", -1) == 1) { "Versione backup non supportata" }
+            val entries = root.getJSONArray("entries")
+            for (i in 0 until entries.length()) {
+                val entry = entries.getJSONObject(i)
+                val key = entry.getString("key")
+                if (!isLayoutBackupKey(key)) continue
+                when (entry.getString("type")) {
+                    "string" -> result[key] = entry.getString("value")
+                    "boolean" -> result[key] = entry.getBoolean("value")
+                }
+            }
+        } else {
+            val parser = Xml.newPullParser()
+            parser.setInput(raw.reader())
+            var event = parser.eventType
+            while (event != XmlPullParser.END_DOCUMENT) {
+                if (event == XmlPullParser.START_TAG) {
+                    when (parser.name) {
+                        "string" -> {
+                            val key = parser.getAttributeValue(null, "name")
+                            val value = parser.nextText()
+                            if (key != null && isLayoutBackupKey(key)) result[key] = value
+                        }
+                        "boolean" -> {
+                            val key = parser.getAttributeValue(null, "name")
+                            val value = parser.getAttributeValue(null, "value")
+                            if (key != null && value != null && isLayoutBackupKey(key) && (value == "true" || value == "false")) result[key] = (value == "true")
+                        }
+                    }
+                }
+                event = parser.next()
+            }
+        }
+        require(result.isNotEmpty()) { "Il file non contiene modifiche di layout riconoscibili" }
+        return result
+    }
+
+    private fun confirmLayoutImport(uri: Uri) {
+        try {
+            val imported = readLayoutBackup(uri)
+            AlertDialog.Builder(this)
+                .setTitle("IMPORTA PROGETTO")
+                .setMessage("Trovate ${imported.size} impostazioni di layout. Vuoi importarle? Le altre impostazioni dell'app non verranno modificate.")
+                .setNegativeButton("ANNULLA", null)
+                .setPositiveButton("IMPORTA") { _, _ ->
+                    val editor = prefs.edit()
+                    imported.forEach { (key, value) ->
+                        when (value) {
+                            is String -> editor.putString(key, value)
+                            is Boolean -> editor.putBoolean(key, value)
+                        }
+                    }
+                    editor.apply()
+                    Toast.makeText(this, "Progetto importato. Riapri MODIFICA / DESIGN per applicarlo.", Toast.LENGTH_LONG).show()
+                }
+                .show()
+        } catch (t: Throwable) {
+            AlertDialog.Builder(this).setTitle("BACKUP NON VALIDO")
+                .setMessage(t.message ?: "Il file non contiene un backup FREQUALIZER valido.")
+                .setPositiveButton("OK", null).show()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            when (requestCode) {
+                layoutExportRequest -> writeLayoutBackup(uri)
+                layoutImportRequest -> confirmLayoutImport(uri)
+            }
+        } catch (t: Throwable) {
+            Toast.makeText(this, t.message ?: "Operazione backup non riuscita", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun showOptions(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
         lateinit var optionsDialog: AlertDialog
-        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Personalizza colori","MODIFICA / DESIGN")
+        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Personalizza colori","MODIFICA / DESIGN","ESPORTA PROGETTO","IMPORTA PROGETTO")
         names.forEachIndexed{index,name->
             val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
                 when(index){
@@ -3060,6 +3198,8 @@ class MainActivity : Activity() {
                     }
                     4->showColorOptions()
                     5->{optionsDialog.dismiss();startLayoutDesigner()}
+                    6->{optionsDialog.dismiss();startLayoutExport()}
+                    7->{optionsDialog.dismiss();startLayoutImport()}
                 }
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
