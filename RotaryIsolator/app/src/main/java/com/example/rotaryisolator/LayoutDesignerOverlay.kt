@@ -254,7 +254,7 @@ class LayoutDesignerOverlay(
             return
         }
         pushUndo()
-        targets.forEach { it.visibility = View.INVISIBLE }
+        targets.forEach { it.visibility = View.GONE }
         saveAll()
         selectedViews.clear()
         selected = null
@@ -423,7 +423,7 @@ class LayoutDesignerOverlay(
         walk(targetRoot,"") { v,key ->
             if (v !== targetRoot) {
                 val baseline = initialVisibility[v] ?: v.visibility
-                v.visibility = if (preferences.getBoolean(deletedPrefix+key, false)) View.INVISIBLE else baseline
+                v.visibility = if (preferences.getBoolean(deletedPrefix+key, false)) View.GONE else baseline
             }
             val raw=preferences.getString(prefix+key,null) ?: return@walk
             val a=raw.split(",").mapNotNull { it.toFloatOrNull() }
