@@ -1120,7 +1120,7 @@ class MainActivity : Activity() {
     private fun addGainSection(parent:LinearLayout=content){
         val accent=accentFor("MASTER")
         val compact=phonePortrait && !wideLayout
-        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compact)1 else 4),dp(4),dp(if(compact)1 else 4),dp(1))}
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.TOP;setPadding(dp(if(compact)1 else 4),dp(4),dp(if(compact)1 else 4),dp(1));tag="designer_group_master"}
         box.addView(sectionLabel("MASTER",if(compact)11f else 13f,titleTint(accent)),LinearLayout.LayoutParams(-1,dp(if(compact)24 else 32)))
         val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
         val gainDial:View=if(modes["GAIN"]==true)SeekBar(this).apply{
