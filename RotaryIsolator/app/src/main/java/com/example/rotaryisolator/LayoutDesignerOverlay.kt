@@ -172,6 +172,14 @@ class LayoutDesignerOverlay(
     }
 
     private fun findHit(group: ViewGroup,x: Float,y: Float): View? {
+        // Dividers are only 1dp wide, so give their expanded touch zones priority.
+        for (i in group.childCount-1 downTo 0) {
+            val child=group.getChildAt(i)
+            val tag=child.tag as? String
+            if (tag?.startsWith("designer_divider_")==true &&
+                child.visibility==View.VISIBLE && child.alpha>=0.05f &&
+                child.width>0 && child.height>0 && inside(child,x,y)) return child
+        }
         for (i in group.childCount-1 downTo 0) {
             val child=group.getChildAt(i)
             if (child.visibility!=View.VISIBLE || child.alpha<0.05f || child.width<=0 || child.height<=0 || !inside(child,x,y)) continue
