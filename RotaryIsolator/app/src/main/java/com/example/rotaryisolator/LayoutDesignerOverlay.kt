@@ -26,9 +26,23 @@ class LayoutDesignerOverlay(
     private val density = resources.displayMetrics.density
     private val prefix = "layout_designer_" + profile + "_"
     private var selected: View? = null
+    private val selectedViews = ArrayList<View>()
     private var moving: View? = null
     private var lastX = 0f
     private var lastY = 0f
+    private var gestureStartX = 0f
+    private var gestureStartY = 0f
+    private var marqueeSelecting = false
+    private var marqueeActive = false
+    private var marqueeStartX = 0f
+    private var marqueeStartY = 0f
+    private var marqueeX = 0f
+    private var marqueeY = 0f
+    private var snapEnabled = true
+    private val gridStep get() = 8f * density
+    private val moveOrigins = HashMap<View, Pair<Float, Float>>()
+    private var moveBoundsLeft = 0f
+    private var moveBoundsTop = 0f
     private var resizing = false
     private var resizeLeft = false
     private var resizeRight = false
@@ -38,6 +52,12 @@ class LayoutDesignerOverlay(
         color = 0xFFFFC928.toInt(); style = Paint.Style.STROKE; strokeWidth = 2.5f*density
     }
     private val handle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFC928.toInt() }
+    private val marqueePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF42C8FF.toInt(); style = Paint.Style.STROKE; strokeWidth = 2f*density
+    }
+    private val marqueeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x2242C8FF; style = Paint.Style.FILL
+    }
 
     init {
         setWillNotDraw(false); isClickable = true; setBackgroundColor(0x18000000)
@@ -57,6 +77,10 @@ class LayoutDesignerOverlay(
         action("SALVA") { saveAll(); Toast.makeText(context, "Layout salvato", Toast.LENGTH_SHORT).show() }
         action("RIPRISTINA") { resetAll(); Toast.makeText(context, "Layout originale ripristinato", Toast.LENGTH_SHORT).show() }
         action("GRUPPO") { selectParentGroup() }
+        action("SNAP 8dp") {
+            snapEnabled = !snapEnabled
+            Toast.makeText(context, if (snapEnabled) "Aggancio griglia attivo (8 dp)" else "Aggancio griglia disattivato", Toast.LENGTH_SHORT).show()
+        }
         action("FINE") { saveAll(); onExit() }
         // Keep the action bar away from the lower resize handles and content.
         addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (48*density).toInt(), Gravity.TOP))
@@ -65,25 +89,34 @@ class LayoutDesignerOverlay(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val v = selected ?: return
-        if (v.width <= 0 || v.height <= 0) return
-        val p = IntArray(2); val o = IntArray(2); v.getLocationOnScreen(p); getLocationOnScreen(o)
-        val l = (p[0]-o[0]).toFloat(); val t = (p[1]-o[1]).toFloat()
-        val r = l + v.width*v.scaleX; val b = t + v.height*v.scaleY
-        canvas.drawRect(RectF(l,t,r,b), outline)
-        val isDivider = (v.tag as? String)?.startsWith("designer_divider_") == true
-        if (isDivider) {
-            val half = 7f*density
-            canvas.drawRect(l-half,t,r+half,b,outline)
-            canvas.drawRect(l-half,t,r+half,b,handle)
-        } else {
-            val h = 5f*density
-            canvas.drawRect(l-h,t-h,r+h,t+h,handle)
-            canvas.drawRect(l-h,b-h,r+h,b+h,handle)
-            canvas.drawRect(l-h,t-h,l+h,b+h,outline)
-            canvas.drawRect(r-h,t-h,r+h,b+h,outline)
-            canvas.drawRect(l-h,t-h,r+h,t+h,handle)
-            canvas.drawRect(l-h,b-h,r+h,b+h,handle)
+        val o = IntArray(2); getLocationOnScreen(o)
+        selectedViews.forEach { v ->
+            if (v.width <= 0 || v.height <= 0) return@forEach
+            val p = IntArray(2); v.getLocationOnScreen(p)
+            val l = (p[0]-o[0]).toFloat(); val t = (p[1]-o[1]).toFloat()
+            val r = l + v.width*v.scaleX; val b = t + v.height*v.scaleY
+            canvas.drawRect(RectF(l,t,r,b), outline)
+            val tag = v.tag as? String
+            val isDivider = tag?.startsWith("designer_divider_") == true
+            if (isDivider) {
+                val half = 7f*density
+                canvas.drawRect(l-half,t,r+half,b,outline)
+                canvas.drawRect(l-half,t,r+half,b,handle)
+            } else if (selectedViews.size == 1) {
+                val h = 5f*density
+                canvas.drawRect(l-h,t-h,r+h,t+h,handle)
+                canvas.drawRect(l-h,b-h,r+h,b+h,handle)
+                canvas.drawRect(l-h,t-h,l+h,b+h,outline)
+                canvas.drawRect(r-h,t-h,r+h,b+h,outline)
+                canvas.drawRect(l-h,t-h,r+h,t+h,handle)
+                canvas.drawRect(l-h,b-h,r+h,b+h,handle)
+            }
+        }
+        if (marqueeSelecting && marqueeActive) {
+            val rect = RectF(minOf(marqueeStartX,marqueeX)-o[0], minOf(marqueeStartY,marqueeY)-o[1],
+                maxOf(marqueeStartX,marqueeX)-o[0], maxOf(marqueeStartY,marqueeY)-o[1])
+            canvas.drawRect(rect, marqueeFill)
+            canvas.drawRect(rect, marqueePaint)
         }
     }
 
@@ -91,58 +124,148 @@ class LayoutDesignerOverlay(
         val x = event.rawX; val y = event.rawY
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val current = selected
-                if (current != null && inside(current,x,y)) {
-                    moving = current
-                    val p = IntArray(2); current.getLocationOnScreen(p)
-                    val left = p[0].toFloat()
-                    val top = p[1].toFloat()
-                    val right = left + current.width*current.scaleX
-                    val bottom = top + current.height*current.scaleY
-                    val edge = 22f*density
-                    val isDivider = (current.tag as? String)?.startsWith("designer_divider_") == true
-                    resizeLeft = !isDivider && x <= left+edge
-                    resizeRight = !isDivider && x >= right-edge
-                    resizeTop = !isDivider && y <= top+edge
-                    resizeBottom = !isDivider && y >= bottom-edge
-                    resizing = resizeLeft || resizeRight || resizeTop || resizeBottom
-                    lastX=x; lastY=y
-                } else {
-                    selected = findHit(targetRoot,x,y); moving=null
-                    selected?.let { v ->
-                        val title = (v as? TextView)?.text?.toString()?.take(22)
-                            ?: v.contentDescription?.toString()?.take(22) ?: v.javaClass.simpleName
-                        Toast.makeText(context,"Selezionato: "+title,Toast.LENGTH_SHORT).show()
+                val hit = findHit(targetRoot,x,y)
+                val alreadySelected = hit != null && selectedViews.any { it === hit || isDescendant(hit,it) }
+                if (hit == null) {
+                    marqueeSelecting = true; marqueeActive = false
+                    marqueeStartX=x; marqueeStartY=y; marqueeX=x; marqueeY=y
+                    moving=null; resizing=false; moveOrigins.clear()
+                } else if (alreadySelected) {
+                    moving = if (selectedViews.size == 1) selectedViews.first() else null
+                    val current = moving
+                    resizing = false
+                    if (current != null) {
+                        val p = IntArray(2); current.getLocationOnScreen(p)
+                        val left=p[0].toFloat(); val top=p[1].toFloat()
+                        val right=left+current.width*current.scaleX
+                        val bottom=top+current.height*current.scaleY
+                        val edge=22f*density
+                        val isDivider=(current.tag as? String)?.startsWith("designer_divider_")==true
+                        resizeLeft=!isDivider && x<=left+edge
+                        resizeRight=!isDivider && x>=right-edge
+                        resizeTop=!isDivider && y<=top+edge
+                        resizeBottom=!isDivider && y>=bottom-edge
+                        resizing=resizeLeft||resizeRight||resizeTop||resizeBottom
                     }
-                    invalidate()
+                    moveOrigins.clear()
+                    selectedViews.forEach { moveOrigins[it]=it.translationX to it.translationY }
+                    val bounds = selectionBounds(selectedViews)
+                    moveBoundsLeft=bounds?.left ?: x; moveBoundsTop=bounds?.top ?: y
+                    gestureStartX=x; gestureStartY=y
+                } else {
+                    selectedViews.clear(); selectedViews.add(hit); selected=hit
+                    moving=null; resizing=false
+                    val title = (hit as? TextView)?.text?.toString()?.take(22)
+                        ?: hit.contentDescription?.toString()?.take(22) ?: hit.javaClass.simpleName
+                    Toast.makeText(context,"Selezionato: "+title,Toast.LENGTH_SHORT).show()
                 }
+                lastX=x; lastY=y; invalidate()
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                val v = moving ?: return true
-                val dx=x-lastX; val dy=y-lastY
-                if (resizing) {
-                    if (resizeLeft || resizeRight) {
-                        val direction = if (resizeLeft) -1f else 1f
-                        v.scaleX=(v.scaleX + direction*2f*dx/max(1f,v.width.toFloat())).coerceIn(0.45f,2.5f)
-                        v.translationX += dx
+                if (marqueeSelecting) {
+                    marqueeX=x; marqueeY=y
+                    if (!marqueeActive && (kotlin.math.abs(x-marqueeStartX)>6f*density || kotlin.math.abs(y-marqueeStartY)>6f*density)) marqueeActive=true
+                    invalidate(); return true
+                }
+                if (selectedViews.isEmpty()) return true
+                if (resizing && moving != null) {
+                    val v=moving!!
+                    resizeSnapped(v,x-lastX,y-lastY)
+                    lastX=x; lastY=y
+                } else if (moveOrigins.isNotEmpty()) {
+                    val dx=x-gestureStartX; val dy=y-gestureStartY
+                    var snappedDx=dx; var snappedDy=dy
+                    if (snapEnabled) {
+                        snappedDx=(kotlin.math.round((moveBoundsLeft+dx)/gridStep)*gridStep)-moveBoundsLeft
+                        snappedDy=(kotlin.math.round((moveBoundsTop+dy)/gridStep)*gridStep)-moveBoundsTop
                     }
-                    if (resizeTop || resizeBottom) {
-                        val direction = if (resizeTop) -1f else 1f
-                        v.scaleY=(v.scaleY + direction*2f*dy/max(1f,v.height.toFloat())).coerceIn(0.45f,2.5f)
-                        v.translationY += dy
+                    selectedViews.forEach { v ->
+                        val origin=moveOrigins[v] ?: return@forEach
+                        v.translationX=origin.first+snappedDx
+                        v.translationY=origin.second+snappedDy
                     }
-                } else { v.translationX+=dx; v.translationY+=dy }
-                lastX=x; lastY=y; invalidate(); return true
+                }
+                invalidate(); return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (moving != null) saveSelected()
-                moving=null; performClick(); invalidate(); return true
+                if (marqueeSelecting) {
+                    if (marqueeActive && event.actionMasked==MotionEvent.ACTION_UP) selectInRectangle()
+                    marqueeSelecting=false; marqueeActive=false
+                } else if (selectedViews.isNotEmpty()) {
+                    saveSelected()
+                }
+                moving=null; resizing=false; moveOrigins.clear()
+                performClick(); invalidate(); return true
             }
         }
         return true
     }
 
+    private fun resizeSnapped(v: View, dx: Float, dy: Float) {
+        if (resizeLeft || resizeRight) {
+            val oldSize=v.width*v.scaleX
+            val growth=if(resizeLeft) -dx else dx
+            val wanted=(oldSize+growth).coerceIn(v.width*0.45f,v.width*2.5f)
+            val newSize=if(snapEnabled) (kotlin.math.round(wanted/gridStep)*gridStep).coerceIn(v.width*0.45f,v.width*2.5f) else wanted
+            val actual=newSize-oldSize
+            v.scaleX=(newSize/v.width).coerceIn(0.45f,2.5f)
+            v.translationX += (if(resizeLeft) -0.5f else 0.5f)*actual
+        }
+        if (resizeTop || resizeBottom) {
+            val oldSize=v.height*v.scaleY
+            val growth=if(resizeTop) -dy else dy
+            val wanted=(oldSize+growth).coerceIn(v.height*0.45f,v.height*2.5f)
+            val newSize=if(snapEnabled) (kotlin.math.round(wanted/gridStep)*gridStep).coerceIn(v.height*0.45f,v.height*2.5f) else wanted
+            val actual=newSize-oldSize
+            v.scaleY=(newSize/v.height).coerceIn(0.45f,2.5f)
+            v.translationY += (if(resizeTop) -0.5f else 0.5f)*actual
+        }
+    }
+
+    private fun selectionBounds(views: List<View>): RectF? {
+        if (views.isEmpty()) return null
+        var left=Float.POSITIVE_INFINITY; var top=Float.POSITIVE_INFINITY
+        var right=Float.NEGATIVE_INFINITY; var bottom=Float.NEGATIVE_INFINITY
+        views.forEach { v ->
+            val p=IntArray(2); v.getLocationOnScreen(p)
+            left=minOf(left,p[0].toFloat()); top=minOf(top,p[1].toFloat())
+            right=maxOf(right,p[0]+v.width*v.scaleX); bottom=maxOf(bottom,p[1]+v.height*v.scaleY)
+        }
+        return RectF(left,top,right,bottom)
+    }
+
+    private fun isDescendant(view: View, ancestor: View): Boolean {
+        var current: android.view.ViewParent? = view.parent
+        while (current is View) {
+            if (current===ancestor) return true
+            current=current.parent
+        }
+        return false
+    }
+
+    private fun selectInRectangle() {
+        val rect=RectF(minOf(marqueeStartX,marqueeX),minOf(marqueeStartY,marqueeY),
+            maxOf(marqueeStartX,marqueeX),maxOf(marqueeStartY,marqueeY))
+        selectedViews.clear()
+        collectInRectangle(targetRoot,rect,selectedViews)
+        selected=selectedViews.firstOrNull()
+        Toast.makeText(context, if(selectedViews.isEmpty()) "Nessun elemento nel riquadro" else "${selectedViews.size} elementi selezionati",Toast.LENGTH_SHORT).show()
+    }
+
+    private fun collectInRectangle(group: ViewGroup, rect: RectF, out: MutableList<View>) {
+        for(i in 0 until group.childCount) {
+            val child=group.getChildAt(i)
+            if(child.visibility!=View.VISIBLE || child.alpha<0.05f || child.width<=0 || child.height<=0) continue
+            val p=IntArray(2); child.getLocationOnScreen(p)
+            val bounds=RectF(p[0].toFloat(),p[1].toFloat(),p[0]+child.width*child.scaleX,p[1]+child.height*child.scaleY)
+            if(!RectF.intersects(rect,bounds)) continue
+            val tag=child.tag as? String
+            val tagged=tag?.startsWith("designer_group_")==true || tag?.startsWith("designer_divider_")==true || tag?.startsWith("designer_selectable_")==true
+            if(tagged || child !is ViewGroup) out.add(child)
+            else collectInRectangle(child,rect,out)
+        }
+    }
     override fun performClick(): Boolean { super.performClick(); return true }
 
     private fun inside(v: View,x: Float,y: Float): Boolean {
@@ -161,6 +284,7 @@ class LayoutDesignerOverlay(
             val tag = parent.tag as? String
             if (tag?.startsWith("designer_group_") == true) {
                 selected = parent
+                selectedViews.clear(); selectedViews.add(parent)
                 val label = tag.removePrefix("designer_group_").replace('_',' ').uppercase()
                 Toast.makeText(context, "Gruppo selezionato: $label", Toast.LENGTH_SHORT).show()
                 invalidate()
@@ -176,7 +300,7 @@ class LayoutDesignerOverlay(
         for (i in group.childCount-1 downTo 0) {
             val child=group.getChildAt(i)
             val tag=child.tag as? String
-            if (tag?.startsWith("designer_divider_")==true &&
+            if ((tag?.startsWith("designer_divider_")==true || tag?.startsWith("designer_selectable_")==true) &&
                 child.visibility==View.VISIBLE && child.alpha>=0.05f &&
                 child.width>0 && child.height>0 && inside(child,x,y)) return child
         }
@@ -206,8 +330,13 @@ class LayoutDesignerOverlay(
     }
 
     private fun saveSelected() {
-        val v=selected ?: return; val key=path(v) ?: return
-        preferences.edit().putString(prefix+key,listOf(v.translationX,v.translationY,v.scaleX,v.scaleY).joinToString(",")).apply()
+        val targets=if(selectedViews.isNotEmpty()) selectedViews.toList() else listOfNotNull(selected)
+        val editor=preferences.edit()
+        targets.forEach { v ->
+            val key=path(v) ?: return@forEach
+            editor.putString(prefix+key,listOf(v.translationX,v.translationY,v.scaleX,v.scaleY).joinToString(","))
+        }
+        editor.apply()
     }
 
     private fun saveAll() {
@@ -236,6 +365,6 @@ class LayoutDesignerOverlay(
         preferences.all.keys.filter { it.startsWith(prefix) }.forEach { editor.remove(it) }
         editor.apply()
         walk(targetRoot,"") { v,_ -> if (v !== targetRoot) { v.translationX=0f; v.translationY=0f; v.scaleX=1f; v.scaleY=1f } }
-        selected=null; invalidate()
+        selected=null; selectedViews.clear(); moving=null; marqueeSelecting=false; marqueeActive=false; invalidate()
     }
 }
