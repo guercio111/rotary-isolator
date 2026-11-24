@@ -139,12 +139,13 @@ class LayoutDesignerOverlay(
                         val left=p[0].toFloat(); val top=p[1].toFloat()
                         val right=left+current.width*current.scaleX
                         val bottom=top+current.height*current.scaleY
-                        val edge=22f*density
+                        val edgeX=minOf(22f*density,current.width*current.scaleX*0.25f)
+                        val edgeY=minOf(22f*density,current.height*current.scaleY*0.25f)
                         val isDivider=(current.tag as? String)?.startsWith("designer_divider_")==true
-                        resizeLeft=!isDivider && x<=left+edge
-                        resizeRight=!isDivider && x>=right-edge
-                        resizeTop=!isDivider && y<=top+edge
-                        resizeBottom=!isDivider && y>=bottom-edge
+                        resizeLeft=!isDivider && x<=left+edgeX
+                        resizeRight=!isDivider && x>=right-edgeX
+                        resizeTop=!isDivider && y<=top+edgeY
+                        resizeBottom=!isDivider && y>=bottom-edgeY
                         resizing=resizeLeft||resizeRight||resizeTop||resizeBottom
                     }
                     moveOrigins.clear()
