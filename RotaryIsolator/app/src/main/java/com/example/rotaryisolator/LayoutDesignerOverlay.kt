@@ -82,6 +82,18 @@ class LayoutDesignerOverlay(
         action("RIPRISTINA") { resetAll(); Toast.makeText(context, "Layout originale ripristinato", Toast.LENGTH_SHORT).show() }
         action("GRUPPO") { selectParentGroup() }
         action("X") { deleteSelected() }
+        fun sizeAction(title: String, factor: Float) {
+            bar.addView(Button(context).apply {
+                text = title; textSize = 18f; isAllCaps = false
+                setPadding(0, 0, 0, 0)
+                contentDescription = if (factor > 1f) "Ingrandisci elemento selezionato" else "Riduci elemento selezionato"
+                setOnClickListener { resizeSelectedByStep(factor) }
+            }, LinearLayout.LayoutParams((42*density).toInt(), (42*density).toInt()).apply {
+                leftMargin = (2*density).toInt(); rightMargin = (2*density).toInt()
+            })
+        }
+        sizeAction("−", 0.95f)
+        sizeAction("+", 1.05f)
         action("ANNULLA") { undoLast() }
         action("SNAP 8dp") {
             snapEnabled = !snapEnabled
@@ -262,6 +274,28 @@ class LayoutDesignerOverlay(
         resizing = false
         invalidate()
         Toast.makeText(context, if (targets.size == 1) "Elemento rimosso" else "${targets.size} elementi rimossi", Toast.LENGTH_SHORT).show()
+    }
+
+    /** Resize a single selected control in predictable 5% steps, keeping its center fixed. */
+    private fun resizeSelectedByStep(factor: Float) {
+        if (selectedViews.size != 1) {
+            Toast.makeText(context, "Seleziona un solo quadrante da ridimensionare", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val v = selectedViews.first()
+        if (v.width <= 0 || v.height <= 0) return
+        pushUndo()
+        val newX = (v.scaleX * factor).coerceIn(0.45f, 2.5f)
+        val newY = (v.scaleY * factor).coerceIn(0.45f, 2.5f)
+        if (newX == v.scaleX && newY == v.scaleY) {
+            undoHistory.removeLast()
+            Toast.makeText(context, "Dimensione massima o minima raggiunta", Toast.LENGTH_SHORT).show()
+            return
+        }
+        v.scaleX = newX
+        v.scaleY = newY
+        saveSelected()
+        invalidate()
     }
 
     private fun resizeSnapped(v: View, dx: Float, dy: Float) {
