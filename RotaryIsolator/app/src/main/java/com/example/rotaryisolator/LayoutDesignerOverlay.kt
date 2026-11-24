@@ -30,6 +30,10 @@ class LayoutDesignerOverlay(
     private var lastX = 0f
     private var lastY = 0f
     private var resizing = false
+    private var resizeLeft = false
+    private var resizeRight = false
+    private var resizeTop = false
+    private var resizeBottom = false
     private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFFFC928.toInt(); style = Paint.Style.STROKE; strokeWidth = 2.5f*density
     }
@@ -52,14 +56,10 @@ class LayoutDesignerOverlay(
         }
         action("SALVA") { saveAll(); Toast.makeText(context, "Layout salvato", Toast.LENGTH_SHORT).show() }
         action("RIPRISTINA") { resetAll(); Toast.makeText(context, "Layout originale ripristinato", Toast.LENGTH_SHORT).show() }
+        action("GRUPPO") { selectParentGroup() }
         action("FINE") { saveAll(); onExit() }
-        addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (50*density).toInt(), Gravity.BOTTOM))
-        val hint = TextView(context).apply {
-            text = "TOCCA per selezionare • TRASCINA per spostare • angolo giallo per ridimensionare"
-            textSize = 10f; gravity = Gravity.CENTER; setTextColor(0xFFFFFFFF.toInt())
-            setBackgroundColor(0xCC171B20.toInt())
-        }
-        addView(hint, LayoutParams(LayoutParams.MATCH_PARENT, (30*density).toInt(), Gravity.TOP))
+        // Keep the action bar away from the lower resize handles and content.
+        addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (48*density).toInt(), Gravity.TOP))
         applySaved()
     }
 
@@ -71,7 +71,20 @@ class LayoutDesignerOverlay(
         val l = (p[0]-o[0]).toFloat(); val t = (p[1]-o[1]).toFloat()
         val r = l + v.width*v.scaleX; val b = t + v.height*v.scaleY
         canvas.drawRect(RectF(l,t,r,b), outline)
-        val h = 11f*density; canvas.drawRect(r-h,b-h,r+h,b+h,handle)
+        val isDivider = (v.tag as? String)?.startsWith("designer_divider_") == true
+        if (isDivider) {
+            val half = 7f*density
+            canvas.drawRect(l-half,t,r+half,b,outline)
+            canvas.drawRect(l-half,t,r+half,b,handle)
+        } else {
+            val h = 5f*density
+            canvas.drawRect(l-h,t-h,r+h,t+h,handle)
+            canvas.drawRect(l-h,b-h,r+h,b+h,handle)
+            canvas.drawRect(l-h,t-h,l+h,b+h,outline)
+            canvas.drawRect(r-h,t-h,r+h,b+h,outline)
+            canvas.drawRect(l-h,t-h,r+h,t+h,handle)
+            canvas.drawRect(l-h,b-h,r+h,b+h,handle)
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -82,8 +95,17 @@ class LayoutDesignerOverlay(
                 if (current != null && inside(current,x,y)) {
                     moving = current
                     val p = IntArray(2); current.getLocationOnScreen(p)
-                    resizing = x >= p[0]+current.width*current.scaleX-24f*density &&
-                        y >= p[1]+current.height*current.scaleY-24f*density
+                    val left = p[0].toFloat()
+                    val top = p[1].toFloat()
+                    val right = left + current.width*current.scaleX
+                    val bottom = top + current.height*current.scaleY
+                    val edge = 22f*density
+                    val isDivider = (current.tag as? String)?.startsWith("designer_divider_") == true
+                    resizeLeft = !isDivider && x <= left+edge
+                    resizeRight = !isDivider && x >= right-edge
+                    resizeTop = !isDivider && y <= top+edge
+                    resizeBottom = !isDivider && y >= bottom-edge
+                    resizing = resizeLeft || resizeRight || resizeTop || resizeBottom
                     lastX=x; lastY=y
                 } else {
                     selected = findHit(targetRoot,x,y); moving=null
@@ -100,8 +122,16 @@ class LayoutDesignerOverlay(
                 val v = moving ?: return true
                 val dx=x-lastX; val dy=y-lastY
                 if (resizing) {
-                    v.scaleX=(v.scaleX+dx/max(1f,v.width.toFloat())).coerceIn(0.45f,2.5f)
-                    v.scaleY=(v.scaleY+dy/max(1f,v.height.toFloat())).coerceIn(0.45f,2.5f)
+                    if (resizeLeft || resizeRight) {
+                        val direction = if (resizeLeft) -1f else 1f
+                        v.scaleX=(v.scaleX + direction*2f*dx/max(1f,v.width.toFloat())).coerceIn(0.45f,2.5f)
+                        v.translationX += dx
+                    }
+                    if (resizeTop || resizeBottom) {
+                        val direction = if (resizeTop) -1f else 1f
+                        v.scaleY=(v.scaleY + direction*2f*dy/max(1f,v.height.toFloat())).coerceIn(0.45f,2.5f)
+                        v.translationY += dy
+                    }
                 } else { v.translationX+=dx; v.translationY+=dy }
                 lastX=x; lastY=y; invalidate(); return true
             }
@@ -117,7 +147,28 @@ class LayoutDesignerOverlay(
 
     private fun inside(v: View,x: Float,y: Float): Boolean {
         val p=IntArray(2); v.getLocationOnScreen(p)
-        return x>=p[0] && x<=p[0]+v.width*v.scaleX && y>=p[1] && y<=p[1]+v.height*v.scaleY
+        val isDivider = (v.tag as? String)?.startsWith("designer_divider_") == true
+        val pad = if (isDivider) 18f*density else 0f
+        return x>=p[0]-pad && x<=p[0]+v.width*v.scaleX+pad &&
+            y>=p[1]-pad && y<=p[1]+v.height*v.scaleY+pad
+    }
+
+    /** Promote the currently selected control to its nearest semantic group. */
+    private fun selectParentGroup() {
+        var current = selected ?: return
+        var parent = current.parent as? View
+        while (parent != null && parent !== targetRoot) {
+            val tag = parent.tag as? String
+            if (tag?.startsWith("designer_group_") == true) {
+                selected = parent
+                val label = tag.removePrefix("designer_group_").replace('_',' ').uppercase()
+                Toast.makeText(context, "Gruppo selezionato: $label", Toast.LENGTH_SHORT).show()
+                invalidate()
+                return
+            }
+            parent = parent.parent as? View
+        }
+        Toast.makeText(context, "Nessun gruppo disponibile per questo elemento", Toast.LENGTH_SHORT).show()
     }
 
     private fun findHit(group: ViewGroup,x: Float,y: Float): View? {
