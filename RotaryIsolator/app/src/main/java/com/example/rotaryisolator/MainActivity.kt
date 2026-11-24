@@ -275,6 +275,8 @@ class MainActivity : Activity() {
     private var phonePortrait = false
     private var wideLayout = false
     private var layoutRebuildPending = false
+    private var layoutDesignerActive = false
+    private var designerOverlay: LayoutDesignerOverlay? = null
     private var lastWindowWidthPx = 0
     private var lastWindowHeightPx = 0
     private var masterMode = 0
@@ -772,6 +774,14 @@ class MainActivity : Activity() {
             }.apply()
     }
 
+    private fun layoutDesignerProfile(): String = if (wideLayout) "tablet_landscape" else "tablet_portrait"
+
+    private fun startLayoutDesigner() {
+        if (phonePortrait) return
+        layoutDesignerActive = true
+        designerOverlay?.visibility = View.VISIBLE
+    }
+
     private fun buildUi() {
         val compactPhone = phonePortrait && !wideLayout
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
@@ -868,6 +878,12 @@ class MainActivity : Activity() {
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
         container.addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        designerOverlay = if (!phonePortrait) LayoutDesignerOverlay(this, root, prefs, layoutDesignerProfile()) {
+            layoutDesignerActive = false
+            designerOverlay?.visibility = View.GONE
+        } else null
+        designerOverlay?.visibility = if (layoutDesignerActive) View.VISIBLE else View.GONE
+        designerOverlay?.let { container.addView(it, FrameLayout.LayoutParams(-1,-1)) }
         setContentView(container)
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
             if (view.width > 0 && view.height > 0) {
@@ -3018,7 +3034,8 @@ class MainActivity : Activity() {
 
     private fun showOptions(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
-        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Personalizza colori")
+        lateinit var optionsDialog: AlertDialog
+        val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Personalizza colori","MODIFICA / DESIGN")
         names.forEachIndexed{index,name->
             val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
                 when(index){
@@ -3028,6 +3045,7 @@ class MainActivity : Activity() {
                         AlertDialog.Builder(this@MainActivity).setTitle(key+" • tipo controllo").setSingleChoiceItems(opts,if(modes[key]==true)1 else 0){a,c->modes[key]=c==1;save();refreshUi();applyDsp();a.dismiss()}.setNegativeButton("Annulla",null).show()
                     }
                     4->showColorOptions()
+                    5->{optionsDialog.dismiss();startLayoutDesigner()}
                 }
             }}
             panel.addView(b,LinearLayout.LayoutParams(-1,dp(44)))
@@ -3090,7 +3108,7 @@ class MainActivity : Activity() {
         doubleMidRow.addView(label("EQ • DOPPIO MEDIO",13f,Color.WHITE),LinearLayout.LayoutParams(0,dp(48),1f))
         val doubleMidSwitch=Switch(this).apply{isChecked=eqDoubleMid;setOnCheckedChangeListener{_,checked->eqDoubleMid=checked;save();refreshUi();applyDsp()}}
         doubleMidRow.addView(doubleMidSwitch);panel.addView(doubleMidRow)
-        AlertDialog.Builder(this).setTitle("OPTIONS").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
+        optionsDialog=AlertDialog.Builder(this).setTitle("OPTIONS").setView(ScrollView(this).apply{addView(panel)}).setNegativeButton("CHIUDI",null).show()
     }
     private fun rebuildEffect(){
         try{dpEffect?.release()}catch(_:Throwable){}
