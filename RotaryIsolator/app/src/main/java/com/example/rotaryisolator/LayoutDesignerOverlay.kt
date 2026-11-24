@@ -167,106 +167,111 @@ class LayoutDesignerOverlay(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val x = event.rawX; val y = event.rawY
+        val x = event.rawX
+        val y = event.rawY
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val hit = findHit(targetRoot,x,y)
-                val rightButton = (event.buttonState and MotionEvent.BUTTON_SECONDARY) != 0
-                val alreadySelected = hit != null && selectedViews.any { it === hit || isDescendant(hit,it) }
+                val hit = findHit(targetRoot, x, y)
                 if (hit == null) {
-                    marqueeSelecting = true; marqueeActive = false
-                    marqueeStartX=x; marqueeStartY=y; marqueeX=x; marqueeY=y
-                    moving=null; resizing=false; rightButtonMoving=false; moveOrigins.clear()
-                } else if (rightButton) {
-                    // Right mouse button is reserved for moving the selected element.
-                    if (!alreadySelected) {
-                        selectedViews.clear(); selectedViews.add(hit); selected=hit
-                    }
-                    pushUndo()
-                    moving = if (selectedViews.size == 1) selectedViews.first() else null
-                    resizing = false; rightButtonMoving = moving != null
+                    marqueeSelecting = true
+                    marqueeActive = false
+                    marqueeStartX = x; marqueeStartY = y
+                    marqueeX = x; marqueeY = y
+                    pendingHit = null
+                    dragStarted = false
                     moveOrigins.clear()
-                    selectedViews.forEach { moveOrigins[it]=it.translationX to it.translationY }
-                    val bounds = selectionBounds(selectedViews)
-                    moveBoundsLeft=bounds?.left ?: x; moveBoundsTop=bounds?.top ?: y
-                    gestureStartX=x; gestureStartY=y
-                } else if (alreadySelected) {
-                    pushUndo()
-                    moving = if (selectedViews.size == 1) selectedViews.first() else null
-                    rightButtonMoving = false
-                    resizing = false
-                    val current = moving
-                    if (current != null) {
-                        val p = IntArray(2); current.getLocationOnScreen(p)
-                        val left=p[0].toFloat(); val top=p[1].toFloat()
-                        val right=left+current.width*current.scaleX
-                        val bottom=top+current.height*current.scaleY
-                        val edgeX=minOf(26f*density,current.width*current.scaleX*0.30f)
-                        val edgeY=minOf(26f*density,current.height*current.scaleY*0.30f)
-                        val isDivider=(current.tag as? String)?.startsWith("designer_divider_")==true
-                        resizeLeft=!isDivider && x<=left+edgeX
-                        resizeRight=!isDivider && x>=right-edgeX
-                        resizeTop=!isDivider && y<=top+edgeY
-                        resizeBottom=!isDivider && y>=bottom-edgeY
-                        resizing=resizeLeft||resizeRight||resizeTop||resizeBottom
-                    }
-                    // Left-button dragging on the body no longer moves the element.
-                    if (!resizing) moving = null
-                    moveOrigins.clear()
-                    selectedViews.forEach { moveOrigins[it]=it.translationX to it.translationY }
-                    val bounds = selectionBounds(selectedViews)
-                    moveBoundsLeft=bounds?.left ?: x; moveBoundsTop=bounds?.top ?: y
-                    gestureStartX=x; gestureStartY=y
                 } else {
-                    selectedViews.clear(); selectedViews.add(hit); selected=hit
-                    moving=null; resizing=false; rightButtonMoving=false
-                    val title = (hit as? TextView)?.text?.toString()?.take(22)
-                        ?: hit.contentDescription?.toString()?.take(22) ?: hit.javaClass.simpleName
-                    Toast.makeText(context,"Selezionato: "+title,Toast.LENGTH_SHORT).show()
+                    pendingHit = hit
+                    hitWasSelected = selectedViews.any { it === hit || isDescendant(hit, it) }
+                    dragStarted = false
+                    gestureStartX = x; gestureStartY = y
+                    moveOrigins.clear()
                 }
-                lastX=x; lastY=y; invalidate()
+                lastX = x; lastY = y
+                invalidate()
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 if (marqueeSelecting) {
-                    marqueeX=x; marqueeY=y
-                    if (!marqueeActive && (kotlin.math.abs(x-marqueeStartX)>6f*density || kotlin.math.abs(y-marqueeStartY)>6f*density)) marqueeActive=true
-                    invalidate(); return true
+                    marqueeX = x; marqueeY = y
+                    if (!marqueeActive && (kotlin.math.abs(x-marqueeStartX) > 6f*density ||
+                                kotlin.math.abs(y-marqueeStartY) > 6f*density)) marqueeActive = true
+                    invalidate()
+                    return true
                 }
-                if (selectedViews.isEmpty()) return true
-                if (resizing && moving != null) {
-                    val v=moving!!
-                    resizeSnapped(v,x-lastX,y-lastY)
-                    lastX=x; lastY=y
-                } else if (rightButtonMoving && moveOrigins.isNotEmpty()) {
-                    val dx=x-gestureStartX; val dy=y-gestureStartY
-                    var snappedDx=dx; var snappedDy=dy
+                val hit = pendingHit ?: return true
+                if (!dragStarted &&
+                    (kotlin.math.abs(x-gestureStartX) > 8f*density ||
+                     kotlin.math.abs(y-gestureStartY) > 8f*density)) {
+                    // Drag from the center of any item moves the complete selection.
+                    if (!hitWasSelected && selectedViews.none { it === hit || isDescendant(hit, it) }) {
+                        selectedViews.removeAll { isDescendant(it, hit) }
+                        selectedViews.add(hit)
+                    }
+                    selected = selectedViews.firstOrNull()
+                    if (selectedViews.isNotEmpty()) {
+                        pushUndo()
+                        selectedViews.forEach { moveOrigins[it] = it.translationX to it.translationY }
+                        val bounds = selectionBounds(selectedViews)
+                        moveBoundsLeft = bounds?.left ?: x
+                        moveBoundsTop = bounds?.top ?: y
+                        dragStarted = true
+                    }
+                }
+                if (dragStarted && moveOrigins.isNotEmpty()) {
+                    val dx = x - gestureStartX
+                    val dy = y - gestureStartY
+                    var snappedDx = dx
+                    var snappedDy = dy
                     if (snapEnabled) {
-                        snappedDx=(kotlin.math.round((moveBoundsLeft+dx)/gridStep)*gridStep)-moveBoundsLeft
-                        snappedDy=(kotlin.math.round((moveBoundsTop+dy)/gridStep)*gridStep)-moveBoundsTop
+                        snappedDx = (kotlin.math.round((moveBoundsLeft + dx) / gridStep) * gridStep) - moveBoundsLeft
+                        snappedDy = (kotlin.math.round((moveBoundsTop + dy) / gridStep) * gridStep) - moveBoundsTop
                     }
                     selectedViews.forEach { v ->
-                        val origin=moveOrigins[v] ?: return@forEach
-                        v.translationX=origin.first+snappedDx
-                        v.translationY=origin.second+snappedDy
+                        val origin = moveOrigins[v] ?: return@forEach
+                        v.translationX = origin.first + snappedDx
+                        v.translationY = origin.second + snappedDy
                     }
+                    invalidate()
                 }
-                invalidate(); return true
+                return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (marqueeSelecting) {
-                    if (marqueeActive && event.actionMasked==MotionEvent.ACTION_UP) selectInRectangle()
-                    marqueeSelecting=false; marqueeActive=false
-                } else if (selectedViews.isNotEmpty()) {
+                    if (marqueeActive && event.actionMasked == MotionEvent.ACTION_UP) selectInRectangle()
+                    marqueeSelecting = false
+                    marqueeActive = false
+                } else if (!dragStarted && event.actionMasked == MotionEvent.ACTION_UP) {
+                    val hit = pendingHit
+                    if (hit != null) {
+                        val isStillSelected = selectedViews.any { it === hit || isDescendant(hit, it) }
+                        if (isStillSelected) {
+                            // Tap a selected item to remove it from the multi-selection.
+                            selectedViews.removeAll { it === hit || isDescendant(it, hit) }
+                        } else {
+                            // Additional center taps add items to the current selection.
+                            selectedViews.removeAll { isDescendant(it, hit) }
+                            selectedViews.add(hit)
+                        }
+                        selected = selectedViews.firstOrNull()
+                        val label = (hit as? TextView)?.text?.toString()?.take(22)
+                            ?: hit.contentDescription?.toString()?.take(22) ?: hit.javaClass.simpleName
+                        Toast.makeText(context, if (selectedViews.isEmpty()) "Selezione vuota" else
+                            "Selezionati: " + selectedViews.size + " · " + label, Toast.LENGTH_SHORT).show()
+                    }
+                } else if (dragStarted) {
                     saveSelected()
                 }
-                moving=null; resizing=false; rightButtonMoving=false; moveOrigins.clear()
-                performClick(); invalidate(); return true
+                pendingHit = null
+                dragStarted = false
+                moveOrigins.clear()
+                invalidate()
+                performClick()
+                return true
             }
         }
         return true
     }
-
     private fun pushUndo() {
         val snapshot = LinkedHashMap<View, ViewState>()
         walk(targetRoot, "") { v, _ ->
