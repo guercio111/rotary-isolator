@@ -1,6 +1,8 @@
 package com.example.rotaryisolator
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
@@ -83,17 +85,46 @@ class LayoutDesignerOverlay(
         action("GRUPPO") { selectParentGroup() }
         action("X") { deleteSelected() }
         fun sizeAction(title: String, factor: Float) {
+            val repeatHandler = Handler(Looper.getMainLooper())
+            lateinit var repeatAction: Runnable
             bar.addView(Button(context).apply {
-                text = title; textSize = 18f; isAllCaps = false
-                setPadding(0, 0, 0, 0)
-                contentDescription = if (factor > 1f) "Ingrandisci elemento selezionato" else "Riduci elemento selezionato"
-                setOnClickListener { resizeSelectedByStep(factor) }
-            }, LinearLayout.LayoutParams((42*density).toInt(), (42*density).toInt()).apply {
+                text = title; textSize = 11f; isAllCaps = false
+                setPadding((3*density).toInt(), 0, (3*density).toInt(), 0)
+                contentDescription = if (factor > 1f) "Tieni premuto per allargare la finestra" else "Tieni premuto per ridurre la finestra"
+                setOnClickListener { }
+                repeatAction = object : Runnable {
+                    override fun run() {
+                        if (isPressed) {
+                            resizeSelectedByStep(factor, false)
+                            repeatHandler.postDelayed(this, 240L)
+                        }
+                    }
+                }
+                setOnTouchListener { view, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            if (selectedViews.size == 1) {
+                                resizeSelectedByStep(factor, true)
+                                repeatHandler.postDelayed(repeatAction, 420L)
+                            } else {
+                                resizeSelectedByStep(factor, true)
+                            }
+                            true
+                        }
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            repeatHandler.removeCallbacks(repeatAction)
+                            view.performClick()
+                            true
+                        }
+                        else -> true
+                    }
+                }
+            }, LinearLayout.LayoutParams((88*density).toInt(), (42*density).toInt()).apply {
                 leftMargin = (2*density).toInt(); rightMargin = (2*density).toInt()
             })
         }
-        sizeAction("−", 0.95f)
-        sizeAction("+", 1.05f)
+        sizeAction("−  RIDUCI", 0.90f)
+        sizeAction("+  ALLARGA", 1.10f)
         action("ANNULLA") { undoLast() }
         action("SNAP 8dp") {
             snapEnabled = !snapEnabled
@@ -277,19 +308,19 @@ class LayoutDesignerOverlay(
     }
 
     /** Resize a single selected control in predictable 5% steps, keeping its center fixed. */
-    private fun resizeSelectedByStep(factor: Float) {
+    private fun resizeSelectedByStep(factor: Float, recordUndo: Boolean = true) {
         if (selectedViews.size != 1) {
-            Toast.makeText(context, "Seleziona un solo quadrante da ridimensionare", Toast.LENGTH_SHORT).show()
+            if (recordUndo) Toast.makeText(context, "Seleziona una sola finestra o un solo elemento", Toast.LENGTH_SHORT).show()
             return
         }
         val v = selectedViews.first()
         if (v.width <= 0 || v.height <= 0) return
-        pushUndo()
+        if (recordUndo) pushUndo()
         val newX = (v.scaleX * factor).coerceIn(0.45f, 2.5f)
         val newY = (v.scaleY * factor).coerceIn(0.45f, 2.5f)
         if (newX == v.scaleX && newY == v.scaleY) {
-            undoHistory.removeLast()
-            Toast.makeText(context, "Dimensione massima o minima raggiunta", Toast.LENGTH_SHORT).show()
+            if (recordUndo && undoHistory.isNotEmpty()) undoHistory.removeLast()
+            if (recordUndo) Toast.makeText(context, "Dimensione massima o minima raggiunta", Toast.LENGTH_SHORT).show()
             return
         }
         v.scaleX = newX
