@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.view.Gravity
 import android.view.MotionEvent
@@ -460,13 +461,17 @@ class LayoutDesignerOverlay(
     override fun performClick(): Boolean { super.performClick(); return true }
 
     private fun inside(v: View,x: Float,y: Float): Boolean {
-        val p=IntArray(2); v.getLocationOnScreen(p)
-        // Keep hit regions tight: a divider gets only a tiny touch tolerance,
-        // so it cannot steal a neighbouring label or control.
+        // rawX/rawY are screen coordinates. getGlobalVisibleRect() also
+        // returns screen-space bounds, including transforms from every parent.
+        // Do not subtract rootView's screen origin: that mixes coordinate spaces
+        // and shifts hit targets, especially after the Designer scales a section.
+        val visible = Rect()
+        if (!v.getGlobalVisibleRect(visible)) return false
+        // Keep divider hit regions tight so they cannot steal a neighbouring control.
         val isDivider = (v.tag as? String)?.startsWith("designer_divider_") == true
         val pad = if (isDivider) 3f*density else 0f
-        return x>=p[0]-pad && x<=p[0]+v.width*v.scaleX+pad &&
-            y>=p[1]-pad && y<=p[1]+v.height*v.scaleY+pad
+        return x >= visible.left - pad && x <= visible.right + pad &&
+            y >= visible.top - pad && y <= visible.bottom + pad
     }
 
     /** Promote the currently selected control to its nearest semantic group. */
