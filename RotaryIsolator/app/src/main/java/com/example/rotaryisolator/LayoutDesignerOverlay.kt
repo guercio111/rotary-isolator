@@ -102,10 +102,10 @@ class LayoutDesignerOverlay(
             pendingHit = null; dragStarted = false; marqueeSelecting = false; marqueeActive = false
             invalidate()
         }
-        lateinit var testModeButton: Button
+        var testModeButton: Button? = null
         testModeButton = action("PROVA") {
             passThrough = !passThrough
-            testModeButton.text = if (passThrough) "TORNA DESIGN" else "PROVA"
+            testModeButton?.text = if (passThrough) "TORNA DESIGN" else "PROVA"
             pendingHit = null; dragStarted = false; marqueeSelecting = false; marqueeActive = false
             Toast.makeText(context,
                 if (passThrough) "PROVA ATTIVA: manopole e pulsanti dell'app sono utilizzabili" else "MODIFICA ATTIVA",
