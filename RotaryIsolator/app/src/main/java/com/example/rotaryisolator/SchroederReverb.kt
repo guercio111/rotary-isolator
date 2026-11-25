@@ -247,6 +247,28 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private var smoothedReverbMid = 1f
     private var smoothedReverbHigh = 1f
 
+    private fun clearReverbTail() {
+        lines.forEach { it.clear() }
+        inputDiffusers.forEach { it.clear() }
+        outputDiffusers.forEach { it.clear() }
+        matrix.fill(0f)
+        hpX = 0f
+        hpY = 0f
+        hp2X = 0f
+        hp2Y = 0f
+        lpY = 0f
+        reverbLimiter = 1f
+        smoothedSend = 0f
+        reverbPreDelayBuffer.fill(0f)
+        reverbPreDelayWriteIndex = 0
+        smoothedReverbPreDelaySamples = 0f
+        reverbLowMidSplit.clear()
+        reverbMidHighSplit.clear()
+        smoothedReverbLow = 1f
+        smoothedReverbMid = 1f
+        smoothedReverbHigh = 1f
+    }
+
     fun clear() {
         lines.forEach { it.clear() }
         inputDiffusers.forEach { it.clear() }
@@ -409,7 +431,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // audibly smears its onset. Update only between handoffs so an active
         // transition never changes duration halfway through.
         if (!delayDivisionSwitch) {
-            delayTransitionLength = (sampleRate * (fxPhasePeriodMs / 1000f * 0.08f))
+            delayTransitionLength = (sampleRate * (fxPhasePeriodMs / 1000f * 0.06f))
                 .coerceIn(sampleRate * 0.002f, sampleRate * 0.012f)
                 .toInt().coerceAtLeast(1)
         }
@@ -705,13 +727,17 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     reverbFadeGain = (reverbFadeRemainingSamples.toFloat() / reverbFadeTotalSamples)
                         .coerceIn(0f, 1f)
                     reverbFadeRemainingSamples--
+                    if (reverbFadeRemainingSamples == 0) {
+                        reverbFadeGain = 0f
+                        clearReverbTail()
+                    }
                 } else {
                     reverbFadeGain = 0f
                 }
             }
             // Small additional reduction requested to keep the Reverb return from
             // sitting too strongly on the beat; this does not alter beat timing.
-            val reverbReturn = wet * 1.50f * reverbFadeGain
+            val reverbReturn = wet * 1.55f * reverbFadeGain
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
 
             // Restore Build 907's proven independent return limiters.
