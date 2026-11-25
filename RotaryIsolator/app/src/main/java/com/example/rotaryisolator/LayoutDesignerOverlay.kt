@@ -480,28 +480,42 @@ class LayoutDesignerOverlay(
     }
 
     private fun findHit(group: ViewGroup,x: Float,y: Float): View? {
-        // First give individually tagged labels and dividers priority. This keeps
-        // labels independently editable even when they belong to a larger control.
-        for (i in group.childCount-1 downTo 0) {
-            val child=group.getChildAt(i)
-            val tag=child.tag as? String
-            if ((tag?.startsWith("designer_divider_")==true || tag?.startsWith("designer_selectable_")==true) &&
-                child.visibility==View.VISIBLE && child.alpha>=0.05f &&
-                child.width>0 && child.height>0 && inside(child,x,y)) return child
-        }
+        // Always search the complete subtree for individually selectable controls
+        // before considering a semantic parent group. Otherwise a tagged group
+        // (for example MASTER/REVERB) masks its dots, labels and dividers.
+        findTaggedHit(group,x,y)?.let { return it }
+        return findHitBody(group,x,y)
+    }
+
+    private fun findTaggedHit(group: ViewGroup,x: Float,y: Float): View? {
         for (i in group.childCount-1 downTo 0) {
             val child=group.getChildAt(i)
             if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
                 child.width<=0 || child.height<=0) continue
             val tag=child.tag as? String
+            if ((tag?.startsWith("designer_divider_")==true ||
+                 tag?.startsWith("designer_selectable_")==true) && inside(child,x,y)) return child
             val nested=child as? ViewGroup
-            // A semantic group (for example a complete rotary) is selected as one
-            // unit when the pointer is on its body; its tagged labels were checked above.
-            if (tag?.startsWith("designer_group_")==true && inside(child,x,y)) return child
-            // Descend even outside the parent's bounds so protruding labels remain hittable.
-            val deeper=nested?.let { findHit(it,x,y) }
+            val deeper=nested?.let { findTaggedHit(it,x,y) }
             if (deeper!=null) return deeper
-            // Every remaining visible view, including untagged containers, can be selected.
+        }
+        return null
+    }
+
+    private fun findHitBody(group: ViewGroup,x: Float,y: Float): View? {
+        for (i in group.childCount-1 downTo 0) {
+            val child=group.getChildAt(i)
+            if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
+                child.width<=0 || child.height<=0) continue
+            val tag=child.tag as? String
+            // After individually tagged descendants have been checked, a semantic
+            // group can be selected as a whole from the remaining area of its body.
+            if (tag?.startsWith("designer_group_")==true && inside(child,x,y)) return child
+            val nested=child as? ViewGroup
+            // Search beyond parent bounds for labels protruding from a rotary/panel.
+            val deeper=nested?.let { findHitBody(it,x,y) }
+            if (deeper!=null) return deeper
+            // Untagged containers and ordinary leaf views are selectable too.
             if (inside(child,x,y)) return child
         }
         return null
