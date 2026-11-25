@@ -277,7 +277,6 @@ class MainActivity : Activity() {
     private var compMakeup = 0f
     private var eqOn = true
     private var isoOn = true
-    private var filtersOn = false
     private var gain = 0f
     private var resonance = 0f
     private var phonePortrait = false
@@ -287,12 +286,8 @@ class MainActivity : Activity() {
     private var designerOverlay: LayoutDesignerOverlay? = null
     private var lastWindowWidthPx = 0
     private var lastWindowHeightPx = 0
-    private var masterMode = 0
-    private var bassBoost = 0f
     private var loudness = 0f
-    private var bassBoostOn = false
     private var loudnessOn = false
-    private var previousBassBoost = 0f
     private var previousLoudness = 0f
     private val sectionPreviousEq = FloatArray(4)
     private val sectionPreviousIso = FloatArray(3)
@@ -307,7 +302,6 @@ class MainActivity : Activity() {
     private val eqControlOn = BooleanArray(4) { true }
     private var eqDoubleMid = false
     private val isoControlOn = BooleanArray(3) { true }
-    private val filterControlOn = BooleanArray(2) { true }
     private val handler = Handler(Looper.getMainLooper())
     private val dspThread = HandlerThread("Frequalizer-DSP", Process.THREAD_PRIORITY_AUDIO).apply { start() }
     private val dspHandler = Handler(dspThread.looper)
@@ -418,12 +412,8 @@ class MainActivity : Activity() {
         if (!fadePlusTwoSecondsApplied) prefs.edit().putInt("reverb_fade_ms", reverbFadeMs).putBoolean("reverb_fade_plus2sec_v2", true).apply()
         defaultSettingsOnStart = prefs.getBoolean("default_settings_on_start", true)
         compact = false
-        masterMode = prefs.getInt("master_mode", 0).coerceIn(0,1)
-        bassBoost = prefs.getFloat("bass_boost", 0f).coerceIn(0f,100f)
         loudness = prefs.getFloat("loudness", 0f).coerceIn(0f,100f)
-        bassBoostOn = prefs.getBoolean("bass_boost_on", false)
         loudnessOn = prefs.getBoolean("loudness_on", false)
-        previousBassBoost = prefs.getFloat("previous_bass_boost", 0f).coerceIn(0f,100f)
         previousLoudness = prefs.getFloat("previous_loudness", 0f).coerceIn(0f,100f)
         uiScale = prefs.getFloat("ui_scale",1.0f).coerceIn(0.70f,1.30f)
         val dm = resources.displayMetrics
@@ -491,9 +481,6 @@ class MainActivity : Activity() {
         if (!doubleMidDefaultApplied) prefs.edit().putBoolean("double_mid_default_v1", true).putBoolean("eq_double_mid", true).apply()
         // Keep the filter section enabled at every app start, regardless of
         // an OFF value saved by an older build/session.
-        filtersOn = prefs.getBoolean("filters_on", true)
-        filterControlOn[0] = prefs.getBoolean("filter_control_0", true)
-        filterControlOn[1] = prefs.getBoolean("filter_control_1", true)
         gain = prefs.getFloat("gain", 0f).coerceIn(-12f,12f)
         for (i in 0..2) {
             eq[i] = prefs.getFloat("eq_$i", 0f).coerceIn(-14f,14f)
@@ -508,7 +495,6 @@ class MainActivity : Activity() {
         sectionPreviousFilters[0]=filters[0];sectionPreviousFilters[1]=filters[1];sectionPreviousFilters[2]=resonance
         for (i in 0..3) eqControlOn[i] = prefs.getBoolean("eq_control_$i", true)
         for (i in 0..2) isoControlOn[i] = prefs.getBoolean("iso_control_$i", true)
-        for (i in 0..1) filterControlOn[i] = prefs.getBoolean("filter_control_$i", true)
         for (key in modes.keys) modes[key] = prefs.getBoolean("mode_$key", false)
         for(i in 0..3){
             previousEq[i]=prefs.getFloat("previous_eq_$i",eq[i])
@@ -627,7 +613,7 @@ class MainActivity : Activity() {
         reverbMix=0
         for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
         gain=0f;compMakeup=0f;compressorOn=false
-        bassBoost=0f;loudness=0f;bassBoostOn=false;loudnessOn=false
+        loudness=0f;loudnessOn=false
     }
 
     private fun dp(v:Int)= (v*resources.displayMetrics.density*phoneUiScale).roundToInt()
@@ -777,10 +763,10 @@ class MainActivity : Activity() {
     }
 
     private fun save() {
-        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putInt("master_mode",masterMode).putFloat("bass_boost",bassBoost).putFloat("loudness",loudness).putBoolean("bass_boost_on",bassBoostOn).putBoolean("loudness_on",loudnessOn).putFloat("previous_bass_boost",previousBassBoost).putFloat("previous_loudness",previousLoudness).putBoolean("limiter",limiterOn).putBoolean("isolator_limiter",isoLimiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
+        prefs.edit().putBoolean("app_enabled",appEnabled).putBoolean("mini",compact).putFloat("loudness",loudness).putBoolean("loudness_on",loudnessOn).putFloat("previous_loudness",previousLoudness).putBoolean("limiter",limiterOn).putBoolean("isolator_limiter",isoLimiterOn).putBoolean("mouse_wheel_adjust_on",mouseWheelAdjustOn).putFloat("mouse_wheel_sensitivity",mouseWheelSensitivity)
             .putBoolean("compressor_on",compressorOn).putFloat("comp_threshold",compThreshold).putFloat("comp_ratio",compRatio).putFloat("comp_attack",compAttack).putFloat("comp_release",compRelease).putFloat("comp_makeup",compMakeup)
             .putInt("color_eq",colorEq).putInt("color_iso",colorIso).putInt("color_filters",colorFilters).putInt("color_master",colorMaster).putInt("color_reverb",colorReverb).putInt("color_delay",colorDelay).putInt("color_buttons",colorButtons).putInt("color_background",colorBackground).putInt("color_titles",colorTitles).putInt("color_options",colorOptions)
-            .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putBoolean("filters_on",filtersOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
+            .putBoolean("eq_on",eqOn).putBoolean("iso_on",isoOn).putFloat("gain",gain).putFloat("ui_scale",uiScale)
             .putBoolean("default_settings_on_start",defaultSettingsOnStart)
             .putBoolean("reverb_on",reverbOn).putInt("reverb_fade_ms",reverbFadeMs).putInt("reverb_mix",reverbMix).putInt("reverb_size_t2",reverbSize).putInt("reverb_beat_percent",reverbBeatPercent).putInt("reverb_feedback",reverbFeedbackPercent).putInt("reverb_color",reverbColorPercent).putInt("reverb_hp_hz",reverbHpHz).putInt("reverb_lp_hz",reverbLpHz).putInt("reverb_delay_mix",delayMix).putInt("beat_fx_delay_feedback",delayFeedbackPercent).putInt("beat_fx_delay_tone",delayTonePercent).putBoolean("beat_fx_low_enabled",fxLowEnabled).putBoolean("beat_fx_mid_enabled",fxMidEnabled).putBoolean("beat_fx_high_enabled",fxHighEnabled).putBoolean("reverb_low_enabled",reverbLowEnabled).putBoolean("reverb_mid_enabled",reverbMidEnabled).putBoolean("reverb_high_enabled",reverbHighEnabled).putFloat("reverb_delay_bpm",delayBpm).putFloat("reverb_delay_tap_bpm",delayTapBpm).putFloat("reverb_delay_bpm_correction",delayBpmCorrection).putBoolean("auto_bpm_enabled",autoBpmEnabled).putBoolean("dub_delay_on",delayOn).putInt("dub_delay_fade_ms",delayFadeMs).putInt("dub_delay_division",delayDivision).putInt("dub_delay_mode",delayMode).putInt("beat_fx_selected",selectedBeatFx).putBoolean("dub_delay_manual_mode",delayManualMode).putFloat("dub_delay_manual_time_percent",delayManualTimePercent)
             .apply {
@@ -788,8 +774,7 @@ class MainActivity : Activity() {
                 putFloat("eq_3",eq[3]).putBoolean("eq_double_mid",eqDoubleMid)
                 putFloat("hpf",filters[0]);putFloat("resonance",resonance)
                                 for(i in 0..2){putBoolean("eq_control_$i",eqControlOn[i]);putBoolean("iso_control_$i",isoControlOn[i])}
-                for(i in 0..1)putBoolean("filter_control_$i",filterControlOn[i])
-                for(i in 0..3){putFloat("previous_eq_$i",previousEq[i]);putFloat("section_previous_eq_$i",sectionPreviousEq[i])}
+                        for(i in 0..3){putFloat("previous_eq_$i",previousEq[i]);putFloat("section_previous_eq_$i",sectionPreviousEq[i])}
                 for(i in 0..2){putFloat("previous_iso_$i",previousIso[i]);putFloat("section_previous_iso_$i",sectionPreviousIso[i])}
                 putFloat("previous_hpf",previousFilters[0]).putFloat("previous_resonance",previousFilters[2])
                 putFloat("section_previous_hpf",sectionPreviousFilters[0]).putFloat("section_previous_resonance",sectionPreviousFilters[2])
@@ -1179,38 +1164,12 @@ class MainActivity : Activity() {
                 override fun onStopTrackingTouch(b:SeekBar?){save()}
             })
         }else RotaryControl(this,"GAIN",gain,-12f,12f,accent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-        val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-        val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,accent,{v->loudness=v.coerceIn(0f,100f);scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+        val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},switchState={compressorOn},switchChanged={enabled->compressorOn=enabled;save();scheduleUpdate()},switchTag="designer_selectable_comp_dot")
+        val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,accent,{v->loudness=v.coerceIn(0f,100f);scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},switchState={loudnessOn},switchChanged={enabled->loudnessOn=enabled;save();scheduleUpdate()},switchTag="designer_selectable_loud_dot")
         listOf(gainDial,compDial,loudDial).forEachIndexed{index,dial->row.addView(dial,LinearLayout.LayoutParams(0,if(compact)dp(110) else -1,1f).apply{leftMargin=if(index==0)0 else dp(4);rightMargin=if(index==2)0 else dp(4)})}
         box.addView(row,LinearLayout.LayoutParams(-1,0,1f))
         parent.addView(box,if(parent===content)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,-1,1f))
         sections["GAIN"]=box
-    }
-
-    private fun masterToneControl(
-        title:String,value:Float,enabled:Boolean,setValue:(Float)->Unit,setEnabled:(Boolean)->Unit,
-        remember:()->Unit,restore:()->Unit,compactActions:Boolean=false
-    ):View{
-        val col=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
-        // Percentage label removed; master values remain adjustable.
-        val actions=LinearLayout(this).apply{orientation=if(compactActions)LinearLayout.VERTICAL else LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-        val onAction=roundAction("",if(enabled)"ON" else "OFF",enabled){
-            setEnabled(!enabled);save();refreshUi();scheduleUpdate()
-        }
-        val returnAction=roundAction("↶","RETURN",true){
-            restore();save();refreshUi();scheduleUpdate()
-        }
-        if(compactActions){
-            actions.addView(onAction,LinearLayout.LayoutParams(-1,dp(24)).apply{bottomMargin=dp(5)})
-            actions.addView(returnAction,LinearLayout.LayoutParams(-1,dp(24)))
-        }else{
-            actions.addView(onAction,LinearLayout.LayoutParams(-2,dp(24)).apply{rightMargin=dp(8)})
-            actions.addView(returnAction,LinearLayout.LayoutParams(-2,dp(24)).apply{leftMargin=dp(8)})
-        }
-        col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)56 else 28)))
-        col.addView(RotaryControl(this,title,value,0f,100f,accentFor("MASTER"),{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
-            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
-        return col
     }
 
     private fun masterDialHeight():Int {
@@ -1281,11 +1240,10 @@ class MainActivity : Activity() {
         filters[0]=0f;filters[1]=0f;resonance=0f
         for(i in 0..2){previousFilters[i]=0f;sectionPreviousFilters[i]=0f}
         gain=0f;compMakeup=0f;compressorOn=false
-        bassBoost=0f;loudness=0f;bassBoostOn=false;loudnessOn=false
-        eqOn=true;isoOn=true;filtersOn=true
+        loudness=0f;loudnessOn=false
+        eqOn=true;isoOn=true
         for(i in 0..3)eqControlOn[i]=true
         for(i in 0..2)isoControlOn[i]=true
-        for(i in 0..1)filterControlOn[i]=true
         save();refreshUi();scheduleUpdate()
     }
 
@@ -2396,7 +2354,21 @@ class MainActivity : Activity() {
                 frame.addView(knob, FrameLayout.LayoutParams(-1, -1))
                 // The visible 14dp status dot sits inside a larger 30dp editor hit target.
                 // This keeps the on-screen appearance unchanged while making it easy to select.
-                val dot = FrameLayout(this).apply {
+                val dot = object : FrameLayout(this@MainActivity) {
+                    private var acceptedTouch = false
+                    override fun onTouchEvent(event: MotionEvent): Boolean {
+                        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                            val radius = dp(9f)
+                            val dx = event.x - width / 2f
+                            val dy = event.y - height / 2f
+                            acceptedTouch = dx * dx + dy * dy <= radius * radius
+                        }
+                        if (!acceptedTouch) return false
+                        val handled = super.onTouchEvent(event)
+                        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) acceptedTouch = false
+                        return handled
+                    }
+                }.apply {
                     tag = selectionTag
                     isClickable = true
                     isFocusable = true
@@ -3447,7 +3419,10 @@ private class RotaryControl(
     private val spaciousText:Boolean = false,
     private val labelScale:Float = 1f,
     private val wheelStep:Float = 0f,
-    private val zeroCentered:Boolean = false
+    private val zeroCentered:Boolean = false,
+    private val switchState: (() -> Boolean)? = null,
+    private val switchChanged: ((Boolean) -> Unit)? = null,
+    private val switchTag: String? = null
 ):FrameLayout(context){
     private val density get()=resources.displayMetrics.density
     private fun dp(x:Float)=x*density*layoutScale
@@ -3559,6 +3534,47 @@ private class RotaryControl(
         addView(dialFace,FrameLayout.LayoutParams(-1,-1))
         addView(titleLabel,FrameLayout.LayoutParams(-1,dp(18f).toInt(),Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         addView(valueLabel,FrameLayout.LayoutParams(-1,dp(16f).toInt(),Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        if (switchState != null && switchChanged != null) {
+            val toggle = object : FrameLayout(context) {
+                private var acceptedTouch = false
+                override fun onTouchEvent(event: MotionEvent): Boolean {
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        val radius = dp(9f)
+                        val dx = event.x - width / 2f
+                        val dy = event.y - height / 2f
+                        acceptedTouch = dx * dx + dy * dy <= radius * radius
+                    }
+                    if (!acceptedTouch) return false
+                    val handled = super.onTouchEvent(event)
+                    if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) acceptedTouch = false
+                    return handled
+                }
+            }.apply {
+                tag = switchTag ?: "designer_selectable_${title.lowercase()}_dot"
+                isClickable = true
+                isFocusable = true
+                contentDescription = "$title ${if (switchState()) "ON" else "OFF"}"
+            }
+            val indicator = View(context)
+            fun paintSwitch() {
+                indicator.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(if (switchState()) Color.rgb(40,220,90) else Color.rgb(225,45,45))
+                    setStroke(dp(1f).toInt(), Color.WHITE)
+                }
+                toggle.contentDescription = "$title ${if (switchState()) "ON" else "OFF"}"
+            }
+            paintSwitch()
+            toggle.setOnClickListener {
+                switchChanged(!switchState())
+                paintSwitch()
+            }
+            toggle.addView(indicator, FrameLayout.LayoutParams(dp(14f).toInt(),dp(14f).toInt(),Gravity.CENTER))
+            addView(toggle,FrameLayout.LayoutParams(dp(24f).toInt(),dp(24f).toInt(),Gravity.TOP or Gravity.END).apply {
+                topMargin = dp(2f).toInt()
+                marginEnd = dp(2f).toInt()
+            })
+        }
         updateLabelLayout()
     }
     private fun refreshValueLabel(){valueLabel.text=valueText()}
