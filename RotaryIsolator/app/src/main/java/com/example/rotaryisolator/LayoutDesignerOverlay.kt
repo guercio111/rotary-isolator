@@ -202,25 +202,30 @@ class LayoutDesignerOverlay(
                 pendingHit = hit
                 dragStarted = false
                 moveOrigins.clear()
-                if (editMode == EditMode.SELECT && hit == null) {
-                    marqueeSelecting = true
-                    marqueeActive = false
-                    marqueeStartX = x; marqueeStartY = y
-                    marqueeX = x; marqueeY = y
-                } else {
-                    marqueeSelecting = false
-                    if (editMode == EditMode.MOVE && hit != null &&
-                        selectedViews.any { it === hit || isDescendant(hit, it) || isDescendant(it, hit) }) {
-                        gestureStartX = x; gestureStartY = y
-                    }
+                marqueeSelecting = false
+                marqueeActive = false
+                gestureStartX = x
+                gestureStartY = y
+                if (editMode == EditMode.MOVE && hit != null &&
+                    selectedViews.any { it === hit || isDescendant(hit, it) || isDescendant(it, hit) }) {
+                    gestureStartX = x; gestureStartY = y
                 }
                 lastX = x; lastY = y
                 invalidate()
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (marqueeSelecting && editMode == EditMode.SELECT) {
-                    marqueeX = x; marqueeY = y
+                if (editMode == EditMode.SELECT) {
+                    // In selection mode, a tap selects one precise element; dragging
+                    // anywhere (including over a panel/group) draws a marquee instead.
+                    if (!marqueeSelecting) {
+                        marqueeSelecting = true
+                        marqueeStartX = gestureStartX.takeIf { it != 0f } ?: lastX
+                        marqueeStartY = gestureStartY.takeIf { it != 0f } ?: lastY
+                        marqueeX = x; marqueeY = y
+                    } else {
+                        marqueeX = x; marqueeY = y
+                    }
                     if (!marqueeActive && (kotlin.math.abs(x-marqueeStartX) > 6f*density ||
                                 kotlin.math.abs(y-marqueeStartY) > 6f*density)) marqueeActive = true
                     invalidate()
@@ -454,8 +459,10 @@ class LayoutDesignerOverlay(
 
     private fun inside(v: View,x: Float,y: Float): Boolean {
         val p=IntArray(2); v.getLocationOnScreen(p)
+        // Keep hit regions tight: a divider gets only a tiny touch tolerance,
+        // so it cannot steal a neighbouring label or control.
         val isDivider = (v.tag as? String)?.startsWith("designer_divider_") == true
-        val pad = if (isDivider) 18f*density else 0f
+        val pad = if (isDivider) 3f*density else 0f
         return x>=p[0]-pad && x<=p[0]+v.width*v.scaleX+pad &&
             y>=p[1]-pad && y<=p[1]+v.height*v.scaleY+pad
     }
@@ -488,18 +495,22 @@ class LayoutDesignerOverlay(
     }
 
     private fun findTaggedHit(group: ViewGroup,x: Float,y: Float): View? {
-        for (i in group.childCount-1 downTo 0) {
-            val child=group.getChildAt(i)
-            if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
-                child.width<=0 || child.height<=0) continue
-            val tag=child.tag as? String
-            if ((tag?.startsWith("designer_divider_")==true ||
-                 tag?.startsWith("designer_selectable_")==true) && inside(child,x,y)) return child
-            val nested=child as? ViewGroup
-            val deeper=nested?.let { findTaggedHit(it,x,y) }
-            if (deeper!=null) return deeper
+        // Collect every tagged hit and choose the smallest actual view. This avoids
+        // a broad parent/label region winning over the small item directly touched.
+        val hits = ArrayList<View>()
+        fun collect(parent: ViewGroup) {
+            for (i in parent.childCount-1 downTo 0) {
+                val child=parent.getChildAt(i)
+                if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
+                    child.width<=0 || child.height<=0) continue
+                val tag=child.tag as? String
+                if ((tag?.startsWith("designer_divider_")==true ||
+                     tag?.startsWith("designer_selectable_")==true) && inside(child,x,y)) hits.add(child)
+                (child as? ViewGroup)?.let { collect(it) }
+            }
         }
-        return null
+        collect(group)
+        return hits.minByOrNull { it.width.toLong() * it.height.toLong() }
     }
 
     private fun findHitBody(group: ViewGroup,x: Float,y: Float): View? {
