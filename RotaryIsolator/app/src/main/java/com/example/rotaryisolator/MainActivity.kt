@@ -692,6 +692,7 @@ class MainActivity : Activity() {
     private fun circleAction(symbol:String, diameter:Int, action:()->Unit):View = TextView(this).apply {
         text=symbol; textSize=(if(diameter>=48)16f else 11f)*phoneUiScale; setTextColor(Color.WHITE)
         gravity=Gravity.CENTER; contentDescription=when(symbol){"F"->"Flat";"0"->"Reset";else->"Return"}
+        tag="designer_selectable_action_"+symbol
         background=android.graphics.drawable.GradientDrawable().apply {
             shape=android.graphics.drawable.GradientDrawable.OVAL
             setColor(colorButtons); setStroke(dp(1),Color.rgb(255,235,100))
@@ -1008,7 +1009,11 @@ class MainActivity : Activity() {
                 values[i]=old.coerceIn(bandRange.start,bandRange.endInclusive); save(); refreshUi(); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
             bandActions.addView(circleAction("F",actionFlatSize) {
-                if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
+                // Preserve the last non-flat value; pressing FLAT repeatedly must
+                // not erase the value that RETURN is expected to restore.
+                if (values[i] != 0f) {
+                    if(key=="EQ") previousEq[i]=values[i] else previousIso[i]=values[i]
+                }
                 values[i]=0f
                 save()
                 scheduleUpdate()
@@ -1083,7 +1088,10 @@ class MainActivity : Activity() {
         }
         headerControls.addView(circleAction("F",if(compactHeader)30 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
-            for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
+            for(i in 0..(if(key=="EQ")3 else 2)){
+                if (values[i] != 0f) previous[i]=values[i]
+                values[i]=0f
+            }
             scheduleUpdate();refreshUi()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
@@ -2144,6 +2152,8 @@ class MainActivity : Activity() {
         divisionLabels.forEachIndexed { index, caption ->
             val button = TextView(this).apply {
                 text = caption
+                tag = "designer_selectable_beat_division_"+index
+                contentDescription = "Beat division "+caption
                 textSize = 8.5f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
