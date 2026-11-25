@@ -497,22 +497,22 @@ class LayoutDesignerOverlay(
     }
 
     private fun findTaggedHit(group: ViewGroup,x: Float,y: Float): View? {
-        // Collect every tagged hit and choose the smallest actual view. This avoids
-        // a broad parent/label region winning over the small item directly touched.
-        val hits = ArrayList<View>()
-        fun collect(parent: ViewGroup) {
-            for (i in parent.childCount-1 downTo 0) {
-                val child=parent.getChildAt(i)
-                if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
-                    child.width<=0 || child.height<=0) continue
-                val tag=child.tag as? String
-                if ((tag?.startsWith("designer_divider_")==true ||
-                     tag?.startsWith("designer_selectable_")==true) && inside(child,x,y)) hits.add(child)
-                (child as? ViewGroup)?.let { collect(it) }
-            }
+        // Follow Android's reverse child drawing order and return the first exact
+        // tagged hit. Choosing the globally smallest intersecting view can select
+        // an unrelated tiny label (for example LOUDNESS) when two transformed
+        // controls overlap in a customized portrait/landscape layout.
+        for (i in group.childCount-1 downTo 0) {
+            val child=group.getChildAt(i)
+            if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
+                child.width<=0 || child.height<=0) continue
+            val nested=child as? ViewGroup
+            val deeper=nested?.let { findTaggedHit(it,x,y) }
+            if (deeper!=null) return deeper
+            val tag=child.tag as? String
+            if ((tag?.startsWith("designer_divider_")==true ||
+                 tag?.startsWith("designer_selectable_")==true) && inside(child,x,y)) return child
         }
-        collect(group)
-        return hits.minByOrNull { it.width.toLong() * it.height.toLong() }
+        return null
     }
 
     private fun findHitBody(group: ViewGroup,x: Float,y: Float): View? {
