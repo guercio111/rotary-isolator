@@ -519,14 +519,18 @@ class LayoutDesignerOverlay(
             if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
                 child.width<=0 || child.height<=0) continue
             val tag=child.tag as? String
-            // After individually tagged descendants have been checked, a semantic
-            // group can be selected as a whole from the remaining area of its body.
-            if (tag?.startsWith("designer_group_")==true && inside(child,x,y)) return child
+            // Search descendants BEFORE accepting a semantic parent group.
+            // This is essential: a tap on FILTER/MASTER text or on an individual
+            // rotary must select that exact child, not the surrounding section.
+            // Recurse even when the touch is outside a parent's bounds because
+            // labels and rotary hit areas can extend beyond compact containers.
             val nested=child as? ViewGroup
-            // Search beyond parent bounds for labels protruding from a rotary/panel.
             val deeper=nested?.let { findHitBody(it,x,y) }
             if (deeper!=null) return deeper
-            // Untagged containers and ordinary leaf views are selectable too.
+            // A semantic group is selectable only when no more specific child
+            // under the same touch point was found.
+            if (tag?.startsWith("designer_group_")==true && inside(child,x,y)) return child
+            // Untagged containers and ordinary leaf views remain selectable.
             if (inside(child,x,y)) return child
         }
         return null
