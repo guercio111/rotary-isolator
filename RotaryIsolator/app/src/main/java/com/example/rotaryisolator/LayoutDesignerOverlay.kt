@@ -521,9 +521,13 @@ class LayoutDesignerOverlay(
             if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
                 child.width<=0 || child.height<=0) continue
             val tag=child.tag as? String
-            // Search descendants BEFORE accepting a semantic parent group.
+            // RotaryControl is one logical movable component. Its dial face is an
+            // implementation child, not an independently movable UI element.
+            // The title/value labels are already handled by findTaggedHit above.
+            if (tag == "designer_group_rotary" && inside(child,x,y)) return child
+            // Search descendants BEFORE accepting other semantic parent groups.
             // This is essential: a tap on FILTER/MASTER text or on an individual
-            // rotary must select that exact child, not the surrounding section.
+            // control must select that exact child, not the surrounding section.
             // Recurse even when the touch is outside a parent's bounds because
             // labels and rotary hit areas can extend beyond compact containers.
             val nested=child as? ViewGroup
