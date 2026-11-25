@@ -692,7 +692,7 @@ class MainActivity : Activity() {
     private fun circleAction(symbol:String, diameter:Int, action:()->Unit):View = TextView(this).apply {
         text=symbol; textSize=(if(diameter>=48)16f else 11f)*phoneUiScale; setTextColor(Color.WHITE)
         gravity=Gravity.CENTER; contentDescription=when(symbol){"F"->"Flat";"0"->"Reset";else->"Return"}
-        tag="designer_selectable_action_"+symbol
+        tag="designer_selectable_action_"+symbol+"_"+System.identityHashCode(this)
         background=android.graphics.drawable.GradientDrawable().apply {
             shape=android.graphics.drawable.GradientDrawable.OVAL
             setColor(colorButtons); setStroke(dp(1),Color.rgb(255,235,100))
@@ -705,8 +705,10 @@ class MainActivity : Activity() {
         val narrowPhone = phonePortrait && !wideLayout
         return LinearLayout(this).apply {
             orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL
+            tag="designer_selectable_action_group_"+caption
             val dot=TextView(this@MainActivity).apply {
                 text=symbol;gravity=Gravity.CENTER;textSize=(if(symbol=="F")9f else 11f)*phoneUiScale
+                tag="designer_selectable_action_dot_"+caption
                 setTextColor(Color.WHITE)
                 background=android.graphics.drawable.GradientDrawable().apply {
                     shape=android.graphics.drawable.GradientDrawable.OVAL
@@ -718,6 +720,7 @@ class MainActivity : Activity() {
             addView(dot,LinearLayout.LayoutParams(dp(if(narrowPhone)18 else 26),dp(if(narrowPhone)20 else 24)))
             val txt=TextView(this@MainActivity).apply {
                 text=caption;textSize=(if(narrowPhone)8f else 9f)*phoneUiScale;setTextColor(Color.WHITE);gravity=Gravity.CENTER_VERTICAL
+                tag="designer_selectable_action_label_"+caption
                 setPadding(dp(if(narrowPhone)3 else 5),0,dp(2),0);setOnClickListener { action() }
             }
             addView(txt,LinearLayout.LayoutParams(-2,dp(24)))
@@ -748,6 +751,7 @@ class MainActivity : Activity() {
         }
         init {
             contentDescription = "Impostazioni"
+            tag = "designer_selectable_options_gear"
             setOnClickListener { showOptions() }
         }
     }
@@ -2107,6 +2111,8 @@ class MainActivity : Activity() {
         modeLabels.forEachIndexed { index, caption ->
             val button = TextView(this).apply {
                 text = caption
+                tag = "designer_selectable_delay_mode_"+index
+                contentDescription = caption
                 textSize = 9f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
