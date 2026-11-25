@@ -1270,6 +1270,10 @@ class MainActivity : Activity() {
     // AUTO BPM also needs the system-audio capture, even when no FX is audible.
     private fun captureNeeded() = effectsActive() || autoBpmEnabled || bpmAnalyzerOn
 
+    private fun stopCaptureIfUnused() {
+        if (!captureNeeded()) stopAudioCaptureTest()
+    }
+
     private fun startBpmAnalyzer() {
         if (bpmAnalyzerOn) return
         bpmAnalyzerOn = true
@@ -1592,7 +1596,7 @@ class MainActivity : Activity() {
                 reverbOn = !reverbOn
                 styleToggle(this, reverbOn, colorReverb)
                 save(); scheduleUpdate()
-                if (reverbOn) updateEffectsCapture(true)
+                if (reverbOn) updateEffectsCapture(true) else stopCaptureIfUnused()
             }
         }
         val reverbTitle = label("REVERB", 13f, colorReverb)
@@ -1693,6 +1697,7 @@ class MainActivity : Activity() {
                 // DELAY may be switched ON at zero level; opening the send later
                 // must start capture from this direct user interaction.
                 if (delayOn && previousMix == 0 && delayMix > 0) updateEffectsCapture(true)
+                else if (delayOn && delayMix == 0) stopCaptureIfUnused()
             },
             { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
@@ -1733,6 +1738,7 @@ class MainActivity : Activity() {
                 delayBpm = registerDelayTap()
                 bpmLabel.text = String.format(java.util.Locale.US, "%.1f", delayBpm)
                 save(); scheduleUpdate()
+                stopCaptureIfUnused()
             }
         }
         var bpmFineSeek: SeekBar? = null
@@ -1768,7 +1774,7 @@ class MainActivity : Activity() {
                 text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
                 paintClockButton(this, autoBpmEnabled)
                 save()
-                if (autoBpmEnabled) updateEffectsCapture(true)
+                if (autoBpmEnabled) updateEffectsCapture(true) else stopCaptureIfUnused()
             }
         }
         autoBpmButton = autoButton
@@ -1993,6 +1999,7 @@ class MainActivity : Activity() {
                     // Flush the Delay/Echo history with its short DSP fade. The
                     // Reverb and BPM capture paths remain untouched.
                     parallelReverbProcessor?.requestDelayReset()
+                    stopCaptureIfUnused()
                 }
             }
         }
@@ -2202,7 +2209,6 @@ class MainActivity : Activity() {
                     delayDivision = index
                     phaseJogLastProgress = 100
                     fxPhaseSeek?.progress = 100
-                    fxPhaseSeek?.invalidate()
                     fxPhaseSeek?.invalidate()
                     refreshFxPhaseUi()
                     fxBpmLastBeatIndex = Long.MIN_VALUE
