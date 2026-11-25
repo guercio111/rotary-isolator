@@ -1064,8 +1064,16 @@ class MainActivity : Activity() {
                 save(); scheduleUpdate()
                 val activeNow = if(key=="EQ") eqOn else isoOn
                 status.text = if(activeNow) "$key ON" else "$key OFF"
-                // Refresh band controls to reflect the section state.
-                refreshUi()
+                for (i in active.indices) {
+                    val enabled = activeNow && active[i]
+                    if (key == "EQ") {
+                        eqBandKnobs[i]?.isEnabled = enabled
+                        eqBandSeekBars[i]?.isEnabled = enabled
+                    } else {
+                        isoBandKnobs[i]?.isEnabled = enabled
+                        isoBandSeekBars[i]?.isEnabled = enabled
+                    }
+                }
             }
         }
         headerControls.addView(sectionPower,LinearLayout.LayoutParams(dp(if(compactHeader)38 else 48),dp(if(compactHeader)24 else 28)).apply{rightMargin=dp(5)})
@@ -1099,8 +1107,8 @@ class MainActivity : Activity() {
                         }
                     }
                     save()
+                    for (i in 0..2) refreshBandControl("ISOLATOR", i)
                     scheduleUpdate()
-                    refreshUi()
                 }
             }
             headerControls.addView(
@@ -1250,12 +1258,13 @@ class MainActivity : Activity() {
         }
         val label = if (isEq) eqBandLabels[index] else isoBandLabels[index]
         label?.text = "$name  ${fmt(value)} dB"
+        val rangeStart = if (isEq) -14f else -24f
+        val rangeEnd = if (isEq) 14f else if (isoLimiterOn) { if (index == 0) 0f else 6f } else 24f
         val knob = if (isEq) eqBandKnobs[index] else isoBandKnobs[index]
+        knob?.setRange(rangeStart, rangeEnd)
         knob?.setValueExternally(value)
         val seek = if (isEq) eqBandSeekBars[index] else isoBandSeekBars[index]
         seek?.let {
-            val rangeStart = if (isEq) -14f else -24f
-            val rangeEnd = if (isEq) 14f else if (isoLimiterOn) { if (index == 0) 0f else 6f } else 24f
             val half = (max(abs(rangeStart), abs(rangeEnd)) * 10f).roundToInt().coerceAtLeast(1)
             it.max = half * 2
             it.progress = if (value <= 0f) {
@@ -3423,8 +3432,8 @@ private class RotaryControl(
     context:android.content.Context,
     private val title:String,
     initial:Float,
-    private val minV:Float,
-    private val maxV:Float,
+    private var minV:Float,
+    private var maxV:Float,
     private val accent:Int,
     private val changed:(Float)->Unit,
     private val valueText:()->String,
@@ -3517,9 +3526,9 @@ private class RotaryControl(
                 MotionEvent.ACTION_DOWN->{onStart();downY=e.y;downV=v;dragged=false;parent?.requestDisallowInterceptTouchEvent(true);return true}
                 MotionEvent.ACTION_MOVE->{
                     val delta=downY-e.y
-                    if(abs(delta)>dp(if(step>0f)1f else 4f)) dragged=true
+                    if(abs(delta)>dp(if(step>0f)1f else 3f)) dragged=true
                     if(dragged){
-                        val sensitivity=(maxV-minV)*(if(step>0f)0.25f else 2.2f)/height.coerceAtLeast(1)
+                        val sensitivity=(maxV-minV)*(if(step>0f)0.25f else 1.2f)/height.coerceAtLeast(1)
                         v=quantize(downV+delta*sensitivity);changed(v);invalidate();refreshValueLabel()
                     }
                     return true
@@ -3568,6 +3577,13 @@ private class RotaryControl(
     }
     override fun setEnabled(enabled:Boolean){super.setEnabled(enabled);dialFace.isEnabled=enabled;titleLabel.isEnabled=enabled;valueLabel.isEnabled=enabled}
     override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);updateLabelLayout()}
+    fun setRange(minimum: Float, maximum: Float) {
+        minV = minimum
+        maxV = maximum.coerceAtLeast(minimum + 0.0001f)
+        v = quantize(v)
+        dialFace.invalidate()
+        refreshValueLabel()
+    }
     fun setValueExternally(value:Float){v=quantize(value);dialFace.invalidate();refreshValueLabel()}
     private fun quantize(value:Float):Float{
         if(step<=0f)return value.coerceIn(minV,maxV)
