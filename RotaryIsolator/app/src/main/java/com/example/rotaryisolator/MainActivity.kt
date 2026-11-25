@@ -248,7 +248,7 @@ class MainActivity : Activity() {
     private val captureRequestCode = 7420
     private val capturePermissionRequestCode = 7421
     private var audioReady = false
-    private var appEnabled = true
+    @Volatile private var appEnabled = true
     private var defaultSettingsOnStart = true
     private var compact = false
     private var uiScale = 1.0f
@@ -2747,16 +2747,24 @@ class MainActivity : Activity() {
                                 if (absolute > peak) peak = absolute
                                 sum += sample.toDouble() * sample.toDouble()
                             }
-                            processor.process(
-                                buffer, wetBuffer, count,
-                                reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
-                                appEnabled && reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                appEnabled && delayOn, delayFadeMs, delayDivision, manualDelayTimeMs(), delayManualMode, delayMode, delayFeedbackPercent, delayTonePercent,
-                                fxLowEnabled, fxMidEnabled, fxHighEnabled,
-                                reverbLowEnabled, reverbMidEnabled, reverbHighEnabled,
-                                reverbFeedbackPercent, 50, reverbColorPercent,
-                                delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
-                            )
+                            if (appEnabled) {
+                                processor.process(
+                                    buffer, wetBuffer, count,
+                                    reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
+                                    reverbOn, reverbFadeMs, delayMix, delayBpm,
+                                    delayOn, delayFadeMs, delayDivision, manualDelayTimeMs(), delayManualMode, delayMode, delayFeedbackPercent, delayTonePercent,
+                                    fxLowEnabled, fxMidEnabled, fxHighEnabled,
+                                    reverbLowEnabled, reverbMidEnabled, reverbHighEnabled,
+                                    reverbFeedbackPercent, 50, reverbColorPercent,
+                                    delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
+                                )
+                            } else {
+                                // Global OFF is a hard FX bypass even if BPM analysis
+                                // keeps the capture stream alive. Clear the wet history
+                                // on the audio worker so no old tail returns on re-enable.
+                                processor.clear()
+                                java.util.Arrays.fill(wetBuffer, 0, count, 0.toShort())
+                            }
                             fxAppliedPhaseDelayMs = processor.getFxPhaseDelayMs()
                             var written = 0
                             while (written < count && captureRunning) {
