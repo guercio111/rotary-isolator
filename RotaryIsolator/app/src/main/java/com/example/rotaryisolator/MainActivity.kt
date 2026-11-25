@@ -2358,7 +2358,7 @@ class MainActivity : Activity() {
                     private var acceptedTouch = false
                     override fun onTouchEvent(event: MotionEvent): Boolean {
                         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                            val radius = dp(9f)
+                            val radius = dp(9).toFloat()
                             val dx = event.x - width / 2f
                             val dy = event.y - height / 2f
                             acceptedTouch = dx * dx + dy * dy <= radius * radius
