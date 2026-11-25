@@ -328,6 +328,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         // Preload the user's saved tablet Designer layout once; subsequent manual edits remain persistent.
         applyBundledTabletLayoutOnce()
+        applyDelayLayoutTouchFix()
         captureDiag("ACTIVITY onCreate; changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         // Explicitly follow the physical sensor in both portrait and landscape.
         // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
@@ -3258,6 +3259,29 @@ class MainActivity : Activity() {
         } catch (t: Throwable) {
             android.util.Log.e("FREQUALIZER_LAYOUT", "Caricamento layout tablet integrato non riuscito", t)
         }
+    }
+
+    /** Reset only the broken Delay/Echo Designer transforms; preserve every other saved layout edit. */
+    private fun applyDelayLayoutTouchFix() {
+        val marker = "delay_echo_touch_layout_fix_20261125_v1_applied"
+        if (prefs.getBoolean(marker, false)) return
+        val affectedPrefixes = listOf(
+            "layout_designer_tablet_portrait_1.2.0.0.1.2",
+            "layout_designer_tablet_landscape_1.1.1.0.0.3",
+            "layout_designer_deleted_tablet_portrait_1.2.0.0.1.2",
+            "layout_designer_deleted_tablet_landscape_1.1.1.0.0.3"
+        )
+        val affectedKeys = prefs.all.keys.filter { key ->
+            affectedPrefixes.any { prefix -> key == prefix || key.startsWith("$prefix.") }
+        }
+        val editor = prefs.edit()
+        affectedKeys.forEach { editor.remove(it) }
+        editor.putBoolean(marker, true)
+        check(editor.commit()) { "Impossibile ripristinare il layout Delay/Echo" }
+        android.util.Log.i(
+            "FREQUALIZER_LAYOUT",
+            "Ripristinato il posizionamento nativo Delay/Echo in portrait e landscape; rimosse ${affectedKeys.size} trasformazioni/nascondimenti"
+        )
     }
 
     private fun readLayoutBackup(uri: Uri): Map<String, Any> {
