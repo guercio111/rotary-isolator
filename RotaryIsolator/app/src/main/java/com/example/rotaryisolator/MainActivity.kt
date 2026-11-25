@@ -759,7 +759,17 @@ class MainActivity : Activity() {
         }
         textSize=11f*phoneUiScale;isAllCaps=false;setTextColor(Color.WHITE);minHeight=dp(30);minimumHeight=dp(30);tag="designer_selectable_app_power"
         setPadding(dp(3),0,dp(3),0);paintState();contentDescription="Interruttore generale audio"
-        setOnClickListener { appEnabled=!appEnabled;paintState();save();scheduleUpdate() }
+        setOnClickListener {
+            appEnabled = !appEnabled
+            paintState()
+            save()
+            scheduleUpdate()
+            if (appEnabled) {
+                if (effectsActive()) updateEffectsCapture(true)
+            } else {
+                stopCaptureIfUnused()
+            }
+        }
     }
 
     private fun save() {
@@ -1266,7 +1276,7 @@ class MainActivity : Activity() {
 
 
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
-    private fun effectsActive() = reverbOn || (delayOn && delayMix > 0)
+    private fun effectsActive() = appEnabled && (reverbOn || (delayOn && delayMix > 0))
     // AUTO BPM also needs the system-audio capture, even when no FX is audible.
     private fun captureNeeded() = effectsActive() || autoBpmEnabled || bpmAnalyzerOn
 
@@ -1596,7 +1606,7 @@ class MainActivity : Activity() {
                 reverbOn = !reverbOn
                 styleToggle(this, reverbOn, colorReverb)
                 save(); scheduleUpdate()
-                if (reverbOn) updateEffectsCapture(true) else stopCaptureIfUnused()
+                if (reverbOn) updateEffectsCapture(true)
             }
         }
         val reverbTitle = label("REVERB", 13f, colorReverb)
@@ -1697,7 +1707,6 @@ class MainActivity : Activity() {
                 // DELAY may be switched ON at zero level; opening the send later
                 // must start capture from this direct user interaction.
                 if (delayOn && previousMix == 0 && delayMix > 0) updateEffectsCapture(true)
-                else if (delayOn && delayMix == 0) stopCaptureIfUnused()
             },
             { "$delayMix%" }, onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
@@ -1999,7 +2008,6 @@ class MainActivity : Activity() {
                     // Flush the Delay/Echo history with its short DSP fade. The
                     // Reverb and BPM capture paths remain untouched.
                     parallelReverbProcessor?.requestDelayReset()
-                    stopCaptureIfUnused()
                 }
             }
         }
@@ -2742,8 +2750,8 @@ class MainActivity : Activity() {
                             processor.process(
                                 buffer, wetBuffer, count,
                                 reverbMix, reverbSize, reverbHpHz, reverbLpHz, false,
-                                reverbOn, reverbFadeMs, delayMix, delayBpm,
-                                delayOn, delayFadeMs, delayDivision, manualDelayTimeMs(), delayManualMode, delayMode, delayFeedbackPercent, delayTonePercent,
+                                appEnabled && reverbOn, reverbFadeMs, delayMix, delayBpm,
+                                appEnabled && delayOn, delayFadeMs, delayDivision, manualDelayTimeMs(), delayManualMode, delayMode, delayFeedbackPercent, delayTonePercent,
                                 fxLowEnabled, fxMidEnabled, fxHighEnabled,
                                 reverbLowEnabled, reverbMidEnabled, reverbHighEnabled,
                                 reverbFeedbackPercent, 50, reverbColorPercent,
