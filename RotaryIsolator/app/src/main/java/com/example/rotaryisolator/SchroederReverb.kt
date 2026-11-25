@@ -155,6 +155,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
     private val reverbPreDelayBuffer = FloatArray(sampleRate * 2)
     private var reverbPreDelayWriteIndex = 0
     private var smoothedReverbPreDelaySamples = 0f
+    // Reverb OFF uses the configured fade time to let the existing tail decay smoothly.
+    private var reverbWasEnabled = false
+    private var reverbFadeRemainingSamples = 0
+    private var reverbFadeGain = 0f
     private var smoothedReverbFilterHz = 14000f
     // The FILTER control also damps the recirculating FDN tail, not just its input.
     // This one-pole coefficient maps the selected cutoff to a stable feedback low-pass.
@@ -259,6 +263,9 @@ internal class SchroederReverb(private val sampleRate: Int) {
         reverbPreDelayBuffer.fill(0f)
         reverbPreDelayWriteIndex = 0
         smoothedReverbPreDelaySamples = 0f
+        reverbWasEnabled = false
+        reverbFadeRemainingSamples = 0
+        reverbFadeGain = 0f
         smoothedReverbFilterHz = 14000f
         smoothedReverbDamping = exp((-2.0 * PI * 14000.0 / sampleRate).toFloat())
         delayBuffer.fill(0f)
@@ -462,6 +469,17 @@ internal class SchroederReverb(private val sampleRate: Int) {
         }
 
         val delayFadeSeconds = delayFadeMs.coerceIn(300, 6000) / 1000f
+        val reverbFadeTotalSamples = (fadeMs.coerceIn(300, 6000) * sampleRate / 1000f)
+            .toInt().coerceAtLeast(1)
+        if (inputEnabled) {
+            reverbWasEnabled = true
+            reverbFadeRemainingSamples = 0
+            reverbFadeGain = 1f
+        } else if (reverbWasEnabled) {
+            reverbWasEnabled = false
+            reverbFadeRemainingSamples = reverbFadeTotalSamples
+            reverbFadeGain = 1f
+        }
         // Build 861 send response: fast DJ-style 12 ms smoothing, independent of the tail.
         val sendSmoothing = (1.0 - exp(-1.0 / (sampleRate * 0.012))).toFloat().coerceIn(0.000001f, 1f)
         val delayMixSmoothing = (1.0 - exp(-3.0 / (sampleRate * delayFadeSeconds))).toFloat().coerceIn(0.000001f, 1f)
@@ -682,7 +700,18 @@ internal class SchroederReverb(private val sampleRate: Int) {
                 delayResetFadeInRemaining--
             }
             // Build 861 return gain restores the original strong, full-bodied wet level.
-            val reverbReturn = wet * 1.55f
+            if (!inputEnabled) {
+                if (reverbFadeRemainingSamples > 0) {
+                    reverbFadeGain = (reverbFadeRemainingSamples.toFloat() / reverbFadeTotalSamples)
+                        .coerceIn(0f, 1f)
+                    reverbFadeRemainingSamples--
+                } else {
+                    reverbFadeGain = 0f
+                }
+            }
+            // Small additional reduction requested to keep the Reverb return from
+            // sitting too strongly on the beat; this does not alter beat timing.
+            val reverbReturn = wet * 1.50f * reverbFadeGain
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
 
             // Restore Build 907's proven independent return limiters.
