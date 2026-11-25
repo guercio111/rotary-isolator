@@ -319,6 +319,14 @@ class MainActivity : Activity() {
     private lateinit var container: FrameLayout
     private lateinit var status: TextView
     private val sections = mutableMapOf<String, LinearLayout>()
+    // Live references let FLAT/RETURN update only the affected bands instead of
+    // rebuilding the complete view tree on every press.
+    private val eqBandKnobs = arrayOfNulls<RotaryControl>(4)
+    private val isoBandKnobs = arrayOfNulls<RotaryControl>(3)
+    private val eqBandSeekBars = arrayOfNulls<SeekBar>(4)
+    private val isoBandSeekBars = arrayOfNulls<SeekBar>(3)
+    private val eqBandLabels = arrayOfNulls<TextView>(4)
+    private val isoBandLabels = arrayOfNulls<TextView>(3)
     private val gold get() = colorEq
     private val bg get() = colorBackground
     private fun accentFor(key:String) = when(key) { "EQ" -> colorEq; "ISOLATOR" -> colorIso; "FILTERS" -> colorFilters; else -> colorMaster }
@@ -798,6 +806,9 @@ class MainActivity : Activity() {
     }
 
     private fun buildUi() {
+        eqBandKnobs.fill(null); isoBandKnobs.fill(null)
+        eqBandSeekBars.fill(null); isoBandSeekBars.fill(null)
+        eqBandLabels.fill(null); isoBandLabels.fill(null)
         val compactPhone = phonePortrait && !wideLayout
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
@@ -971,12 +982,14 @@ class MainActivity : Activity() {
             val bandRange = range.start..bandCeiling
             val col=LinearLayout(this).apply{orientation=if(useVerticalRows)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL;gravity=Gravity.CENTER}
             val vLabel=label("${names[pos]}  ${fmt(values[i])} dB", if(compactHeader && key=="EQ" && eqDoubleMid)7f else if(compactHeader)8.5f else if(compact)10f else 12f,Color.WHITE)
+            if (key == "EQ") eqBandLabels[i] = vLabel else isoBandLabels[i] = vLabel
             val controlHeader=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             if(useVerticalRows) vLabel.gravity=Gravity.CENTER_VERTICAL or Gravity.CENTER_HORIZONTAL
             controlHeader.addView(vLabel,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(0,dp(if(compactHeader)19 else 28),1f))
             val controlRow=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             if(modes[key]==true) {
                 val seek=SeekBar(this).apply{
+                    if (key == "EQ") eqBandSeekBars[i] = this else isoBandSeekBars[i] = this
                     val seekHalf=(max(abs(bandRange.start),abs(bandRange.endInclusive))*10f).roundToInt().coerceAtLeast(1)
                     max=seekHalf*2
                     progress=if(values[i]<=0f) {
@@ -1002,6 +1015,7 @@ class MainActivity : Activity() {
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
                 val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,zeroCentered=key=="ISOLATOR")
+                if (key == "EQ") eqBandKnobs[i] = knob else isoBandKnobs[i] = knob
                 knob.isEnabled=active[i]
                 // In portrait each dial occupies the same flexible column; the
                 // control measures itself from its row, never from a guessed width.
@@ -1013,7 +1027,7 @@ class MainActivity : Activity() {
             bandActions.addView(circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
-                values[i]=old.coerceIn(bandRange.start,bandRange.endInclusive); save(); refreshUi(); scheduleUpdate()
+                values[i]=old.coerceIn(bandRange.start,bandRange.endInclusive); save(); refreshBandControl(key, i); scheduleUpdate()
             },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
             bandActions.addView(circleAction("F",actionFlatSize) {
                 // Preserve the last non-flat value; pressing FLAT repeatedly must
@@ -1023,8 +1037,8 @@ class MainActivity : Activity() {
                 }
                 values[i]=0f
                 save()
+                refreshBandControl(key, i)
                 scheduleUpdate()
-                refreshUi()
             },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
@@ -1100,8 +1114,9 @@ class MainActivity : Activity() {
             for(i in 0..(if(key=="EQ")3 else 2)){
                 if (values[i] != 0f) previous[i]=values[i]
                 values[i]=0f
+                refreshBandControl(key, i)
             }
-            scheduleUpdate();refreshUi()
+            save(); scheduleUpdate()
         },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
@@ -1222,6 +1237,34 @@ class MainActivity : Activity() {
     }
 
     private fun refreshUi(){ buildUi() }
+
+    private fun refreshBandControl(key: String, index: Int) {
+        val isEq = key == "EQ"
+        val values = if (isEq) eq else iso
+        if (index !in values.indices) return
+        val value = values[index]
+        val name = when {
+            isEq && eqDoubleMid -> arrayOf("LOW", "MID LOW", "MID HIGH", "HIGH")[index]
+            isEq -> arrayOf("LOW", "MID", "HIGH", "HIGH")[index]
+            else -> arrayOf("LOW", "MID", "HIGH")[index]
+        }
+        val label = if (isEq) eqBandLabels[index] else isoBandLabels[index]
+        label?.text = "$name  ${fmt(value)} dB"
+        val knob = if (isEq) eqBandKnobs[index] else isoBandKnobs[index]
+        knob?.setValueExternally(value)
+        val seek = if (isEq) eqBandSeekBars[index] else isoBandSeekBars[index]
+        seek?.let {
+            val rangeStart = if (isEq) -14f else -24f
+            val rangeEnd = if (isEq) 14f else if (isoLimiterOn) { if (index == 0) 0f else 6f } else 24f
+            val half = (max(abs(rangeStart), abs(rangeEnd)) * 10f).roundToInt().coerceAtLeast(1)
+            it.max = half * 2
+            it.progress = if (value <= 0f) {
+                (half + value / abs(rangeStart).coerceAtLeast(0.0001f) * half).roundToInt()
+            } else {
+                (half + value / rangeEnd.coerceAtLeast(0.0001f) * half).roundToInt()
+            }.coerceIn(0, it.max)
+        }
+    }
 
     private fun resetAllControls(){
         for(i in 0..3){eq[i]=0f;previousEq[i]=0f;sectionPreviousEq[i]=0f}
