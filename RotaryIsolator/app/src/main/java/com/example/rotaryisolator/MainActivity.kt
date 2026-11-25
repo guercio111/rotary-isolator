@@ -3103,8 +3103,10 @@ class MainActivity : Activity() {
             }
             entries.put(entry)
         }
-        require(entries.length() > 0) { "Nessun layout salvato da esportare" }
-        val backup = JSONObject().put("format", "frequalizer-layout-backup").put("version", 1).put("entries", entries)
+        // An empty project is also exportable: it represents the original layout in both orientations.
+        val backup = JSONObject().put("format", "frequalizer-layout-backup").put("version", 2)
+            .put("profiles", JSONArray().put("tablet_portrait").put("tablet_landscape"))
+            .put("entries", entries)
         contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(backup.toString(2)) }
             ?: throw IllegalStateException("Impossibile creare il file di backup")
         Toast.makeText(this, "Backup layout esportato (${entries.length()} elementi)", Toast.LENGTH_LONG).show()
@@ -3117,10 +3119,12 @@ class MainActivity : Activity() {
         val raw = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
             ?: throw IllegalStateException("Impossibile leggere il file")
         val result = linkedMapOf<String, Any>()
+        var validJsonBackup = false
         if (raw.trimStart().startsWith("{")) {
             val root = JSONObject(raw)
             require(root.optString("format") == "frequalizer-layout-backup") { "Formato backup non riconosciuto" }
-            require(root.optInt("version", -1) == 1) { "Versione backup non supportata" }
+            require(root.optInt("version", -1) in 1..2) { "Versione backup non supportata" }
+            validJsonBackup = true
             val entries = root.getJSONArray("entries")
             for (i in 0 until entries.length()) {
                 val entry = entries.getJSONObject(i)
@@ -3153,7 +3157,7 @@ class MainActivity : Activity() {
                 event = parser.next()
             }
         }
-        require(result.isNotEmpty()) { "Il file non contiene modifiche di layout riconoscibili" }
+        require(result.isNotEmpty() || validJsonBackup) { "Il file non contiene modifiche di layout riconoscibili" }
         return result
     }
 
@@ -3162,10 +3166,12 @@ class MainActivity : Activity() {
             val imported = readLayoutBackup(uri)
             AlertDialog.Builder(this)
                 .setTitle("IMPORTA PROGETTO")
-                .setMessage("Trovate ${imported.size} impostazioni di layout. Vuoi importarle? Le altre impostazioni dell'app non verranno modificate.")
+                .setMessage("Il file contiene ${imported.size} impostazioni. L'importazione SOSTITUIRÀ il layout attualmente salvato, sia verticale sia orizzontale. Le altre impostazioni e i parametri audio dell'app non verranno modificati. Vuoi continuare?")
                 .setNegativeButton("ANNULLA", null)
-                .setPositiveButton("IMPORTA") { _, _ ->
+                .setPositiveButton("SOSTITUISCI LAYOUT") { _, _ ->
                     val editor = prefs.edit()
+                    // Import is a full project restore, not a partial merge.
+                    prefs.all.keys.filter { isLayoutBackupKey(it) }.forEach { editor.remove(it) }
                     imported.forEach { (key, value) ->
                         when (value) {
                             is String -> editor.putString(key, value)
@@ -3407,6 +3413,8 @@ private class RotaryControl(
     }
     init{
         isFocusable=true;isClickable=true;clipChildren=false;clipToPadding=false
+        // The complete knob is a selectable group; title/value labels remain individually selectable.
+        tag="designer_group_rotary"
         contentDescription="$title rotary control"
         dialFace.contentDescription="$title rotary dial"
         addView(dialFace,FrameLayout.LayoutParams(-1,-1))
