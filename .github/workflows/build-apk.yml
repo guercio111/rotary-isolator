@@ -66,6 +66,8 @@ jobs:
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/LayoutDesignerOverlay.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/LayoutDesignerOverlay.kt
+          mkdir -p extracted/RotaryIsolator/app/src/main/assets
+          cp RotaryIsolator/app/src/main/assets/FREQUALIZER_LAYOUT_BACKUP.json extracted/RotaryIsolator/app/src/main/assets/FREQUALIZER_LAYOUT_BACKUP.json
 
       - name: Configure internal audio capture and preserve popup through rotation
         run: |
