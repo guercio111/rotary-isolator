@@ -328,6 +328,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         // Preload the user's saved tablet Designer layout once; subsequent manual edits remain persistent.
         applyBundledTabletLayoutOnce()
+        repairDesignerTouchLayoutOnce()
         captureDiag("ACTIVITY onCreate; changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         // Explicitly follow the physical sensor in both portrait and landscape.
         // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
@@ -1112,7 +1113,13 @@ class MainActivity : Activity() {
         headerControls.addView(circleAction("F",if(compactHeader)30 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..(if(key=="EQ")3 else 2)){
-                if (values[i] != 0f) previous[i]=values[i]
+                if (values[i] != 0f) {
+                    previous[i]=values[i]
+                    // The section FLAT button must also update the per-band
+                    // RETURN snapshot. RETURN reads previousEq/previousIso,
+                    // not sectionPreviousEq/sectionPreviousIso.
+                    if (key == "EQ") previousEq[i] = values[i] else previousIso[i] = values[i]
+                }
                 values[i]=0f
                 refreshBandControl(key, i)
             }
@@ -3258,6 +3265,35 @@ class MainActivity : Activity() {
         } catch (t: Throwable) {
             android.util.Log.e("FREQUALIZER_LAYOUT", "Caricamento layout tablet integrato non riuscito", t)
         }
+    }
+
+    private fun repairDesignerTouchLayoutOnce() {
+        // Earlier Designer saves moved the complete portrait DELAY/ECHO column
+        // far outside its panel and shifted the landscape BEAT-FX controls into
+        // MASTER. Restore only those affected subtrees; keep EQ, ISOLATOR,
+        // FILTER and the user's remaining layout customizations untouched.
+        val marker = "designer_touch_layout_repair_20261125_v1"
+        if (prefs.getBoolean(marker, false)) return
+
+        val affectedSubtrees = listOf(
+            "layout_designer_tablet_portrait_1.2.0.0.1.2",
+            "layout_designer_deleted_tablet_portrait_1.2.0.0.1.2",
+            "layout_designer_tablet_landscape_1.1.1.0.0.2",
+            "layout_designer_deleted_tablet_landscape_1.1.1.0.0.2",
+            "layout_designer_tablet_landscape_1.1.1.0.0.3",
+            "layout_designer_deleted_tablet_landscape_1.1.1.0.0.3"
+        )
+        val editor = prefs.edit()
+        val keysToReset = prefs.all.keys.filter { key ->
+            affectedSubtrees.any { prefix -> key == prefix || key.startsWith(prefix + ".") }
+        }
+        keysToReset.forEach { editor.remove(it) }
+        editor.putBoolean(marker, true)
+        check(editor.commit()) { "Impossibile ripristinare le aree touch DELAY/ECHO" }
+        android.util.Log.i(
+            "FREQUALIZER_LAYOUT",
+            "Ripristinati i soli rami DELAY/ECHO verticali e orizzontali; rimossi ${keysToReset.size} override Designer"
+        )
     }
 
     private fun readLayoutBackup(uri: Uri): Map<String, Any> {
