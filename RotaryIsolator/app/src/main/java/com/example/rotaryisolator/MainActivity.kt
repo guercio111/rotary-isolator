@@ -2066,15 +2066,15 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         listOf(autoButton, lockButton, phaseBackButton, phaseForwardButton, skipBeatButton, resetButton).forEachIndexed { index, control ->
-            clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(if (compactTabletPortrait) 20 else 34), 1f).apply {
+            clockControlRow.addView(control, LinearLayout.LayoutParams(0, dp(if (compactTabletPortrait) 18 else 34), 1f).apply {
                 if (index > 0) leftMargin = dp(if (compactTabletPortrait) 1 else 3)
             })
         }
-        delayControls.addView(clockControlRow, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(20)) else LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
+        delayControls.addView(clockControlRow, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(18)) else LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
         val bpmFineCaption = label("PITCH  −10%  |  0  |  +10%", 8f, colorDelay).apply {
             gravity = Gravity.CENTER_VERTICAL
         }
-        delayControls.addView(bpmFineCaption, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(8)) else LinearLayout.LayoutParams(-1, 0, 0.55f).apply { topMargin = dp(2) })
+        delayControls.addView(bpmFineCaption, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(9)) else LinearLayout.LayoutParams(-1, 0, 0.55f).apply { topMargin = dp(2) })
         val fineSeek = SeekBar(this).apply {
             max = 200
             progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
@@ -2099,7 +2099,7 @@ class MainActivity : Activity() {
             })
         }
         bpmFineSeek = fineSeek
-        delayControls.addView(fineSeek, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(10)) else LinearLayout.LayoutParams(-1, 0, 0.9f).apply { topMargin = dp(2); bottomMargin = dp(2) })
+        delayControls.addView(fineSeek, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(11)) else LinearLayout.LayoutParams(-1, 0, 0.9f).apply { topMargin = dp(2); bottomMargin = dp(2) })
 
         // Separate spring-centred FX phase jog. Dragging changes only the FX
         // phase trim; on release the handle returns to centre while the trim
@@ -2152,11 +2152,11 @@ class MainActivity : Activity() {
             })
         }
         fxPhaseSeek = phaseJogSeek
-        delayControls.addView(fxPhaseTitle, LinearLayout.LayoutParams(-1, dp(if (compactTabletPortrait) 8 else 15)).apply {
+        delayControls.addView(fxPhaseTitle, LinearLayout.LayoutParams(-1, dp(if (compactTabletPortrait) 9 else 15)).apply {
             topMargin = dp(if (compactTabletPortrait) 0 else 1)
         })
         phaseJogSeek?.let { seek ->
-            delayControls.addView(seek, LinearLayout.LayoutParams(-1, dp(if (compactTabletPortrait) 10 else 25)).apply {
+            delayControls.addView(seek, LinearLayout.LayoutParams(-1, dp(if (compactTabletPortrait) 11 else 25)).apply {
                 topMargin = dp(if (compactTabletPortrait) 0 else 1)
                 bottomMargin = dp(if (compactTabletPortrait) 0 else 2)
             })
@@ -2201,7 +2201,7 @@ class MainActivity : Activity() {
             })
         }
         paintModeButtons()
-        delayControls.addView(modeRow, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(20)) else LinearLayout.LayoutParams(-1, 0, 1.1f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+        delayControls.addView(modeRow, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(18)) else LinearLayout.LayoutParams(-1, 0, 1.1f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         var delayTimeDial: RotaryControl? = null
         val divisions = LinearLayout(this).apply {
@@ -2272,7 +2272,7 @@ class MainActivity : Activity() {
             onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
-        delayControls.addView(divisions, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(20)) else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+        delayControls.addView(divisions, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(18)) else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
         // Three independent V10-style Beat FX frequency selectors.
         // At least one band must remain selected; all three ON is full spectrum.
@@ -2318,7 +2318,7 @@ class MainActivity : Activity() {
         addFrequencyButton("FX LOW", { fxLowEnabled }, { fxLowEnabled = !fxLowEnabled })
         addFrequencyButton("FX MID", { fxMidEnabled }, { fxMidEnabled = !fxMidEnabled })
         addFrequencyButton("FX HIGH", { fxHighEnabled }, { fxHighEnabled = !fxHighEnabled })
-        delayControls.addView(frequencyRow, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(20)) else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
+        delayControls.addView(frequencyRow, if (compactTabletPortrait) LinearLayout.LayoutParams(-1, dp(18)) else LinearLayout.LayoutParams(-1, 0, 1.15f).apply { topMargin = dp(3); bottomMargin = dp(3) })
 
 
         val delayFeedbackDial = RotaryControl(
@@ -2366,7 +2366,7 @@ class MainActivity : Activity() {
         val delayColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(3), dp(2), dp(3), dp(2))
+            setPadding(dp(3), dp(if (compactTabletPortrait) 0 else 2), dp(3), dp(if (compactTabletPortrait) 0 else 2))
         }
         val delaySection = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
