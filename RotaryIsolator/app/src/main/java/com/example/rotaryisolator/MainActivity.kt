@@ -3380,9 +3380,9 @@ private class RotaryControl(
     private val dialFace=object:View(context){
         private val p=Paint(Paint.ANTI_ALIAS_FLAG)
         private val rect get()={
-            val dialTextReserve=if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f)
+            val dialTextReserve=dp(36f)
             val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .94f
-            val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
+            val cy=(height-dp(36f))/2f
             RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
         }()
         override fun onDraw(c:Canvas){
@@ -3473,12 +3473,12 @@ private class RotaryControl(
     private fun updateLabelLayout(){
         val titleHeight=dp(18f).toInt().coerceAtLeast(1)
         val valueHeight=dp(16f).toInt().coerceAtLeast(1)
-        val dialTextReserve=if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f)
+        val dialTextReserve=dp(36f)
         val side=min(width.toFloat().coerceAtLeast(1f),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))*.94f
-        val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
+        val cy=(height-dp(36f))/2f
         val radius=side/2f
         val titleTop=if(titleInside) (cy+radius*.48f-titleHeight/2f).toInt()
-            else (height-dp((if(spaciousText)28f else 20f)+bottomTextLift)-titleHeight/2f).toInt()
+            else (height-dp(28f+bottomTextLift)-titleHeight/2f).toInt()
         val valueTop=(height-dp(10f+bottomTextLift)-valueHeight/2f).toInt()
         (titleLabel.layoutParams as FrameLayout.LayoutParams).also{it.height=titleHeight;it.topMargin=titleTop;titleLabel.layoutParams=it}
         (valueLabel.layoutParams as FrameLayout.LayoutParams).also{it.height=valueHeight;it.topMargin=valueTop;valueLabel.layoutParams=it}
