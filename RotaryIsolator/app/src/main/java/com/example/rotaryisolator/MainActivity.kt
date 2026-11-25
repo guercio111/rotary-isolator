@@ -2467,6 +2467,20 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android API  Activity Result migration is not required for this diagnostic")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == layoutExportRequest || requestCode == layoutImportRequest) {
+            if (resultCode == RESULT_OK) {
+                val uri = data?.data
+                if (uri != null) {
+                    try {
+                        if (requestCode == layoutExportRequest) writeLayoutBackup(uri)
+                        else confirmLayoutImport(uri)
+                    } catch (t: Throwable) {
+                        Toast.makeText(this, t.message ?: "Operazione backup non riuscita", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            return
+        }
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
             captureConsentLocked = true
@@ -3166,21 +3180,6 @@ class MainActivity : Activity() {
             AlertDialog.Builder(this).setTitle("BACKUP NON VALIDO")
                 .setMessage(t.message ?: "Il file non contiene un backup FREQUALIZER valido.")
                 .setPositiveButton("OK", null).show()
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK) return
-        val uri = data?.data ?: return
-        try {
-            when (requestCode) {
-                layoutExportRequest -> writeLayoutBackup(uri)
-                layoutImportRequest -> confirmLayoutImport(uri)
-            }
-        } catch (t: Throwable) {
-            Toast.makeText(this, t.message ?: "Operazione backup non riuscita", Toast.LENGTH_LONG).show()
         }
     }
 
