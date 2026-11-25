@@ -276,14 +276,16 @@ class LayoutDesignerOverlay(
                     event.actionMasked == MotionEvent.ACTION_UP) {
                     val hit = pendingHit
                     if (hit != null) {
-                        val isStillSelected = selectedViews.any {
-                            it === hit || isDescendant(hit, it) || isDescendant(it, hit)
-                        }
-                        if (isStillSelected) {
-                            selectedViews.removeAll {
-                                it === hit || isDescendant(it, hit) || isDescendant(hit, it)
-                            }
+                        val exactAlreadySelected = selectedViews.any { it === hit }
+                        if (exactAlreadySelected) {
+                            // A second tap on the exact same item deselects only that item.
+                            selectedViews.removeAll { it === hit }
                         } else {
+                            // Promote a child tapped inside a selected group so it can be
+                            // selected and moved independently.
+                            val selectedAncestor = selectedViews.firstOrNull { isDescendant(hit, it) }
+                            if (selectedAncestor != null) selectedViews.remove(selectedAncestor)
+                            // Tapping a parent collapses any selected descendants into it.
                             selectedViews.removeAll { isDescendant(it, hit) }
                             selectedViews.add(hit)
                         }
