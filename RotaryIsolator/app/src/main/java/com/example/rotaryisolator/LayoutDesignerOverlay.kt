@@ -465,10 +465,10 @@ class LayoutDesignerOverlay(
         // pivot, and ancestor transforms; width * scaleX alone does not.
         val visible = Rect()
         if (!v.getGlobalVisibleRect(visible)) return false
-        // getGlobalVisibleRect is expressed in targetRoot coordinates, while
-        // MotionEvent.rawX/rawY are screen coordinates.
+        // getGlobalVisibleRect is expressed in the hierarchy root's coordinates,
+        // while MotionEvent.rawX/rawY are screen coordinates.
         val rootOnScreen = IntArray(2)
-        targetRoot.getLocationOnScreen(rootOnScreen)
+        v.rootView.getLocationOnScreen(rootOnScreen)
         val localX = x - rootOnScreen[0]
         val localY = y - rootOnScreen[1]
         // Keep hit regions tight: dividers get only a tiny touch tolerance.
