@@ -102,6 +102,8 @@ class MainActivity : Activity() {
     @Volatile private var reverbHpHz = 420
     @Volatile private var reverbLpHz = 14000
     @Volatile private var reverbFadeMs = 1400
+    @Volatile private var reverbTailStopPending = false
+    @Volatile private var reverbCaptureStopGeneration = 0
     @Volatile private var reverbFeedbackPercent = 50
     @Volatile private var reverbColorPercent = 50
     @Volatile private var delayOn = false
@@ -767,6 +769,7 @@ class MainActivity : Activity() {
             if (appEnabled) {
                 if (effectsActive()) updateEffectsCapture(true)
             } else {
+                cancelReverbTailStop()
                 stopCaptureIfUnused()
             }
         }
@@ -1278,7 +1281,24 @@ class MainActivity : Activity() {
     // Delay capture starts only when its mix is above zero; an ON switch alone must not seize audio output.
     private fun effectsActive() = appEnabled && (reverbOn || (delayOn && delayMix > 0))
     // AUTO BPM also needs the system-audio capture, even when no FX is audible.
-    private fun captureNeeded() = effectsActive() || autoBpmEnabled || bpmAnalyzerOn
+    private fun captureNeeded() = effectsActive() || reverbTailStopPending || autoBpmEnabled || bpmAnalyzerOn
+
+    private fun cancelReverbTailStop() {
+        reverbCaptureStopGeneration++
+        reverbTailStopPending = false
+    }
+
+    private fun scheduleReverbTailStop() {
+        reverbTailStopPending = true
+        val generation = ++reverbCaptureStopGeneration
+        val waitMs = reverbFadeMs.coerceIn(300, 6000).toLong() + 60L
+        handler.postDelayed({
+            if (generation == reverbCaptureStopGeneration) {
+                reverbTailStopPending = false
+                if (!captureNeeded()) stopAudioCaptureTest()
+            }
+        }, waitMs)
+    }
 
     private fun stopCaptureIfUnused() {
         if (!captureNeeded()) stopAudioCaptureTest()
@@ -1605,8 +1625,17 @@ class MainActivity : Activity() {
             setOnClickListener {
                 reverbOn = !reverbOn
                 styleToggle(this, reverbOn, colorReverb)
-                save(); scheduleUpdate()
-                if (reverbOn) updateEffectsCapture(true)
+                save()
+                scheduleUpdate()
+                if (reverbOn) {
+                    cancelReverbTailStop()
+                    updateEffectsCapture(true)
+                } else if (appEnabled) {
+                    scheduleReverbTailStop()
+                } else {
+                    cancelReverbTailStop()
+                    stopCaptureIfUnused()
+                }
             }
         }
         val reverbTitle = label("REVERB", 13f, colorReverb)
