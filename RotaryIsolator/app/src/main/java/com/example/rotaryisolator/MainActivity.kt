@@ -1601,13 +1601,13 @@ class MainActivity : Activity() {
             this, "TONE", reverbColorPercent.toFloat(), 0f, 100f, colorReverb,
             { value -> reverbColorPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "${reverbColorPercent}%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val reverbFeedbackDial = RotaryControl(
             this, "FEEDBACK", reverbFeedbackPercent.toFloat(), 0f, 100f, colorReverb,
             { value -> reverbFeedbackPercent = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "${reverbFeedbackPercent}%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val reverbRow = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
