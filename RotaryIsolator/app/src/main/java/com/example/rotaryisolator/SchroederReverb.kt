@@ -345,9 +345,6 @@ internal class SchroederReverb(private val sampleRate: Int) {
         output: ShortArray,
         count: Int,
         mixPercent: Int,
-        roomSize: Int,
-        hpHz: Int,
-        lpHz: Int,
         freeze: Boolean,
         inputEnabled: Boolean,
         fadeMs: Int,
@@ -371,8 +368,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         reverbDecayPercent: Int = 50,
         reverbColorPercent: Int = 50,
         delaySyncOffsetMs: Float = 0f,
-        fxPhaseOffsetMs: Float = 0f,
-        reverbBeatPercent: Int = 50
+        fxPhaseOffsetMs: Float = 0f
     ) {
         if (delayResetRequested) {
             delayResetRequested = false
@@ -735,8 +731,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
                     reverbFadeGain = 0f
                 }
             }
-            // Small additional reduction requested to keep the Reverb return from
-            // sitting too strongly on the beat; this does not alter beat timing.
+            // Reverb return remains independent of the BPM/beat clock.
             val reverbReturn = wet * 1.55f * reverbFadeGain
             val delayReturn = delayToneState * smoothedDelayMix * 1.28f * smoothedDelayOutputGain * delayResetGain
 
