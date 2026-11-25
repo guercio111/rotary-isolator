@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.view.Gravity
 import android.view.MotionEvent
@@ -177,10 +178,14 @@ class LayoutDesignerOverlay(
         val o = IntArray(2); getLocationOnScreen(o)
         selectedViews.forEach { v ->
             if (v.width <= 0 || v.height <= 0) return@forEach
-            val p = IntArray(2); v.getLocationOnScreen(p)
-            val l = (p[0]-o[0]).toFloat(); val t = (p[1]-o[1]).toFloat()
-            val r = l + v.width*v.scaleX; val b = t + v.height*v.scaleY
-            canvas.drawRect(RectF(l,t,r,b), outline)
+            val bounds = Rect()
+            if (!v.getGlobalVisibleRect(bounds)) return@forEach
+            // getGlobalVisibleRect and MotionEvent.rawX/rawY both use screen coordinates.
+            // Convert only for drawing into this overlay's local canvas.
+            canvas.drawRect(RectF(
+                (bounds.left-o[0]).toFloat(), (bounds.top-o[1]).toFloat(),
+                (bounds.right-o[0]).toFloat(), (bounds.bottom-o[1]).toFloat()
+            ), outline)
         }
         if (marqueeSelecting && marqueeActive) {
             val rect = RectF(minOf(marqueeStartX,marqueeX)-o[0], minOf(marqueeStartY,marqueeY)-o[1],
@@ -419,9 +424,10 @@ class LayoutDesignerOverlay(
         var left=Float.POSITIVE_INFINITY; var top=Float.POSITIVE_INFINITY
         var right=Float.NEGATIVE_INFINITY; var bottom=Float.NEGATIVE_INFINITY
         views.forEach { v ->
-            val p=IntArray(2); v.getLocationOnScreen(p)
-            left=minOf(left,p[0].toFloat()); top=minOf(top,p[1].toFloat())
-            right=maxOf(right,p[0]+v.width*v.scaleX); bottom=maxOf(bottom,p[1]+v.height*v.scaleY)
+            val screenBounds = Rect()
+            if (!v.getGlobalVisibleRect(screenBounds)) return@forEach
+            left=minOf(left,screenBounds.left.toFloat()); top=minOf(top,screenBounds.top.toFloat())
+            right=maxOf(right,screenBounds.right.toFloat()); bottom=maxOf(bottom,screenBounds.bottom.toFloat())
         }
         return RectF(left,top,right,bottom)
     }
@@ -448,8 +454,9 @@ class LayoutDesignerOverlay(
         for(i in 0 until group.childCount) {
             val child=group.getChildAt(i)
             if(child.visibility!=View.VISIBLE || child.alpha<0.05f || child.width<=0 || child.height<=0) continue
-            val p=IntArray(2); child.getLocationOnScreen(p)
-            val bounds=RectF(p[0].toFloat(),p[1].toFloat(),p[0]+child.width*child.scaleX,p[1]+child.height*child.scaleY)
+            val screenBounds = Rect()
+            if (!child.getGlobalVisibleRect(screenBounds)) continue
+            val bounds = RectF(screenBounds)
             if(!RectF.intersects(rect,bounds)) continue
             val tag=child.tag as? String
             val tagged=tag?.startsWith("designer_group_")==true || tag?.startsWith("designer_divider_")==true || tag?.startsWith("designer_selectable_")==true
@@ -460,13 +467,15 @@ class LayoutDesignerOverlay(
     override fun performClick(): Boolean { super.performClick(); return true }
 
     private fun inside(v: View,x: Float,y: Float): Boolean {
-        val p=IntArray(2); v.getLocationOnScreen(p)
-        // Keep hit regions tight: a divider gets only a tiny touch tolerance,
-        // so it cannot steal a neighbouring label or control.
+        val bounds = Rect()
+        if (v.width <= 0 || v.height <= 0 || !v.getGlobalVisibleRect(bounds)) return false
+        // rawX/rawY and getGlobalVisibleRect are both screen-space coordinates.
+        // The global rect includes parent translations/scales and the view pivot;
+        // never subtract the root position here or mix local and screen spaces.
         val isDivider = (v.tag as? String)?.startsWith("designer_divider_") == true
         val pad = if (isDivider) 3f*density else 0f
-        return x>=p[0]-pad && x<=p[0]+v.width*v.scaleX+pad &&
-            y>=p[1]-pad && y<=p[1]+v.height*v.scaleY+pad
+        return x >= bounds.left-pad && x <= bounds.right+pad &&
+            y >= bounds.top-pad && y <= bounds.bottom+pad
     }
 
     /** Promote the currently selected control to its nearest semantic group. */
