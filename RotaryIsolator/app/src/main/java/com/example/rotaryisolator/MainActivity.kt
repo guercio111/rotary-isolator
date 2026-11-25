@@ -1633,6 +1633,7 @@ class MainActivity : Activity() {
         fun addReverbBandButton(caption: String, isSelected: () -> Boolean, toggle: () -> Unit) {
             val button = TextView(this).apply {
                 text = caption
+                tag = "designer_selectable_reverb_band_"+caption
                 textSize = 8f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
@@ -1698,6 +1699,8 @@ class MainActivity : Activity() {
         bpmUiLabel = bpmLabel
         val tapButton = TextView(this).apply {
             text = "TAP"
+            tag = "designer_selectable_tap"
+            contentDescription = "TAP tempo"
             textSize = 9f
             setTextColor(Color.WHITE)
             setTypeface(typeface, Typeface.BOLD)
@@ -1727,6 +1730,7 @@ class MainActivity : Activity() {
             button.setTextColor(if (active) Color.BLACK else Color.WHITE)
         }
         val autoButton = TextView(this).apply {
+            tag = "designer_selectable_auto_bpm"
             text = if (autoBpmEnabled) "AUTO ON" else "AUTO"
             textSize = 8f
             setTypeface(typeface, Typeface.BOLD)
@@ -1752,6 +1756,7 @@ class MainActivity : Activity() {
         }
         autoBpmButton = autoButton
         val lockButton = TextView(this).apply {
+            tag = "designer_selectable_clock_lock"
             text = "LOCK"
             textSize = 8f
             setTypeface(typeface, Typeface.BOLD)
@@ -1829,6 +1834,7 @@ class MainActivity : Activity() {
             fxPhaseSeek?.postDelayed({ refreshFxPhaseUi() }, 220L)
         }
         val autoCenterButton = TextView(this).apply {
+            tag = "designer_selectable_phase_align"
             text = "ALIGN"
             textSize = 8f
             setTypeface(typeface, Typeface.BOLD)
@@ -1859,6 +1865,7 @@ class MainActivity : Activity() {
         }
 
         val phaseBackButton = TextView(this).apply {
+            tag = "designer_selectable_phase_back"
             text = "◀"
             textSize = 13f
             setTypeface(typeface, Typeface.BOLD)
@@ -1867,6 +1874,7 @@ class MainActivity : Activity() {
             setOnClickListener { phaseNudge(-1f) }
         }
         val phaseForwardButton = TextView(this).apply {
+            tag = "designer_selectable_phase_forward"
             text = "▶"
             textSize = 13f
             setTypeface(typeface, Typeface.BOLD)
@@ -1875,6 +1883,7 @@ class MainActivity : Activity() {
             setOnClickListener { phaseNudge(1f) }
         }
         val skipBeatButton = TextView(this).apply {
+            tag = "designer_selectable_skip_beat"
             text = "SKIP"
             textSize = 8f
             setTypeface(typeface, Typeface.BOLD)
@@ -1904,6 +1913,7 @@ class MainActivity : Activity() {
             }
         }
         val resetButton = TextView(this).apply {
+            tag = "designer_selectable_clock_reset"
             text = "RST"
             textSize = 8f
             setTypeface(typeface, Typeface.BOLD)
@@ -1953,6 +1963,8 @@ class MainActivity : Activity() {
             }
         }
         val delayPower = TextView(this).apply {
+            tag = "designer_selectable_delay_power"
+            contentDescription = "Beat Effects ON/OFF"
             styleToggle(this, delayOn, colorDelay)
             setOnClickListener {
                 delayOn = !delayOn
@@ -2213,6 +2225,8 @@ class MainActivity : Activity() {
         fun addFrequencyButton(caption: String, isSelected: () -> Boolean, toggle: () -> Unit) {
             val button = TextView(this).apply {
                 text = caption
+                tag = "designer_selectable_fx_band_"+caption.replace(" ","_")
+                contentDescription = caption
                 textSize = 9f
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
