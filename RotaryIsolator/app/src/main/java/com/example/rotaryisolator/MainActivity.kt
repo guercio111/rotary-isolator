@@ -1595,7 +1595,7 @@ class MainActivity : Activity() {
             this, "SEND", reverbMix.toFloat(), 0f, 100f, colorReverb,
             { value -> reverbMix = value.roundToInt().coerceIn(0,100); scheduleUpdate() },
             { "${reverbMix}%" }, onEnd = { save() }, titleInside = false,
-            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }, labelScale = 1.1f
+            wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
         )
         val toneDial = RotaryControl(
             this, "TONE", reverbColorPercent.toFloat(), 0f, 100f, colorReverb,
@@ -1623,10 +1623,10 @@ class MainActivity : Activity() {
         }
         // Three controls only: SEND / TONE above, FEEDBACK centered below.
         // Keep the original panel geometry and the remaining rotary's size.
-        reverbTopRow.addView(sendDial, LinearLayout.LayoutParams(0, -1, 1f))
-        reverbTopRow.addView(toneDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbTopRow.addView(sendDial, LinearLayout.LayoutParams(0, -1, 1f).apply { setMargins(dp(1), dp(1), dp(1), dp(1)) })
+        reverbTopRow.addView(toneDial, LinearLayout.LayoutParams(0, -1, 1f).apply { setMargins(dp(1), dp(1), dp(1), dp(1)) })
         reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
-        reverbBottomRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f))
+        reverbBottomRow.addView(reverbFeedbackDial, LinearLayout.LayoutParams(0, -1, 1f).apply { setMargins(dp(1), dp(1), dp(1), dp(1)) })
         reverbBottomRow.addView(View(this), LinearLayout.LayoutParams(0, -1, 0.5f))
         reverbRow.addView(reverbTopRow, LinearLayout.LayoutParams(-1, 0, 1f))
         reverbRow.addView(reverbBottomRow, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -1705,7 +1705,6 @@ class MainActivity : Activity() {
         val tapButton = TextView(this).apply {
             tag = "designer_selectable_tap"
             text = "TAP"
-            tag = "designer_selectable_tap"
             contentDescription = "TAP tempo"
             textSize = 9f
             setTextColor(Color.WHITE)
@@ -2289,17 +2288,17 @@ class MainActivity : Activity() {
         if (!phonePortrait && wideLayout) {
             val topDials=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
             val bottomDials=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-            topDials.addView(delayDial,LinearLayout.LayoutParams(0,-1,1f))
-            topDials.addView(delayFeedbackDial,LinearLayout.LayoutParams(0,-1,1f))
-            bottomDials.addView(delayToneDial,LinearLayout.LayoutParams(0,-1,1f))
-            delayTimeDial?.let{bottomDials.addView(it,LinearLayout.LayoutParams(0,-1,1f))}
+            topDials.addView(delayDial,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})
+            topDials.addView(delayFeedbackDial,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})
+            bottomDials.addView(delayToneDial,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})
+            delayTimeDial?.let{bottomDials.addView(it,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})}
             delayRow.addView(topDials,LinearLayout.LayoutParams(-1,0,1f))
             delayRow.addView(bottomDials,LinearLayout.LayoutParams(-1,0,1f))
         } else {
-            delayRow.addView(delayDial,LinearLayout.LayoutParams(0,-1,1f))
-            delayRow.addView(delayFeedbackDial,LinearLayout.LayoutParams(0,-1,1f))
-            delayRow.addView(delayToneDial,LinearLayout.LayoutParams(0,-1,1f))
-            delayTimeDial?.let{delayRow.addView(it,LinearLayout.LayoutParams(0,-1,1f))}
+            delayRow.addView(delayDial,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})
+            delayRow.addView(delayFeedbackDial,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})
+            delayRow.addView(delayToneDial,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})
+            delayTimeDial?.let{delayRow.addView(it,LinearLayout.LayoutParams(0,-1,1f).apply{setMargins(dp(1),dp(1),dp(1),dp(1))})}
         }
         val reverbColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -2399,7 +2398,6 @@ class MainActivity : Activity() {
             delayControls.setPadding(0, dp(36), 0, 0)
             // Give BEAT FX the previously unused visual gap before MASTER.
             // The MASTER dials remain height-limited, preserving their drawn diameter.
-            delayControls.setPadding(0, dp(36), 0, 0)
             effectsBody.addView(delayControls,LinearLayout.LayoutParams(0,-1,0.30f))
             // Dedicated non-interactive divider keeps every touch target on its own side.
             val beatFxMasterDivider = View(this).apply {
