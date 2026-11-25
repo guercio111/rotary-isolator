@@ -45,6 +45,8 @@ class LayoutDesignerOverlay(
     private var marqueeX = 0f
     private var marqueeY = 0f
     private var snapEnabled = true
+    // In test mode the editor toolbar remains active while touches pass through to the original app controls.
+    private var passThrough = false
     private val gridStep get() = 8f * density
     private val moveOrigins = HashMap<View, Pair<Float, Float>>()
     private var moveBoundsLeft = 0f
@@ -98,6 +100,16 @@ class LayoutDesignerOverlay(
             modeButton.text = if (editMode == EditMode.SELECT) "MODO: SELEZIONE" else "MODO: SPOSTA"
             Toast.makeText(context, if (editMode == EditMode.SELECT) "Tocca gli elementi per selezionarli" else "Trascina un elemento selezionato per spostare il gruppo", Toast.LENGTH_SHORT).show()
             pendingHit = null; dragStarted = false; marqueeSelecting = false; marqueeActive = false
+            invalidate()
+        }
+        lateinit var testModeButton: Button
+        testModeButton = action("PROVA") {
+            passThrough = !passThrough
+            testModeButton.text = if (passThrough) "TORNA DESIGN" else "PROVA"
+            pendingHit = null; dragStarted = false; marqueeSelecting = false; marqueeActive = false
+            Toast.makeText(context,
+                if (passThrough) "PROVA ATTIVA: manopole e pulsanti dell'app sono utilizzabili" else "MODIFICA ATTIVA",
+                Toast.LENGTH_SHORT).show()
             invalidate()
         }
         action("X") { deleteSelected() }
@@ -179,6 +191,9 @@ class LayoutDesignerOverlay(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        // Returning false lets the parent dispatch the same gesture to the original
+        // FREQUALIZER view underneath. Toolbar buttons are children and remain usable.
+        if (passThrough) return false
         val x = event.rawX
         val y = event.rawY
         when (event.actionMasked) {
@@ -465,9 +480,8 @@ class LayoutDesignerOverlay(
     }
 
     private fun findHit(group: ViewGroup,x: Float,y: Float): View? {
-        // Selectable rotary labels and dial faces can extend beyond the measured
-        // bounds of their parent control. Search visible descendants even when
-        // the pointer is outside the parent's own rectangle.
+        // First give individually tagged labels and dividers priority. This keeps
+        // labels independently editable even when they belong to a larger control.
         for (i in group.childCount-1 downTo 0) {
             val child=group.getChildAt(i)
             val tag=child.tag as? String
@@ -479,14 +493,16 @@ class LayoutDesignerOverlay(
             val child=group.getChildAt(i)
             if (child.visibility!=View.VISIBLE || child.alpha<0.05f ||
                 child.width<=0 || child.height<=0) continue
+            val tag=child.tag as? String
             val nested=child as? ViewGroup
-            // Do not require the pointer to be inside the parent: labels placed
-            // at the edge/outside a rotary's frame must remain independently editable.
+            // A semantic group (for example a complete rotary) is selected as one
+            // unit when the pointer is on its body; its tagged labels were checked above.
+            if (tag?.startsWith("designer_group_")==true && inside(child,x,y)) return child
+            // Descend even outside the parent's bounds so protruding labels remain hittable.
             val deeper=nested?.let { findHit(it,x,y) }
             if (deeper!=null) return deeper
-            val tag=child.tag as? String
-            if (inside(child,x,y) &&
-                (nested==null || tag?.startsWith("designer_group_")==true)) return child
+            // Every remaining visible view, including untagged containers, can be selected.
+            if (inside(child,x,y)) return child
         }
         return null
     }
