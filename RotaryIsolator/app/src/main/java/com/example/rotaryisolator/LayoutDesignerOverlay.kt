@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.view.Gravity
 import android.view.MotionEvent
@@ -460,13 +461,21 @@ class LayoutDesignerOverlay(
     override fun performClick(): Boolean { super.performClick(); return true }
 
     private fun inside(v: View,x: Float,y: Float): Boolean {
-        val p=IntArray(2); v.getLocationOnScreen(p)
-        // Keep hit regions tight: a divider gets only a tiny touch tolerance,
-        // so it cannot steal a neighbouring label or control.
+        // getGlobalVisibleRect accounts for the complete Android view matrix,
+        // pivot, and ancestor transforms; width * scaleX alone does not.
+        val visible = Rect()
+        if (!v.getGlobalVisibleRect(visible)) return false
+        // getGlobalVisibleRect is expressed in targetRoot coordinates, while
+        // MotionEvent.rawX/rawY are screen coordinates.
+        val rootOnScreen = IntArray(2)
+        targetRoot.getLocationOnScreen(rootOnScreen)
+        val localX = x - rootOnScreen[0]
+        val localY = y - rootOnScreen[1]
+        // Keep hit regions tight: dividers get only a tiny touch tolerance.
         val isDivider = (v.tag as? String)?.startsWith("designer_divider_") == true
-        val pad = if (isDivider) 3f*density else 0f
-        return x>=p[0]-pad && x<=p[0]+v.width*v.scaleX+pad &&
-            y>=p[1]-pad && y<=p[1]+v.height*v.scaleY+pad
+        val pad = if (isDivider) (3f * density).toInt() else 0
+        return localX >= visible.left - pad && localX <= visible.right + pad &&
+            localY >= visible.top - pad && localY <= visible.bottom + pad
     }
 
     /** Promote the currently selected control to its nearest semantic group. */
