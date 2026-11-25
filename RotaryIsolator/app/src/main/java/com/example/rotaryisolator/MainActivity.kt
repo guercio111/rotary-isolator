@@ -326,6 +326,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Preload the user's saved tablet Designer layout once; subsequent manual edits remain persistent.
+        applyBundledTabletLayoutOnce()
         captureDiag("ACTIVITY onCreate; changingConfig=$isChangingConfigurations taskId=$taskId config=${captureConfigSummary()}")
         // Explicitly follow the physical sensor in both portrait and landscape.
         // UNSPECIFIED can remain in the user's preferred orientation on some tablets.
@@ -3148,6 +3150,46 @@ class MainActivity : Activity() {
 
     private fun isLayoutBackupKey(key: String): Boolean =
         key.startsWith("layout_designer_tablet_") || key.startsWith("layout_designer_deleted_tablet_")
+
+    private fun applyBundledTabletLayoutOnce() {
+        val marker = "bundled_tablet_layout_20261125_v1_applied"
+        if (prefs.getBoolean(marker, false)) return
+        try {
+            val raw = assets.open("FREQUALIZER_LAYOUT_BACKUP.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val root = JSONObject(raw.removePrefix("\uFEFF").trim())
+            require(root.optString("format") == "frequalizer-layout-backup") { "Formato layout integrato non valido" }
+            require(root.optInt("version", -1) == 2) { "Versione layout integrato non supportata" }
+            val profiles = root.getJSONArray("profiles")
+            val profileNames = (0 until profiles.length()).map { profiles.getString(it) }.toSet()
+            require(profileNames.containsAll(setOf("tablet_portrait", "tablet_landscape"))) { "Profili tablet incompleti" }
+            val entries = root.getJSONArray("entries")
+            val imported = linkedMapOf<String, Any>()
+            for (i in 0 until entries.length()) {
+                val entry = entries.getJSONObject(i)
+                val key = entry.getString("key")
+                if (!isLayoutBackupKey(key)) continue
+                when (entry.getString("type")) {
+                    "string" -> imported[key] = entry.getString("value")
+                    "boolean" -> imported[key] = entry.getBoolean("value")
+                    else -> throw IllegalArgumentException("Tipo di impostazione non supportato: $key")
+                }
+            }
+            require(imported.size == 151) { "Il layout integrato è incompleto (${imported.size}/151)" }
+            val editor = prefs.edit()
+            prefs.all.keys.filter { isLayoutBackupKey(it) }.forEach { editor.remove(it) }
+            imported.forEach { (key, value) ->
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                }
+            }
+            editor.putBoolean(marker, true)
+            check(editor.commit()) { "Impossibile salvare il layout tablet integrato" }
+            android.util.Log.i("FREQUALIZER_LAYOUT", "Caricato layout tablet completo: ${imported.size} impostazioni, portrait + landscape")
+        } catch (t: Throwable) {
+            android.util.Log.e("FREQUALIZER_LAYOUT", "Caricamento layout tablet integrato non riuscito", t)
+        }
+    }
 
     private fun readLayoutBackup(uri: Uri): Map<String, Any> {
         val raw = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
