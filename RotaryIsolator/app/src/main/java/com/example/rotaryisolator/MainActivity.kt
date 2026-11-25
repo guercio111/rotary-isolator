@@ -3263,9 +3263,15 @@ class MainActivity : Activity() {
 
     /** Reset only the broken Delay/Echo Designer transforms; preserve every other saved layout edit. */
     private fun applyDelayLayoutTouchFix() {
-        val marker = "delay_echo_touch_layout_fix_20261125_v1_applied"
+        val marker = "iso_delay_touch_layout_fix_20261125_v2_applied"
         if (prefs.getBoolean(marker, false)) return
         val affectedPrefixes = listOf(
+            // ISOLATOR contains transformed rotary groups that can cover its FLAT/RETURN hit areas.
+            "layout_designer_tablet_portrait_1.0.1",
+            "layout_designer_tablet_landscape_1.0.1",
+            "layout_designer_deleted_tablet_portrait_1.0.1",
+            "layout_designer_deleted_tablet_landscape_1.0.1",
+            // DELAY/ECHO was shifted into neighbouring sections and clipped in portrait.
             "layout_designer_tablet_portrait_1.2.0.0.1.2",
             "layout_designer_tablet_landscape_1.1.1.0.0.3",
             "layout_designer_deleted_tablet_portrait_1.2.0.0.1.2",
