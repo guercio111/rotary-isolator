@@ -3117,11 +3117,14 @@ class MainActivity : Activity() {
 
     private fun readLayoutBackup(uri: Uri): Map<String, Any> {
         val raw = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-            ?: throw IllegalStateException("Impossibile leggere il file")
+            ?: throw IllegalStateException("Impossibile leggere il file selezionato")
+        // Some Android file providers prepend a UTF-8 BOM to JSON documents.
+        val document = raw.removePrefix("\uFEFF").trim()
+        require(document.isNotEmpty()) { "Il file selezionato è vuoto" }
         val result = linkedMapOf<String, Any>()
         var validJsonBackup = false
-        if (raw.trimStart().startsWith("{")) {
-            val root = JSONObject(raw)
+        if (document.startsWith("{")) {
+            val root = JSONObject(document)
             require(root.optString("format") == "frequalizer-layout-backup") { "Formato backup non riconosciuto" }
             require(root.optInt("version", -1) in 1..2) { "Versione backup non supportata" }
             validJsonBackup = true
@@ -3178,8 +3181,16 @@ class MainActivity : Activity() {
                             is Boolean -> editor.putBoolean(key, value)
                         }
                     }
-                    editor.apply()
-                    Toast.makeText(this, "Progetto importato. Riapri MODIFICA / DESIGN per applicarlo.", Toast.LENGTH_LONG).show()
+                    // Commit synchronously so the live Designer and the next orientation see the complete project.
+                    val saved = editor.commit()
+                    if (!saved) {
+                        Toast.makeText(this, "Importazione non completata: impossibile salvare il layout.", Toast.LENGTH_LONG).show()
+                        return@setPositiveButton
+                    }
+                    // If the Designer is already alive, refresh it immediately; otherwise it will load these
+                    // preferences when the user opens MODIFICA / DESIGN.
+                    designerOverlay?.reloadSavedLayout()
+                    Toast.makeText(this, "Progetto importato e applicato. Entrambe le orientazioni sono state ripristinate.", Toast.LENGTH_LONG).show()
                 }
                 .show()
         } catch (t: Throwable) {
