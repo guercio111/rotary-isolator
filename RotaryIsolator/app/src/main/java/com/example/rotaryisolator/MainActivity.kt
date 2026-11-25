@@ -687,8 +687,8 @@ class MainActivity : Activity() {
     private fun sectionLabel(t:String, size:Float, color:Int)=label(t,size,color).apply {
         setTypeface(typeface, Typeface.BOLD)
     }
-    private fun button(t:String, action:()->Unit)=Button(this).apply { text=t; setOnClickListener { action() } }
-    private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
+    private fun button(t:String, action:()->Unit)=Button(this).apply { text=t; tag="designer_selectable_button_"+t.replace(" ","_"); setOnClickListener { action() } }
+    private fun redButton(t:String, active:Boolean=true, action:()->Unit)=Button(this).apply { text=t; tag="designer_selectable_button_"+t.replace(" ","_"); textSize=10f; setTextColor(Color.WHITE); backgroundTintList=ColorStateList.valueOf(if(active) Color.rgb(190,35,42) else Color.rgb(105,35,40)); setOnClickListener { action() } }
     private fun circleAction(symbol:String, diameter:Int, action:()->Unit):View = TextView(this).apply {
         text=symbol; textSize=(if(diameter>=48)16f else 11f)*phoneUiScale; setTextColor(Color.WHITE)
         gravity=Gravity.CENTER; contentDescription=when(symbol){"F"->"Flat";"0"->"Reset";else->"Return"}
@@ -761,7 +761,7 @@ class MainActivity : Activity() {
             text=if(appEnabled)"● ON" else "● OFF"
             backgroundTintList=ColorStateList.valueOf(if(appEnabled)Color.rgb(25,150,65) else Color.rgb(190,35,42))
         }
-        textSize=11f*phoneUiScale;isAllCaps=false;setTextColor(Color.WHITE);minHeight=dp(30);minimumHeight=dp(30)
+        textSize=11f*phoneUiScale;isAllCaps=false;setTextColor(Color.WHITE);minHeight=dp(30);minimumHeight=dp(30);tag="designer_selectable_app_power"
         setPadding(dp(3),0,dp(3),0);paintState();contentDescription="Interruttore generale audio"
         setOnClickListener { appEnabled=!appEnabled;paintState();save();scheduleUpdate() }
     }
@@ -806,6 +806,7 @@ class MainActivity : Activity() {
             setPadding(dp(2), 0, dp(2), 0)
         }
         bpmButton = TextView(this).apply {
+            tag = "designer_selectable_bpm_analyzer"
             text = if (bpmAnalyzerOn) "BPM STOP" else "BPM START"
             textSize = if (compactPhone) 8f else 10f
             gravity = Gravity.CENTER
@@ -1040,6 +1041,7 @@ class MainActivity : Activity() {
             setPadding(dp(3),0,dp(3),0)
             paintState()
             contentDescription = "$key on/off"
+            tag = "designer_selectable_section_power_"+key
             setOnClickListener {
                 if(key=="EQ") eqOn=!eqOn else isoOn=!isoOn
                 paintState()
@@ -1069,6 +1071,7 @@ class MainActivity : Activity() {
                 setPadding(dp(2), 0, dp(2), 0)
                 paintLimiter()
                 contentDescription = "ISOLATOR LIMITER on/off"
+                tag = "designer_selectable_isolator_limiter"
                 setOnClickListener {
                     isoLimiterOn = !isoLimiterOn
                     if (isoLimiterOn) {
@@ -1570,6 +1573,8 @@ class MainActivity : Activity() {
             gravity = Gravity.TOP or Gravity.START
         }
         val reverbPower = TextView(this).apply {
+            tag = "designer_selectable_reverb_power"
+            contentDescription = "Reverb ON/OFF"
             styleToggle(this, reverbOn, colorReverb)
             setOnClickListener {
                 reverbOn = !reverbOn
@@ -1698,6 +1703,7 @@ class MainActivity : Activity() {
         }
         bpmUiLabel = bpmLabel
         val tapButton = TextView(this).apply {
+            tag = "designer_selectable_tap"
             text = "TAP"
             tag = "designer_selectable_tap"
             contentDescription = "TAP tempo"
