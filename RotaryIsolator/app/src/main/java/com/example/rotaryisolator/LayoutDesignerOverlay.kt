@@ -584,6 +584,26 @@ class LayoutDesignerOverlay(
         }
     }
 
+    // Re-apply the currently imported/saved profile to the live designer without recreating the Activity.
+    fun reloadSavedLayout() {
+        walk(targetRoot, "") { view, _ ->
+            if (view !== targetRoot) {
+                view.translationX = 0f
+                view.translationY = 0f
+                view.scaleX = 1f
+                view.scaleY = 1f
+                view.visibility = initialVisibility[view] ?: View.VISIBLE
+            }
+        }
+        selected = null
+        selectedViews.clear()
+        moving = null
+        marqueeSelecting = false
+        marqueeActive = false
+        applySaved()
+        invalidate()
+    }
+
     private fun resetAll() {
         pushUndo()
         val editor=preferences.edit()
