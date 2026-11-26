@@ -364,6 +364,8 @@ internal class FreeLayoutHost(
         AlertDialog.Builder(context)
             .setTitle("SELEZIONA ELEMENTO")
             .setItems(entries.map { it.first }.toTypedArray()) { _, which ->
+                selectedIds.clear()
+                selectedIds.add(entries[which].second)
                 selectedId = entries[which].second
                 invalidate()
             }
@@ -547,16 +549,17 @@ internal class FreeLayoutHost(
     }
 
     private fun applySizePreset(index: Int) {
-        val (id, old) = requireSelection() ?: return
+        val targets = selectedPlacements()
+        if (targets.isEmpty()) { requireSelection(); return }
         val factors = listOf(0.65f, 0.8f, 1f, 1.2f, 1.4f, 1.6f)
-        val current = factors[old.sizePreset.coerceIn(0, 5)]
+        val current = factors[targets.first().sizePreset.coerceIn(0, 5)]
         val factor = factors[index] / current
-        rememberUndo()
-        placements[id] = old.copy(
-            width = (old.width * factor).coerceIn(0.02f, 1f - old.x),
-            height = (old.height * factor).coerceIn(0.02f, 1f - old.y),
-            sizePreset = index
-        ).normalized()
+        val groupWidth = targets.maxOf { it.x + it.width } - targets.minOf { it.x }
+        val groupHeight = targets.maxOf { it.y + it.height } - targets.minOf { it.y }
+        resizeSelected(groupWidth * (factor - 1f), groupHeight * (factor - 1f))
+        selectedPlacements().forEach { placement ->
+            placements[placement.elementId] = placement.copy(sizePreset = index).normalized()
+        }
         requestLayout(); invalidate(); saveProfile()
     }
 
