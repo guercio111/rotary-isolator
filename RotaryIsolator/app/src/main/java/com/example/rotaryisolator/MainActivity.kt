@@ -2131,10 +2131,12 @@ class MainActivity : Activity() {
                 button.alpha = if (held) 1f else if (delayManualMode) 0.38f else 1f
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
-                    setColor(if (selected || held) colorDelay else Color.rgb(55,62,72))
-                    setStroke(dp(1), colorDelay)
+                    // Green fill identifies only the currently selected/active division.
+                    // Yellow outline independently identifies every division in PHASE HOLD.
+                    setColor(if (selected) colorDelay else Color.rgb(55,62,72))
+                    setStroke(dp(if (held) 2 else 1), if (held) Color.YELLOW else colorDelay)
                 }
-                button.setTextColor(if (selected || held) Color.BLACK else Color.WHITE)
+                button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
             }
         }
         repaintDivisionButtons = { paintDivisionButtons() }
