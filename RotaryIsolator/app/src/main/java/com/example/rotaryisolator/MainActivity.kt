@@ -2156,7 +2156,8 @@ class MainActivity : Activity() {
                 }
                 enabled[index] = false
             } else {
-                val sourcePeriod = currentFxPeriodMs().coerceAtLeast(1f)
+                // This division was unheld, so its effective phase was the shared global phase.
+                // Snapshot that value, not another selected division's private HOLD phase.
                 phases[index] = fxPhaseOffsetFraction.coerceIn(-0.49f, 0.49f)
                 enabled[index] = true
             }
