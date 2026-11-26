@@ -22,13 +22,25 @@ internal data class UiElementPlacement(
     val sizePreset: Int = 2,
     val visible: Boolean = true
 ) {
-    fun normalized(): UiElementPlacement = copy(
-        x = x.coerceIn(0f, 1f),
-        y = y.coerceIn(0f, 1f),
-        width = width.coerceIn(0.01f, 1f),
-        height = height.coerceIn(0.01f, 1f),
-        sizePreset = sizePreset.coerceIn(0, 5)
-    )
+    fun normalized(): UiElementPlacement {
+        // Reject NaN/infinite coordinates from malformed or partially edited
+        // profiles before clamping. Keep the complete rectangle on-screen.
+        val safeX = (if (x.isFinite()) x else 0f).coerceIn(0f, 1f)
+        val safeY = (if (y.isFinite()) y else 0f).coerceIn(0f, 1f)
+        val remainingWidth = (1f - safeX).coerceAtLeast(0.01f)
+        val remainingHeight = (1f - safeY).coerceAtLeast(0.01f)
+        val safeWidth = (if (width.isFinite()) width else 0.1f)
+            .coerceIn(0.01f, remainingWidth)
+        val safeHeight = (if (height.isFinite()) height else 0.1f)
+            .coerceIn(0.01f, remainingHeight)
+        return copy(
+            x = safeX,
+            y = safeY,
+            width = safeWidth,
+            height = safeHeight,
+            sizePreset = sizePreset.coerceIn(0, 5)
+        )
+    }
 }
 
 /** One profile is stored for each of the four supported device/orientation pairs. */
