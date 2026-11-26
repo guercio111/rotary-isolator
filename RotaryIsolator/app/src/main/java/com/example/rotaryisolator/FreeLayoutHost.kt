@@ -137,7 +137,8 @@ internal class FreeLayoutHost(
                 x = (left / width).coerceIn(0f, 0.99f),
                 y = (top / height).coerceIn(0f, 0.99f),
                 width = (renderedWidth / width).coerceIn(0.01f, 1f),
-                height = (renderedHeight / height).coerceIn(0.01f, 1f)
+                height = (renderedHeight / height).coerceIn(0.01f, 1f),
+                zOrder = geometry.translationZ.roundToInt()
             ).normalized()
             (view.parent as? ViewGroup)?.removeView(view)
             addElement(elementId, view, placement)
