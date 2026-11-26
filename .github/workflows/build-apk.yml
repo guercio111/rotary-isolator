@@ -148,6 +148,13 @@ jobs:
           cd extracted/RotaryIsolator
           gradle --no-daemon assembleDebug
 
+      - name: Verify standalone package identity
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          APK="extracted/RotaryIsolator/app/build/outputs/apk/debug/app-debug.apk"
+          "${SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.example.rotaryisolator.layoutdraft'"
+          sha256sum "$APK"
+
       - uses: actions/upload-artifact@v4
         with:
           name: rotary-isolator-debug-apk
