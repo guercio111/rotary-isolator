@@ -383,11 +383,12 @@ internal class FreeLayoutHost(
         }
         row("LARGHEZZA", true, 0.01f)
         row("ALTEZZA", false, 0.01f)
-        val uniform = Button(context).apply {
-            text = "INGRANDISCI / RIDUCI UNIFORMEMENTE"
-            setOnClickListener { resizeSelected(0.01f, 0.01f, true) }
-        }
-        root.addView(uniform)
+        val uniformRow = LinearLayout(context).apply { gravity = Gravity.CENTER }
+        val uniformMinus = Button(context).apply { text = "− UNIFORME"; setOnClickListener { resizeSelected(-0.01f, -0.01f) } }
+        val uniformPlus = Button(context).apply { text = "+ UNIFORME"; setOnClickListener { resizeSelected(0.01f, 0.01f) } }
+        uniformRow.addView(uniformMinus, LinearLayout.LayoutParams(0, dp(48), 1f))
+        uniformRow.addView(uniformPlus, LinearLayout.LayoutParams(0, dp(48), 1f))
+        root.addView(uniformRow)
         val presetTitle = TextView(context).apply { text = "PREIMPOSTAZIONI DIMENSIONE"; gravity = Gravity.CENTER; textSize = 12f }
         root.addView(presetTitle)
         val presets = LinearLayout(context).apply { gravity = Gravity.CENTER }
