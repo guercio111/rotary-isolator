@@ -105,6 +105,10 @@ class MainActivity : Activity() {
     private fun manualDelayTimeMs(): Float =
         if (delayManualTimePercent <= 0f) 30f
         else 30f * (8000f / 30f).pow(delayManualTimePercent.coerceIn(0f,100f) / 100f)
+    // Map the selected BEAT division onto the TIME dial's logarithmic millisecond scale.
+    // This keeps the inactive dial pointer parked on the same rhythmic value.
+    private fun timePercentForDelayMs(milliseconds: Float): Float =
+        (ln(milliseconds.coerceAtLeast(30f) / 30f) / ln(8000f / 30f) * 100f).coerceIn(0f,100f)
     private fun manualDelayDivisionLabel(): String =
         String.format(java.util.Locale.US, "%.0f ms", manualDelayTimeMs())
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
@@ -2206,8 +2210,9 @@ class MainActivity : Activity() {
                     // A BEAT touch immediately takes ownership of delay time:
                     // disable manual TIME and zero its dial before selecting this division.
                     delayManualMode = false
-                    delayManualTimePercent = 0f
-                    delayTimeDial?.setValueExternally(0f)
+                    // Keep the TIME pointer on the rhythmic value just selected.
+                    delayManualTimePercent = timePercentForDelayMs(fxPeriodMsForDivision(index))
+                    delayTimeDial?.setValueExternally(delayManualTimePercent)
                     // Build 918 kept one absolute phase trim across division changes.
                     // Carry that shared (non-HOLD) offset into the new period instead
                     // of reusing the same normalized fraction, which changes its timing.
@@ -2250,6 +2255,10 @@ class MainActivity : Activity() {
                 // TIME takes control of continuous delay length in milliseconds.
                 // Keep the last BEAT division as the phase/LOCK/HOLD reference.
                 // TIME excludes the beat keys visually without changing their stored states.
+                // Initialize TIME from the currently selected BEAT division before
+                // handing control to the dial; no jump from a stale TIME position.
+                delayManualTimePercent = timePercentForDelayMs(currentFxPeriodMs())
+                delayTimeDial?.setValueExternally(delayManualTimePercent)
                 delayManualMode = true
                 paintDivisionButtons()
                 save(); scheduleUpdate()
