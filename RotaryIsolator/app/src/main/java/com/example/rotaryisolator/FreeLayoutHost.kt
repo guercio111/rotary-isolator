@@ -161,7 +161,7 @@ internal class FreeLayoutHost(
         invalidate()
     }
 
-    fun saveProfile() = store.save(profile, normalizedSnapshot())
+    fun saveProfile() = store.save(profile, placements.values.toList())
     fun allPlacements(): List<UiElementPlacement> = placements.values.toList()
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean = editMode
@@ -400,11 +400,11 @@ internal class FreeLayoutHost(
             .setNegativeButton("CHIUDI", null).show()
     }
 
-    private fun resizeSelected(dw: Float, dh: Float, uniform: Boolean = false) {
+    private fun resizeSelected(dw: Float, dh: Float) {
         val (id, old) = requireSelection() ?: return
         rememberUndo()
         val w = (old.width + dw).coerceIn(0.02f, 1f - old.x)
-        val h = (old.height + if (uniform) dh else dh).coerceIn(0.02f, 1f - old.y)
+        val h = (old.height + dh).coerceIn(0.02f, 1f - old.y)
         placements[id] = old.copy(width = w, height = h).normalized()
         requestLayout(); invalidate(); saveProfile()
     }
