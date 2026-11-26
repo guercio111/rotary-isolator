@@ -788,7 +788,7 @@ class MainActivity : Activity() {
                     host.setEditMode(!host.isEditMode())
                     Toast.makeText(
                         this@MainActivity,
-                        if (host.isEditMode()) "MODALITÀ LAYOUT: trascina o ridimensiona gli elementi; tocca uno spazio vuoto per uscire"
+                        if (host.isEditMode()) "LAYOUT DESIGNER: seleziona gli elementi e usa i comandi laterali per spostarli e ridimensionarli"
                         else "MODALITÀ LAYOUT DISATTIVATA",
                         Toast.LENGTH_LONG
                     ).show()
