@@ -334,7 +334,7 @@ internal class FreeLayoutHost(
         }
         val up = actionButton("▲", 0, -1)
         val left = actionButton("◀", -1, 0)
-        val center = actionButton("CENTRO", 0, 0)
+        val center = Button(context).apply { text = "CENTRO"; isAllCaps = false; setOnClickListener { centerSelected() } }
         val right = actionButton("▶", 1, 0)
         val down = actionButton("▼", 0, 1)
         val row1 = LinearLayout(context).apply { gravity = Gravity.CENTER; addView(up, LinearLayout.LayoutParams(dp(76), dp(48))) }
@@ -358,7 +358,7 @@ internal class FreeLayoutHost(
         val hostH = height.coerceAtLeast(1).toFloat()
         var nx = (old.x * hostW + dx * px).coerceIn(0f, hostW * (1f - old.width))
         var ny = (old.y * hostH + dy * px).coerceIn(0f, hostH * (1f - old.height))
-        if (snapEnabled) {
+        if (snapEnabled && movementStepDp >= 16f) {
             nx = (nx / gridStep).roundToInt() * gridStep
             ny = (ny / gridStep).roundToInt() * gridStep
         }
