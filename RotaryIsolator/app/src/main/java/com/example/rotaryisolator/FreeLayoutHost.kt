@@ -31,12 +31,21 @@ internal class FreeLayoutHost(
     private val redoHistory = ArrayDeque<Map<String, UiElementPlacement>>()
     private var editMode = false
     private var selectedId: String? = null
+    private val selectedIds = LinkedHashSet<String>()
+    private var selectionMode = false
+    private var selectionStartX = 0f
+    private var selectionStartY = 0f
+    private var selectionEndX = 0f
+    private var selectionEndY = 0f
+    private var selectingArea = false
+    private var toolbarCollapsed = false
     private var showGrid = false
     private var snapEnabled = true
     private var movementStepDp = 5f
     private val gridStep get() = 16f * resources.displayMetrics.density
-    private val railWidth get() = 108f * resources.displayMetrics.density
-    private val toolbarLabels = listOf("ELEMENTI", "SPOSTA", "DIMENS.", "GRIGLIA", "AGGANCIO", "UNDO", "REDO", "CENTRA", "SALVA", "RETURN")
+    private val expandedRailWidth get() = 108f * resources.displayMetrics.density
+    private val railWidth get() = (if (toolbarCollapsed) 30f else expandedRailWidth) * resources.displayMetrics.density / resources.displayMetrics.density
+    private val toolbarLabels = listOf("ELEMENTI", "AREA", "SPOSTA", "DIMENS.", "GRIGLIA", "AGGANCIO", "UNDO", "REDO", "CENTRA", "SALVA", "NASCONDI", "RETURN")
     private val railPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEE171B22.toInt(); style = Paint.Style.FILL }
     private val buttonPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF303943.toInt(); style = Paint.Style.FILL }
     private val activePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF9B7417.toInt(); style = Paint.Style.FILL }
@@ -135,6 +144,9 @@ internal class FreeLayoutHost(
         editMode = enabled
         if (!enabled) {
             selectedId = null
+            selectedIds.clear()
+            selectingArea = false
+            selectionMode = false
             saveProfile()
         }
         invalidate()
@@ -169,18 +181,66 @@ internal class FreeLayoutHost(
     /** Tap selects only. Position changes are performed through the precision controls. */
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!editMode) return false
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            if (handleToolbarTap(event.x, event.y)) return true
-            if (event.x >= width - railWidth) return true
-            val picked = (childCount - 1 downTo 0).asSequence()
-                .map { getChildAt(it) }
-                .firstOrNull { child ->
-                    child.visibility == View.VISIBLE && event.x >= child.left && event.x <= child.right &&
-                        event.y >= child.top && event.y <= child.bottom
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (handleToolbarTap(event.x, event.y)) return true
+                if (event.x >= width - railWidth) {
+                    if (toolbarCollapsed) toolbarCollapsed = false
+                    invalidate()
+                    return true
                 }
-            selectedId = picked?.tag as? String
-            invalidate()
-            return true
+                if (selectionMode) {
+                    selectionStartX = event.x
+                    selectionStartY = event.y
+                    selectionEndX = event.x
+                    selectionEndY = event.y
+                    selectingArea = true
+                    invalidate()
+                    return true
+                }
+                val picked = (childCount - 1 downTo 0).asSequence()
+                    .map { getChildAt(it) }
+                    .firstOrNull { child ->
+                        child.visibility == View.VISIBLE && event.x >= child.left && event.x <= child.right &&
+                            event.y >= child.top && event.y <= child.bottom
+                    }
+                selectedIds.clear()
+                (picked?.tag as? String)?.let { selectedIds.add(it) }
+                selectedId = selectedIds.firstOrNull()
+                invalidate()
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (selectingArea) {
+                    selectionEndX = event.x
+                    selectionEndY = event.y
+                    invalidate()
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (selectingArea) {
+                    selectionEndX = event.x
+                    selectionEndY = event.y
+                    val left = minOf(selectionStartX, selectionEndX)
+                    val right = maxOf(selectionStartX, selectionEndX)
+                    val top = minOf(selectionStartY, selectionEndY)
+                    val bottom = maxOf(selectionStartY, selectionEndY)
+                    selectedIds.clear()
+                    for (i in 0 until childCount) {
+                        val child = getChildAt(i)
+                        val id = child.tag as? String ?: continue
+                        if (child.visibility == View.VISIBLE &&
+                            child.right >= left && child.left <= right &&
+                            child.bottom >= top && child.top <= bottom) selectedIds.add(id)
+                    }
+                    selectedId = selectedIds.firstOrNull()
+                    selectingArea = false
+                    selectionMode = false
+                    invalidate()
+                }
+                return true
+            }
         }
         return true
     }
@@ -193,12 +253,29 @@ internal class FreeLayoutHost(
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         if (!editMode) return
-        selectedId?.let { id ->
+        selectedIds.forEach { id ->
             val child = findElement(id)
             if (child != null) {
                 canvas.drawRect(child.left.toFloat(), child.top.toFloat(), child.right.toFloat(), child.bottom.toFloat(), outlinePaint)
                 canvas.drawCircle(child.right - handleSize, child.bottom - handleSize, handleSize * 0.65f, handlePaint)
             }
+        }
+        if (selectingArea) {
+            val areaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x334FC3F7
+                style = Paint.Style.FILL
+            }
+            val areaOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFF4FC3F7.toInt()
+                style = Paint.Style.STROKE
+                strokeWidth = 2f * resources.displayMetrics.density
+            }
+            val l = minOf(selectionStartX, selectionEndX)
+            val r = maxOf(selectionStartX, selectionEndX)
+            val t = minOf(selectionStartY, selectionEndY)
+            val b = maxOf(selectionStartY, selectionEndY)
+            canvas.drawRect(l, t, r, b, areaPaint)
+            canvas.drawRect(l, t, r, b, areaOutline)
         }
         drawEditorToolbar(canvas)
     }
@@ -218,11 +295,17 @@ internal class FreeLayoutHost(
     private fun drawEditorToolbar(canvas: Canvas) {
         val left = width - railWidth
         canvas.drawRect(left, 0f, width.toFloat(), height.toFloat(), railPaint)
+        if (toolbarCollapsed) {
+            canvas.drawRoundRect(left + 2f, height / 2f - 34f, width - 2f, height / 2f + 34f, 8f, 8f, activePaint)
+            canvas.drawText("MENU", left + railWidth / 2f, height / 2f + textPaint.textSize / 3f, textPaint)
+            return
+        }
         val bh = buttonHeight()
         val gap = 2f * resources.displayMetrics.density
         var top = 5f * resources.displayMetrics.density
         toolbarLabels.forEach { label ->
-            val active = (label == "GRIGLIA" && showGrid) || (label == "AGGANCIO" && snapEnabled)
+            val active = (label == "GRIGLIA" && showGrid) ||
+                (label == "AGGANCIO" && snapEnabled) || (label == "AREA" && selectionMode)
             canvas.drawRoundRect(left + 5f, top, width - 5f, top + bh, 6f, 6f, if (active) activePaint else buttonPaint)
             canvas.drawText(label, left + railWidth / 2f, top + bh / 2f + textPaint.textSize / 3f, textPaint)
             top += bh + gap
@@ -231,12 +314,22 @@ internal class FreeLayoutHost(
 
     private fun handleToolbarTap(x: Float, y: Float): Boolean {
         if (x < width - railWidth) return false
+        if (toolbarCollapsed) {
+            toolbarCollapsed = false
+            invalidate()
+            return true
+        }
         val bh = buttonHeight()
         val gap = 2f * resources.displayMetrics.density
         val index = ((y - 5f * resources.displayMetrics.density) / (bh + gap)).toInt()
         if (index !in toolbarLabels.indices) return true
         when (toolbarLabels[index]) {
             "ELEMENTI" -> showElementPicker()
+            "AREA" -> {
+                selectionMode = !selectionMode
+                selectingArea = false
+                Toast.makeText(context, if (selectionMode) "Traccia un rettangolo per selezionare più elementi" else "Selezione area disattivata", Toast.LENGTH_SHORT).show()
+            }
             "SPOSTA" -> showMoveControls()
             "DIMENS." -> showSizeControls()
             "GRIGLIA" -> showGrid = !showGrid
@@ -245,6 +338,7 @@ internal class FreeLayoutHost(
             "REDO" -> redo()
             "CENTRA" -> centerSelected()
             "SALVA" -> { saveProfile(); Toast.makeText(context, "Layout salvato", Toast.LENGTH_SHORT).show() }
+            "NASCONDI" -> toolbarCollapsed = true
             "RETURN" -> setEditMode(false)
         }
         invalidate()
@@ -278,12 +372,17 @@ internal class FreeLayoutHost(
     }
 
     private fun requireSelection(): Pair<String, UiElementPlacement>? {
-        val id = selectedId ?: run {
-            Toast.makeText(context, "Prima seleziona un elemento dal menu ELEMENTI", Toast.LENGTH_SHORT).show()
+        val id = selectedIds.firstOrNull() ?: selectedId ?: run {
+            Toast.makeText(context, "Prima seleziona uno o più elementi", Toast.LENGTH_SHORT).show()
             return null
         }
         val placement = placements[id] ?: return null
         return id to placement
+    }
+
+    private fun selectedPlacements(): List<UiElementPlacement> {
+        val ids = if (selectedIds.isNotEmpty()) selectedIds else listOfNotNull(selectedId)
+        return ids.mapNotNull { placements[it] }
     }
 
     private fun rememberUndo() {
@@ -351,18 +450,28 @@ internal class FreeLayoutHost(
     }
 
     private fun moveSelected(dx: Int, dy: Int, stepDp: Float) {
-        val (id, old) = requireSelection() ?: return
+        val targets = selectedPlacements()
+        if (targets.isEmpty()) { requireSelection(); return }
         rememberUndo()
         val px = stepDp * resources.displayMetrics.density
         val hostW = width.coerceAtLeast(1).toFloat()
         val hostH = height.coerceAtLeast(1).toFloat()
-        var nx = (old.x * hostW + dx * px).coerceIn(0f, hostW * (1f - old.width))
-        var ny = (old.y * hostH + dy * px).coerceIn(0f, hostH * (1f - old.height))
+        val minX = targets.minOf { it.x * hostW }
+        val minY = targets.minOf { it.y * hostH }
+        val maxX = targets.maxOf { (it.x + it.width) * hostW }
+        val maxY = targets.maxOf { (it.y + it.height) * hostH }
+        var deltaX = (dx * px).coerceIn(-minX, hostW - maxX)
+        var deltaY = (dy * px).coerceIn(-minY, hostH - maxY)
         if (snapEnabled && movementStepDp >= 16f) {
-            nx = (nx / gridStep).roundToInt() * gridStep
-            ny = (ny / gridStep).roundToInt() * gridStep
+            deltaX = ((minX + deltaX) / gridStep).roundToInt() * gridStep - minX
+            deltaY = ((minY + deltaY) / gridStep).roundToInt() * gridStep - minY
         }
-        placements[id] = old.copy(x = (nx / hostW).coerceIn(0f, 1f - old.width), y = (ny / hostH).coerceIn(0f, 1f - old.height)).normalized()
+        targets.forEach { old ->
+            placements[old.elementId] = old.copy(
+                x = ((old.x * hostW + deltaX) / hostW).coerceIn(0f, 1f - old.width),
+                y = ((old.y * hostH + deltaY) / hostH).coerceIn(0f, 1f - old.height)
+            ).normalized()
+        }
         requestLayout(); invalidate(); saveProfile()
     }
 
@@ -402,11 +511,38 @@ internal class FreeLayoutHost(
     }
 
     private fun resizeSelected(dw: Float, dh: Float) {
-        val (id, old) = requireSelection() ?: return
+        val targets = selectedPlacements()
+        if (targets.isEmpty()) { requireSelection(); return }
         rememberUndo()
-        val w = (old.width + dw).coerceIn(0.02f, 1f - old.x)
-        val h = (old.height + dh).coerceIn(0.02f, 1f - old.y)
-        placements[id] = old.copy(width = w, height = h).normalized()
+        if (targets.size == 1) {
+            val old = targets.first()
+            val w = (old.width + dw).coerceIn(0.02f, 1f - old.x)
+            val h = (old.height + dh).coerceIn(0.02f, 1f - old.y)
+            placements[old.elementId] = old.copy(width = w, height = h).normalized()
+        } else {
+            val hostW = width.coerceAtLeast(1).toFloat()
+            val hostH = height.coerceAtLeast(1).toFloat()
+            val left = targets.minOf { it.x }
+            val top = targets.minOf { it.y }
+            val right = targets.maxOf { it.x + it.width }
+            val bottom = targets.maxOf { it.y + it.height }
+            val oldW = (right - left).coerceAtLeast(0.02f)
+            val oldH = (bottom - top).coerceAtLeast(0.02f)
+            val newW = (oldW + dw).coerceIn(0.02f, 1f - left)
+            val newH = (oldH + dh).coerceIn(0.02f, 1f - top)
+            val sx = newW / oldW
+            val sy = newH / oldH
+            targets.forEach { old ->
+                val nx = left + (old.x - left) * sx
+                val ny = top + (old.y - top) * sy
+                placements[old.elementId] = old.copy(
+                    x = nx.coerceIn(0f, 1f - old.width * sx),
+                    y = ny.coerceIn(0f, 1f - old.height * sy),
+                    width = (old.width * sx).coerceIn(0.01f, 1f - nx),
+                    height = (old.height * sy).coerceIn(0.01f, 1f - ny)
+                ).normalized()
+            }
+        }
         requestLayout(); invalidate(); saveProfile()
     }
 
@@ -425,9 +561,23 @@ internal class FreeLayoutHost(
     }
 
     private fun centerSelected() {
-        val (id, old) = requireSelection() ?: return
+        val targets = selectedPlacements()
+        if (targets.isEmpty()) { requireSelection(); return }
         rememberUndo()
-        placements[id] = old.copy(x = (1f - old.width) / 2f, y = (1f - old.height) / 2f).normalized()
+        val left = targets.minOf { it.x }
+        val top = targets.minOf { it.y }
+        val right = targets.maxOf { it.x + it.width }
+        val bottom = targets.maxOf { it.y + it.height }
+        val groupW = right - left
+        val groupH = bottom - top
+        val offsetX = (1f - groupW) / 2f - left
+        val offsetY = (1f - groupH) / 2f - top
+        targets.forEach { old ->
+            placements[old.elementId] = old.copy(
+                x = (old.x + offsetX).coerceIn(0f, 1f - old.width),
+                y = (old.y + offsetY).coerceIn(0f, 1f - old.height)
+            ).normalized()
+        }
         requestLayout(); invalidate(); saveProfile()
     }
 
