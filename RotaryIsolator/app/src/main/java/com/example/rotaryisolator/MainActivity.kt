@@ -350,6 +350,8 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
     private lateinit var container: FrameLayout
+    private val uiLayoutProfileStore by lazy { UiLayoutProfileStore(this) }
+    private var freeLayoutHost: FreeLayoutHost? = null
     private lateinit var status: TextView
     private val sections = mutableMapOf<String, LinearLayout>()
     private val gold get() = colorEq
@@ -909,8 +911,17 @@ class MainActivity : Activity() {
         }
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
-        container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
+        container=FrameLayout(this).apply{clipChildren=false;clipToPadding=false}
         container.addView(root,FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        val configuration = resources.configuration
+        val layoutProfile = UiLayoutProfile.detect(
+            configuration.smallestScreenWidthDp,
+            configuration.screenWidthDp,
+            configuration.screenHeightDp
+        )
+        val freeHost = FreeLayoutHost(this, layoutProfile, uiLayoutProfileStore)
+        freeLayoutHost = freeHost
+        container.addView(freeHost, FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.START))
         setContentView(container)
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
             if (view.width > 0 && view.height > 0) {
@@ -938,7 +949,21 @@ class MainActivity : Activity() {
             }
         }
         root.addOnLayoutChangeListener { _,_,_,_,_,_,_,_,_ -> fitUiToWindow() }
-        container.post { root.post { fitUiToWindow() } }
+        // First lay out the reference composition, then detach its individual
+        // controls into the full-window free host. The legacy rows/sections are
+        // used only to calculate initial positions and are removed afterwards.
+        container.post {
+            root.post {
+                fitUiToWindow()
+                freeHost.post {
+                    if (::container.isInitialized && root.parent === container && freeHost.parent === container) {
+                        freeHost.adoptLaidOutTree(root, root.scaleX.coerceAtLeast(0.01f))
+                        container.removeView(root)
+                        freeHost.bringToFront()
+                    }
+                }
+            }
+        }
     }
 
     private fun scheduleUpdate() {
