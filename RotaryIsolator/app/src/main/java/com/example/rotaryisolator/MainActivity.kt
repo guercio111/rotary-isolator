@@ -783,6 +783,18 @@ class MainActivity : Activity() {
         init {
             contentDescription = "Impostazioni"
             setOnClickListener { showOptions() }
+            setOnLongClickListener {
+                freeLayoutHost?.let { host ->
+                    host.setEditMode(!host.isEditMode())
+                    Toast.makeText(
+                        this@MainActivity,
+                        if (host.isEditMode()) "MODALITÀ LAYOUT: trascina o ridimensiona gli elementi; tocca uno spazio vuoto per uscire"
+                        else "MODALITÀ LAYOUT DISATTIVATA",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                true
+            }
         }
     }
 
