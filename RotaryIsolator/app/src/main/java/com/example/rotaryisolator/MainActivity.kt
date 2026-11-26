@@ -3115,7 +3115,7 @@ class MainActivity : Activity() {
             }
             startActivity(android.content.Intent.createChooser(send, "Esporta progetto FREQUALIZER"))
         }
-        screen.addView(toolbar, LinearLayout.LayoutParams(-1, dp(48)))
+        screen.addView(toolbar, LinearLayout.LayoutParams(-1, dp(58)))
         screen.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
 
         dialog.setOnDismissListener {
@@ -3163,7 +3163,7 @@ class MainActivity : Activity() {
             stored.values.filter { saved -> existingViews.keys.none { saved.id == "section_$it" } }
                 .forEach { saved ->
                     val placeholder = TextView(this).apply {
-                        text = saved.title.ifBlank { saved.kind.uppercase(Locale.US) }
+                        text = saved.title.ifBlank { saved.kind.uppercase(java.util.Locale.US) }
                         gravity = Gravity.CENTER
                         textSize = 12f
                         setTextColor(Color.WHITE)
