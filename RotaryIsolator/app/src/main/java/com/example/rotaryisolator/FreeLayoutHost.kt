@@ -61,7 +61,16 @@ internal class FreeLayoutHost(
         if (width <= 0 || height <= 0) return
         val hostLocation = IntArray(2)
         getLocationOnScreen(hostLocation)
-        val candidates = ArrayList<Pair<View, String>>()
+        // Keep geometry tied to the original container while extracting its
+        // artwork into independent decorative views. This prevents opaque
+        // panel backgrounds from forcing all child controls to move as a group.
+        data class Candidate(val view: View, val geometry: View, val proposedId: String)
+        val candidates = ArrayList<Candidate>()
+
+        fun cloneDrawable(drawable: android.graphics.drawable.Drawable?): android.graphics.drawable.Drawable? {
+            if (drawable == null || drawable.alpha <= 0) return null
+            return drawable.constantState?.newDrawable(resources)?.mutate()
+        }
 
         fun collect(view: View, path: String) {
             val group = view as? ViewGroup
@@ -69,10 +78,25 @@ internal class FreeLayoutHost(
                 group == null ||
                 view.isClickable ||
                 view.isLongClickable ||
-                view.isFocusable ||
-                (group !is android.widget.LinearLayout && (view.background?.alpha ?: 0) > 0)
+                view.isFocusable
             )
             if (group != null && !keepAsUnit) {
+                val backgroundCopy = cloneDrawable(view.background)
+                val foregroundCopy = if (android.os.Build.VERSION.SDK_INT >= 23) {
+                    cloneDrawable(view.foreground)
+                } else null
+                if (backgroundCopy != null || foregroundCopy != null) {
+                    val decoration = View(context).apply {
+                        background = backgroundCopy
+                        if (android.os.Build.VERSION.SDK_INT >= 23) foreground = foregroundCopy
+                        alpha = view.alpha
+                        translationZ = view.translationZ
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                        isClickable = false
+                        isFocusable = false
+                    }
+                    candidates.add(Candidate(decoration, view, "element_${path}_decoration"))
+                }
                 for (index in 0 until group.childCount) {
                     collect(group.getChildAt(index), "$path/$index")
                 }
@@ -80,8 +104,11 @@ internal class FreeLayoutHost(
                 val stablePart = if (view.id != View.NO_ID) "id_${view.id}" else
                     view.contentDescription?.toString()?.takeIf { it.isNotBlank() }
                         ?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
+                        ?: (view as? android.widget.TextView)?.text?.toString()
+                            ?.takeIf { it.isNotBlank() }
+                            ?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
                         ?: view.javaClass.simpleName.lowercase()
-                candidates.add(view to "element_${path}_${stablePart}")
+                candidates.add(Candidate(view, view, "element_${path}_${stablePart}"))
             }
         }
 
@@ -90,18 +117,21 @@ internal class FreeLayoutHost(
         }
 
         val usedIds = HashSet<String>()
-        candidates.forEach { (view, proposedId) ->
+        candidates.forEach { candidate ->
+            val view = candidate.view
+            val geometry = candidate.geometry
+            val proposedId = candidate.proposedId
             var elementId = proposedId
             var suffix = 2
             while (!usedIds.add(elementId)) {
                 elementId = "${proposedId}_${suffix++}"
             }
             val location = IntArray(2)
-            view.getLocationOnScreen(location)
+            geometry.getLocationOnScreen(location)
             val left = (location[0] - hostLocation[0]).toFloat()
             val top = (location[1] - hostLocation[1]).toFloat()
-            val renderedWidth = view.width * referenceScale
-            val renderedHeight = view.height * referenceScale
+            val renderedWidth = geometry.width * referenceScale
+            val renderedHeight = geometry.height * referenceScale
             val placement = UiElementPlacement(
                 elementId = elementId,
                 x = (left / width).coerceIn(0f, 0.99f),
