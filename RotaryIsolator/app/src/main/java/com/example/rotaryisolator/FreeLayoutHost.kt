@@ -46,6 +46,74 @@ internal class FreeLayoutHost(
         setWillNotDraw(false)
     }
 
+
+    /**
+     * Detach the rendered controls from the legacy layout tree and register
+     * each independently interactive leaf in this full-window host. The old
+     * hierarchy is used only once to calculate the initial visual positions;
+     * after adoption it no longer constrains movement or sizing.
+     *
+     * Clickable/focusable composite widgets and views with their own background
+     * are kept intact so their existing listeners and drawing remain functional.
+     */
+    fun adoptLaidOutTree(source: ViewGroup, referenceScale: Float = 1f) {
+        if (width <= 0 || height <= 0) return
+        val hostLocation = IntArray(2)
+        getLocationOnScreen(hostLocation)
+        val candidates = ArrayList<Pair<View, String>>()
+
+        fun collect(view: View, path: String) {
+            val group = view as? ViewGroup
+            val keepAsUnit = view !== source && (
+                group == null ||
+                view.isClickable ||
+                view.isLongClickable ||
+                view.isFocusable ||
+                view.background != null
+            )
+            if (group != null && !keepAsUnit) {
+                for (index in 0 until group.childCount) {
+                    collect(group.getChildAt(index), "$path/$index")
+                }
+            } else if (view !== source && view.width > 0 && view.height > 0) {
+                val stablePart = if (view.id != View.NO_ID) "id_${view.id}" else
+                    view.contentDescription?.toString()?.takeIf { it.isNotBlank() }
+                        ?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
+                        ?: view.javaClass.simpleName.lowercase()
+                candidates.add(view to "element_${path}_${stablePart}")
+            }
+        }
+
+        for (index in 0 until source.childCount) {
+            collect(source.getChildAt(index), index.toString())
+        }
+
+        val usedIds = HashSet<String>()
+        candidates.forEach { (view, proposedId) ->
+            var elementId = proposedId
+            var suffix = 2
+            while (!usedIds.add(elementId)) {
+                elementId = "${proposedId}_${suffix++}"
+            }
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            val left = (location[0] - hostLocation[0]).toFloat()
+            val top = (location[1] - hostLocation[1]).toFloat()
+            val renderedWidth = view.width * referenceScale
+            val renderedHeight = view.height * referenceScale
+            val placement = UiElementPlacement(
+                elementId = elementId,
+                x = (left / width).coerceIn(0f, 0.99f),
+                y = (top / height).coerceIn(0f, 0.99f),
+                width = (renderedWidth / width).coerceIn(0.01f, 1f),
+                height = (renderedHeight / height).coerceIn(0.01f, 1f)
+            ).normalized()
+            (view.parent as? ViewGroup)?.removeView(view)
+            addElement(elementId, view, placement)
+        }
+        requestLayout()
+    }
+
     /** Edit mode intercepts gestures; when off, controls receive normal touch input. */
     fun setEditMode(enabled: Boolean) {
         if (editMode == enabled) return
