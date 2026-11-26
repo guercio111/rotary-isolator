@@ -26,6 +26,32 @@ internal class FreeLayoutHost(
     private var selectedId: String? = null
     private var moving = false
     private var resizing = false
+    private var drawingPanel = false
+    private var drawStartX = 0f
+    private var drawStartY = 0f
+    private var drawNowX = 0f
+    private var drawNowY = 0f
+    private var editorTool = "SELECT"
+    private var showGrid = false
+    private var snapEnabled = true
+    private val gridStep get() = 16f * resources.displayMetrics.density
+    private val railWidth get() = 76f * resources.displayMetrics.density
+    private val toolbarLabels = listOf("SELECT", "PANEL", "GRID", "SNAP", "DUPL", "DELETE", "FRONT", "BACK", "SIZE", "EXPORT", "DONE")
+    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x334FC3F7; strokeWidth = 1f * resources.displayMetrics.density }
+    private val railPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEE171B22.toInt(); style = Paint.Style.FILL }
+    private val toolPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF303943.toInt(); style = Paint.Style.FILL }
+    private val activeToolPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFB8860B.toInt(); style = Paint.Style.FILL }
+    private val toolTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textAlign = Paint.Align.CENTER
+        textSize = 9f * resources.displayMetrics.scaledDensity
+        typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+    }
+    private val draftPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFD54F.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * resources.displayMetrics.density
+    }
     private var downX = 0f
     private var downY = 0f
     private var startPlacement: UiElementPlacement? = null
@@ -197,6 +223,15 @@ internal class FreeLayoutHost(
         if (!editMode) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (handleToolbarTap(event.x, event.y)) return true
+                if (event.x >= width - railWidth) return true
+                if (editorTool == "PANEL") {
+                    drawingPanel = true
+                    drawStartX = snap(event.x); drawStartY = snap(event.y)
+                    drawNowX = drawStartX; drawNowY = drawStartY
+                    invalidate()
+                    return true
+                }
                 downX = event.x
                 downY = event.y
                 val picked = (childCount - 1 downTo 0).asSequence()
@@ -212,6 +247,12 @@ internal class FreeLayoutHost(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
+                if (drawingPanel) {
+                    drawNowX = snap(event.x.coerceAtMost(width - railWidth))
+                    drawNowY = snap(event.y)
+                    invalidate()
+                    return true
+                }
                 val original = startPlacement ?: return true
                 val id = selectedId ?: return true
                 val hostWidth = width.coerceAtLeast(1).toFloat()
@@ -237,6 +278,12 @@ internal class FreeLayoutHost(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (drawingPanel) {
+                    drawingPanel = false
+                    if (event.actionMasked == MotionEvent.ACTION_UP) createPanel(drawStartX, drawStartY, snap(event.x.coerceAtMost(width - railWidth)), snap(event.y))
+                    invalidate()
+                    return true
+                }
                 startPlacement = null
                 moving = false
                 resizing = false
@@ -258,10 +305,136 @@ internal class FreeLayoutHost(
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         if (!editMode) return
+        if (showGrid) drawGrid(canvas)
+        if (drawingPanel) canvas.drawRect(minOf(drawStartX, drawNowX), minOf(drawStartY, drawNowY), maxOf(drawStartX, drawNowX), maxOf(drawStartY, drawNowY), draftPaint)
+        drawEditorToolbar(canvas)
         val id = selectedId ?: return
         val child = (0 until childCount).map { getChildAt(it) }.firstOrNull { it.tag == id } ?: return
         canvas.drawRect(child.left.toFloat(), child.top.toFloat(), child.right.toFloat(), child.bottom.toFloat(), outlinePaint)
         canvas.drawRect(child.right - handleSize, child.bottom - handleSize, child.right.toFloat(), child.bottom.toFloat(), handlePaint)
+    }
+
+
+    private fun snap(value: Float): Float = if (!snapEnabled) value else (value / gridStep).roundToInt() * gridStep
+
+    private fun drawGrid(canvas: Canvas) {
+        val step = gridStep.coerceAtLeast(4f)
+        var x = 0f
+        while (x < width - railWidth) { canvas.drawLine(x, 0f, x, height.toFloat(), gridPaint); x += step }
+        var y = 0f
+        while (y < height) { canvas.drawLine(0f, y, width - railWidth, y, gridPaint); y += step }
+    }
+
+    private fun drawEditorToolbar(canvas: Canvas) {
+        val left = width - railWidth
+        canvas.drawRect(left, 0f, width.toFloat(), height.toFloat(), railPaint)
+        val bh = (42f * resources.displayMetrics.density).coerceAtLeast(34f)
+        val gap = 3f * resources.displayMetrics.density
+        var top = 6f * resources.displayMetrics.density
+        toolbarLabels.forEach { label ->
+            if (top + bh <= height) {
+                val active = when (label) { "SELECT", "PANEL" -> editorTool == label; "GRID" -> showGrid; "SNAP" -> snapEnabled; else -> false }
+                canvas.drawRoundRect(left + 5f, top, width - 5f, top + bh, 7f, 7f, if (active) activeToolPaint else toolPaint)
+                canvas.drawText(label, left + railWidth / 2f, top + bh / 2f + toolTextPaint.textSize / 3f, toolTextPaint)
+            }
+            top += bh + gap
+        }
+    }
+
+    private fun handleToolbarTap(x: Float, y: Float): Boolean {
+        if (x < width - railWidth) return false
+        val bh = (42f * resources.displayMetrics.density).coerceAtLeast(34f)
+        val gap = 3f * resources.displayMetrics.density
+        val index = ((y - 6f * resources.displayMetrics.density) / (bh + gap)).toInt()
+        if (index !in toolbarLabels.indices) return true
+        when (toolbarLabels[index]) {
+            "SELECT" -> editorTool = "SELECT"
+            "PANEL" -> editorTool = "PANEL"
+            "GRID" -> showGrid = !showGrid
+            "SNAP" -> snapEnabled = !snapEnabled
+            "DUPL" -> duplicateSelectedPanel()
+            "DELETE" -> deleteSelected()
+            "FRONT" -> changeSelectedLayer(1)
+            "BACK" -> changeSelectedLayer(-1)
+            "SIZE" -> cycleSelectedSize()
+            "EXPORT" -> exportLayout()
+            "DONE" -> setEditMode(false)
+        }
+        invalidate()
+        return true
+    }
+
+    private fun createPanel(x1: Float, y1: Float, x2: Float, y2: Float) {
+        val l = minOf(x1, x2).coerceIn(0f, width - railWidth - 40f)
+        val t = minOf(y1, y2).coerceIn(0f, height - 40f)
+        val w = kotlin.math.abs(x2 - x1).coerceAtLeast(40f).coerceAtMost(width - railWidth - l)
+        val h = kotlin.math.abs(y2 - y1).coerceAtLeast(40f).coerceAtMost(height - t)
+        val id = "designer_panel_" + android.os.SystemClock.elapsedRealtimeNanos()
+        val panel = FrameLayout(context).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x553B4652); setStroke((2f * resources.displayMetrics.density).toInt().coerceAtLeast(1), 0xFFFFD54F.toInt())
+                cornerRadius = 8f * resources.displayMetrics.density
+            }
+            contentDescription = "Pannello personalizzato"
+        }
+        addElement(id, panel, UiElementPlacement(id, l / width, t / height, w / width, h / height))
+        selectedId = id; editorTool = "SELECT"; saveProfile()
+    }
+
+    private fun duplicateSelectedPanel() {
+        val id = selectedId ?: return
+        val p = placements[id] ?: return
+        if (!id.startsWith("designer_panel_")) { android.widget.Toast.makeText(context, "Duplica disponibile per i pannelli creati", android.widget.Toast.LENGTH_SHORT).show(); return }
+        val newId = "designer_panel_" + android.os.SystemClock.elapsedRealtimeNanos()
+        val copy = FrameLayout(context).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0x553B4652); setStroke((2f * resources.displayMetrics.density).toInt().coerceAtLeast(1), 0xFFFFD54F.toInt())
+                cornerRadius = 8f * resources.displayMetrics.density
+            }
+            contentDescription = "Pannello duplicato"
+        }
+        val next = p.copy(elementId = newId, x = (p.x + 0.025f).coerceAtMost(1f - p.width), y = (p.y + 0.025f).coerceAtMost(1f - p.height))
+        addElement(newId, copy, next); selectedId = newId; saveProfile()
+    }
+
+    private fun deleteSelected() {
+        val id = selectedId ?: return
+        if (!id.startsWith("designer_panel_")) { android.widget.Toast.makeText(context, "Gli elementi originali non si eliminano", android.widget.Toast.LENGTH_SHORT).show(); return }
+        val v = (0 until childCount).map { getChildAt(it) }.firstOrNull { it.tag == id } ?: return
+        removeView(v); placements.remove(id); selectedId = null; saveProfile(); requestLayout()
+    }
+
+    private fun changeSelectedLayer(delta: Int) {
+        val id = selectedId ?: return
+        val p = placements[id] ?: return
+        val next = p.copy(zOrder = (p.zOrder + delta).coerceIn(-100, 100))
+        placements[id] = next
+        (0 until childCount).map { getChildAt(it) }.firstOrNull { it.tag == id }?.translationZ = next.zOrder.toFloat()
+        saveProfile(); invalidate()
+    }
+
+    private fun cycleSelectedSize() {
+        val id = selectedId ?: return
+        val p = placements[id] ?: return
+        val factors = listOf(0.65f, 0.8f, 1f, 1.2f, 1.4f, 1.6f)
+        val next = (p.sizePreset + 1) % factors.size
+        val factor = factors[next] / factors[p.sizePreset.coerceIn(0, 5)]
+        placements[id] = p.copy(width = (p.width * factor).coerceAtMost(1f - p.x), height = (p.height * factor).coerceAtMost(1f - p.y), sizePreset = next).normalized()
+        saveProfile(); requestLayout(); invalidate()
+    }
+
+    private fun exportLayout() {
+        val elements = org.json.JSONArray()
+        normalizedSnapshot().forEach { p ->
+            elements.put(org.json.JSONObject().put("id", p.elementId).put("x", p.x).put("y", p.y)
+                .put("width", p.width).put("height", p.height).put("zOrder", p.zOrder)
+                .put("sizePreset", p.sizePreset).put("visible", p.visible))
+        }
+        val payload = org.json.JSONObject().put("format", "FREQUALIZER_LAYOUT").put("version", 1)
+            .put("profile", profile.storageKey).put("elements", elements).toString(2)
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("FREQUALIZER layout", payload))
+        android.widget.Toast.makeText(context, "Layout JSON copiato negli appunti", android.widget.Toast.LENGTH_LONG).show()
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
