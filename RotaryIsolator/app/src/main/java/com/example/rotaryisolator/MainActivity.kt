@@ -105,14 +105,8 @@ class MainActivity : Activity() {
     private fun manualDelayTimeMs(): Float =
         if (delayManualTimePercent <= 0f) 30f
         else 30f * (8000f / 30f).pow(delayManualTimePercent.coerceIn(0f,100f) / 100f)
-    private fun manualDelayDivisionLabel(): String {
-        val quarterMs = 60000f / delayBpm.coerceIn(60f,180f)
-        val ratio = manualDelayTimeMs() / quarterMs
-        val divisions = floatArrayOf(1f/16f, 1f/8f, 1f/4f, 1f/2f, 3f/4f, 1f, 2f, 4f, 8f, 16f)
-        val labels = arrayOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
-        val nearest = divisions.indices.minByOrNull { abs(ln((ratio / divisions[it]).coerceAtLeast(0.000001f))) } ?: 5
-        return labels[nearest]
-    }
+    private fun manualDelayDivisionLabel(): String =
+        String.format(java.util.Locale.US, "%.0f ms", manualDelayTimeMs())
     @Volatile private var delayMode = 2 // 0 SHORT DELAY, 1 LONG DELAY, 2 DUB ECHO
     @Volatile private var selectedBeatFx = 2 // 0 SHORT, 1 LONG, 2 DUB ECHO, 3 REVERB
     @Volatile private var delayMix = 0
@@ -164,7 +158,7 @@ class MainActivity : Activity() {
         val phases = phaseHoldPhase
         val index = delayDivision.coerceIn(0, 9)
         val period = currentFxPeriodMs()
-        return if (!delayManualMode && holds[index]) {
+        return if (holds[index]) {
             phases[index] * period
         } else {
             wrapFxPhaseOffsetMs(
@@ -176,7 +170,7 @@ class MainActivity : Activity() {
     private fun setCurrentFxPhaseOffsetMs(value: Float) {
         val index = delayDivision.coerceIn(0, 9)
         val period = currentFxPeriodMs().coerceAtLeast(1f)
-        if (!delayManualMode && phaseHoldEnabled[index]) {
+        if (phaseHoldEnabled[index]) {
             val phases = phaseHoldPhase.copyOf()
             phases[index] = (wrapFxPhaseOffsetMs(value, period) / period).coerceIn(-0.49f, 0.49f)
             phaseHoldPhase = phases
@@ -2169,7 +2163,7 @@ class MainActivity : Activity() {
             val enabled = phaseHoldEnabled.copyOf()
             val phases = phaseHoldPhase.copyOf()
             if (enabled[index]) {
-                if (!delayManualMode && delayDivision == index) {
+                if (delayDivision == index) {
                     val period = currentFxPeriodMs().coerceAtLeast(1f)
                     val autoOffset = wrapFxPhaseOffsetMs(fxAutoPhaseCompensationMs, period)
                     fxPhaseOffsetFraction = (wrapFxPhaseOffsetMs(currentFxPhaseOffsetMs() - autoOffset, period) / period)
@@ -2253,9 +2247,10 @@ class MainActivity : Activity() {
             { value -> delayManualTimePercent = value.coerceIn(0f,100f); scheduleUpdate() },
             { manualDelayDivisionLabel() },
             onStart = {
-                // TIME takes control of delay length but never clears per-division PHASE HOLD.
+                // TIME takes control of continuous delay length in milliseconds.
+                // Keep the last BEAT division as the phase/LOCK/HOLD reference.
+                // TIME excludes the beat keys visually without changing their stored states.
                 delayManualMode = true
-                delayDivision = 5
                 paintDivisionButtons()
                 save(); scheduleUpdate()
             },
