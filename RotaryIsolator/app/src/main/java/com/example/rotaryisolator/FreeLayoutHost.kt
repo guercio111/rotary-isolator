@@ -112,7 +112,7 @@ internal class FreeLayoutHost(
                             ?.takeIf { it.isNotBlank() }
                             ?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
                         ?: view.javaClass.simpleName.lowercase()
-                candidates.add(Candidate(view, view, "element_${path}_${stablePart}"))
+                candidates.add(Candidate(view, view, "element_${view.javaClass.simpleName.lowercase()}_${stablePart}"))
             }
         }
 
