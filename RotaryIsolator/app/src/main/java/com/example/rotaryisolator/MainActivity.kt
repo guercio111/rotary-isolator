@@ -3045,7 +3045,7 @@ class MainActivity : Activity() {
         }
         saved.filter { it.id !in restoredIds }.forEach { element ->
             val placeholder = TextView(this).apply {
-                text = element.title.ifBlank { element.kind.uppercase(Locale.US) }
+                text = element.title.ifBlank { element.kind.uppercase(java.util.Locale.US) }
                 gravity = Gravity.CENTER
                 textSize = 12f
                 setTextColor(Color.WHITE)
