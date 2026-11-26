@@ -1,6 +1,6 @@
 # Tablet stable APK rebuild trigger
 name: Build Rotary Isolator APK
-# Rebuild requested for experimental master reverb controls
+# Experimental FREQUALIZER TEST build; includes PHASE HOLD UI verification.
 
 on:
   push:
