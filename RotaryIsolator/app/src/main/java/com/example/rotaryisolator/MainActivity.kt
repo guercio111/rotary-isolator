@@ -2041,8 +2041,8 @@ class MainActivity : Activity() {
                         // from the locked FX BPM, especially at 1/16 and 16 beats.
                         // One full fader travel corresponds to half an FX beat.
                         val stepMs = -delta * fxPeriodMs / 400f
-                        fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs)
-                            .coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
+                        setCurrentFxPhaseOffsetMs((currentFxPhaseOffsetMs() + stepMs)
+                            .coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f))
                         refreshFxPhaseUi()
                         bar?.invalidate()
                         fxBpmLastBeatIndex = Long.MIN_VALUE
