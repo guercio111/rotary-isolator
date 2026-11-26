@@ -86,7 +86,7 @@ internal class FreeLayoutHost(
                     cloneDrawable(view.foreground)
                 } else null
                 if (backgroundCopy != null || foregroundCopy != null) {
-                    val decoration = View(context).apply {
+                    val decoration = View(this@FreeLayoutHost).apply {
                         background = backgroundCopy
                         if (android.os.Build.VERSION.SDK_INT >= 23) foreground = foregroundCopy
                         alpha = view.alpha
