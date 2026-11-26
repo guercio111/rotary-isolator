@@ -2157,7 +2157,7 @@ class MainActivity : Activity() {
                 enabled[index] = false
             } else {
                 val sourcePeriod = currentFxPeriodMs().coerceAtLeast(1f)
-                phases[index] = (currentFxPhaseOffsetMs() / sourcePeriod).coerceIn(-0.49f, 0.49f)
+                phases[index] = fxPhaseOffsetFraction.coerceIn(-0.49f, 0.49f)
                 enabled[index] = true
             }
             phaseHoldPhase = phases
