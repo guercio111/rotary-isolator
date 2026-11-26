@@ -239,6 +239,7 @@ class MainActivity : Activity() {
     }
     private val captureRequestCode = 7420
     private val capturePermissionRequestCode = 7421
+    private val layoutImportRequestCode = 7422
     private var audioReady = false
     private var appEnabled = true
     private var defaultSettingsOnStart = true
@@ -2430,6 +2431,20 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android API  Activity Result migration is not required for this diagnostic")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == layoutImportRequestCode) {
+            if (resultCode == RESULT_OK && data?.data != null) {
+                try {
+                    val json = contentResolver.openInputStream(data.data!!)?.bufferedReader()?.use { it.readText() }
+                        ?: throw IllegalStateException("File layout vuoto o non leggibile")
+                    FreeformLayoutStore.importProject(this, json)
+                    buildUi()
+                    Toast.makeText(this, "Progetto layout importato", Toast.LENGTH_LONG).show()
+                } catch (t: Throwable) {
+                    Toast.makeText(this, "Importazione non riuscita: ${t.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
             captureConsentLocked = true
@@ -3017,6 +3032,29 @@ class MainActivity : Activity() {
         }catch(t:Throwable){runOnUiThread { if(::status.isInitialized) status.text="Audio DSP non supportato dal driver del dispositivo" }}
     }
 
+    private fun createDesignerPlaceholder(element: FreeformLayoutElement): TextView {
+        return TextView(this).apply {
+            text = element.title.ifBlank { element.kind.uppercase(java.util.Locale.US) }
+            gravity = Gravity.CENTER
+            textSize = if (element.kind == "knob") 10f else 12f
+            setTextColor(if (element.kind == "button") Color.BLACK else Color.WHITE)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            isClickable = false
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = if (element.kind == "knob") dp(100).toFloat() else dp(8).toFloat()
+                shape = if (element.kind == "knob") android.graphics.drawable.GradientDrawable.OVAL
+                    else android.graphics.drawable.GradientDrawable.RECTANGLE
+                val fill = when (element.kind) {
+                    "button" -> colorButtons
+                    "knob" -> Color.rgb(38, 44, 53)
+                    else -> Color.rgb(45, 51, 61)
+                }
+                setColor(fill)
+                setStroke(dp(1), if (element.kind == "button") colorButtons else colorOptions)
+            }
+        }
+    }
+
     private fun applySavedFreeformLayout(profile: String) {
         val saved = FreeformLayoutStore.load(this, profile)
         if (saved.isEmpty()) return
@@ -3044,19 +3082,7 @@ class MainActivity : Activity() {
             restoredIds.add(id)
         }
         saved.filter { it.id !in restoredIds }.forEach { element ->
-            val placeholder = TextView(this).apply {
-                text = element.title.ifBlank { element.kind.uppercase(java.util.Locale.US) }
-                gravity = Gravity.CENTER
-                textSize = 12f
-                setTextColor(Color.WHITE)
-                setPadding(dp(6), dp(6), dp(6), dp(6))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = dp(8).toFloat()
-                    setColor(Color.rgb(45, 51, 61))
-                    setStroke(dp(1), colorOptions)
-                }
-            }
-            canvas.addLayoutElement(placeholder, element)
+            canvas.addLayoutElement(createDesignerPlaceholder(element), element)
         }
         canvas.setEditMode(false)
     }
@@ -3106,6 +3132,41 @@ class MainActivity : Activity() {
             .create()
 
         toolbarButton("CHIUDI") { dialog.dismiss() }
+        toolbarButton("AGGIUNGI") {
+            val types = arrayOf("PANNELLO VUOTO", "PULSANTE GRAFICO", "MANOPOLA GRAFICA")
+            AlertDialog.Builder(this)
+                .setTitle("Aggiungi elemento")
+                .setItems(types) { _, index ->
+                    val kind = arrayOf("panel", "button", "knob")[index]
+                    val count = canvas.layoutElements().size
+                    val title = arrayOf("NUOVO PANNELLO", "NUOVO TASTO", "NUOVA MANOPOLA")[index]
+                    val element = FreeformLayoutElement(
+                        id = "custom_${System.nanoTime()}",
+                        kind = kind,
+                        title = title,
+                        x = (0.08f + (count % 4) * 0.035f).coerceIn(0f, 0.75f),
+                        y = (0.10f + (count % 5) * 0.035f).coerceIn(0f, 0.75f),
+                        width = if (kind == "knob") 0.14f else 0.20f,
+                        height = if (kind == "knob") 0.14f else 0.16f,
+                        zIndex = count
+                    )
+                    canvas.addLayoutElement(createDesignerPlaceholder(element), element)
+                    FreeformLayoutStore.save(this, profile, canvas.layoutElements())
+                    Toast.makeText(this, "Elemento grafico aggiunto: funzione audio non assegnata", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("ANNULLA", null)
+                .show()
+        }
+        toolbarButton("IMPORTA") {
+            dialog.dismiss()
+            handler.post {
+                val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                    type = "application/json"
+                }
+                startActivityForResult(intent, layoutImportRequestCode)
+            }
+        }
         toolbarButton("ESPORTA") {
             val record = FreeformLayoutStore.exportProject(this)
             val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
@@ -3162,19 +3223,7 @@ class MainActivity : Activity() {
 
             stored.values.filter { saved -> existingViews.keys.none { saved.id == "section_$it" } }
                 .forEach { saved ->
-                    val placeholder = TextView(this).apply {
-                        text = saved.title.ifBlank { saved.kind.uppercase(java.util.Locale.US) }
-                        gravity = Gravity.CENTER
-                        textSize = 12f
-                        setTextColor(Color.WHITE)
-                        setPadding(dp(6), dp(6), dp(6), dp(6))
-                        background = android.graphics.drawable.GradientDrawable().apply {
-                            cornerRadius = dp(8).toFloat()
-                            setColor(Color.rgb(45, 51, 61))
-                            setStroke(dp(1), colorOptions)
-                        }
-                    }
-                    canvas.addLayoutElement(placeholder, saved)
+                    canvas.addLayoutElement(createDesignerPlaceholder(saved), saved)
                     elements.add(saved)
                 }
 
