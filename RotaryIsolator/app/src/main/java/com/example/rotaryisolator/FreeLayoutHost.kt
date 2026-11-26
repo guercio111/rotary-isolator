@@ -240,8 +240,15 @@ internal class FreeLayoutHost(
                 startPlacement = null
                 moving = false
                 resizing = false
-                saveProfile()
+                if (event.actionMasked == MotionEvent.ACTION_UP && selectedId == null) {
+                    setEditMode(false)
+                    android.widget.Toast.makeText(context, "MODALITÀ LAYOUT DISATTIVATA", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    saveProfile()
+                }
+                selectedId = null
                 parent?.requestDisallowInterceptTouchEvent(false)
+                invalidate()
                 return true
             }
         }
