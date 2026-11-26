@@ -25,8 +25,8 @@ internal data class UiElementPlacement(
     fun normalized(): UiElementPlacement {
         // Reject NaN/infinite coordinates from malformed or partially edited
         // profiles before clamping. Keep the complete rectangle on-screen.
-        val safeX = (if (x.isFinite()) x else 0f).coerceIn(0f, 1f)
-        val safeY = (if (y.isFinite()) y else 0f).coerceIn(0f, 1f)
+        val safeX = (if (x.isFinite()) x else 0f).coerceIn(0f, 0.99f)
+        val safeY = (if (y.isFinite()) y else 0f).coerceIn(0f, 0.99f)
         val remainingWidth = (1f - safeX).coerceAtLeast(0.01f)
         val remainingHeight = (1f - safeY).coerceAtLeast(0.01f)
         val safeWidth = (if (width.isFinite()) width else 0.1f)
