@@ -33,7 +33,7 @@ internal class FreeLayoutHost(
         defaultPlacement: UiElementPlacement
     ) {
         require(elementId.isNotBlank()) { "A stable element ID is required" }
-        require(placements[elementId] == null || children.none { it.tag == elementId }) {
+        require(placements[elementId] == null || (0 until childCount).none { getChildAt(it).tag == elementId }) {
             "Duplicate UI element ID: $elementId"
         }
         val placement = (placements[elementId] ?: defaultPlacement.copy(elementId = elementId)).normalized()
@@ -94,7 +94,7 @@ internal class FreeLayoutHost(
         val width = width.coerceAtLeast(1).toFloat()
         val height = height.coerceAtLeast(1).toFloat()
         return placements.values.map { placement ->
-            val view = children.firstOrNull { it.tag == placement.elementId }
+            val view = (0 until childCount).map { getChildAt(it) }.firstOrNull { it.tag == placement.elementId }
             if (view == null) placement else placement.copy(
                 x = (view.left / width).coerceIn(0f, 1f),
                 y = (view.top / height).coerceIn(0f, 1f),
