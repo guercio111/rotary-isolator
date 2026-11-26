@@ -67,12 +67,16 @@ internal class FreeLayoutHost(
         data class Candidate(val view: View, val geometry: View, val proposedId: String)
         val candidates = ArrayList<Candidate>()
 
-        fun cloneDrawable(drawable: android.graphics.drawable.Drawable?): android.graphics.drawable.Drawable? {
-            if (drawable == null || drawable.alpha <= 0) return null
-            // Some Android drawables (notably runtime-created GradientDrawable
-            // instances) have no ConstantState. Keep their appearance rather than
-            // silently dropping the panel artwork during extraction.
-            return drawable.constantState?.newDrawable(resources)?.mutate() ?: drawable.mutate()
+        // Transfer decorative drawables instead of mutating or cloning them.
+        // Runtime GradientDrawables often have no ConstantState; mutating the
+        // original instance here can steal its callback from the source view.
+        fun takeDecorations(view: View): Pair<android.graphics.drawable.Drawable?, android.graphics.drawable.Drawable?> {
+            val background = view.background
+            view.background = null
+            val foreground = if (android.os.Build.VERSION.SDK_INT >= 23) {
+                view.foreground.also { view.foreground = null }
+            } else null
+            return background to foreground
         }
 
         fun collect(view: View, path: String) {
@@ -84,14 +88,11 @@ internal class FreeLayoutHost(
                 view.isFocusable
             )
             if (group != null && !keepAsUnit) {
-                val backgroundCopy = cloneDrawable(view.background)
-                val foregroundCopy = if (android.os.Build.VERSION.SDK_INT >= 23) {
-                    cloneDrawable(view.foreground)
-                } else null
-                if (backgroundCopy != null || foregroundCopy != null) {
+                val (backgroundArtwork, foregroundArtwork) = takeDecorations(view)
+                if (backgroundArtwork != null || foregroundArtwork != null) {
                     val decoration = View(this@FreeLayoutHost.context).apply {
-                        background = backgroundCopy
-                        if (android.os.Build.VERSION.SDK_INT >= 23) foreground = foregroundCopy
+                        background = backgroundArtwork
+                        if (android.os.Build.VERSION.SDK_INT >= 23) foreground = foregroundArtwork
                         alpha = view.alpha
                         elevation = view.elevation
                         translationZ = view.translationZ
