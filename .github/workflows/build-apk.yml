@@ -1,4 +1,5 @@
 # Tablet stable APK rebuild trigger
+# Build includes the free-layout host and independent layout profile classes.
 name: Build Rotary Isolator APK
 # Experimental FREQUALIZER TEST build; includes PHASE HOLD UI verification.
 
