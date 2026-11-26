@@ -131,6 +131,11 @@ class MainActivity : Activity() {
     @Volatile private var delaySyncOffsetMs = 0f
     // Independent FX-only phase trim. It never touches the master BeatEngine or BPM.
     @Volatile private var fxPhaseOffsetMs = 0f
+    // PHASE HOLD is session-only: each beat division remembers its own normalized
+    // FX read-head phase. Copy-on-write arrays make UI changes visible to the audio thread.
+    @Volatile private var phaseHoldEnabled = BooleanArray(10)
+    @Volatile private var phaseHoldPhase = FloatArray(10)
+    private var repaintDivisionButtons: (() -> Unit)? = null
     // Real capture-to-playback latency, measured from AudioRecord/AudioTrack monotonic timestamps.
     @Volatile private var fxOutputLatencyMs = Float.NaN
     // One-shot startup alignment, applied after the first valid output-latency timestamp.
@@ -141,6 +146,20 @@ class MainActivity : Activity() {
         val fraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
         return (60000f / delayBpm.coerceIn(60f, 180f) * fraction).coerceAtLeast(1f)
     }
+    private fun currentFxPhaseOffsetMs(): Float {
+        val holds = phaseHoldEnabled
+        val phases = phaseHoldPhase
+        val index = delayDivision.coerceIn(0, 9)
+        return if (!delayManualMode && holds[index]) phases[index] * currentFxPeriodMs() else fxPhaseOffsetMs
+    }
+    private fun setCurrentFxPhaseOffsetMs(value: Float) {
+        val index = delayDivision.coerceIn(0, 9)
+        if (!delayManualMode && phaseHoldEnabled[index]) {
+            val phases = phaseHoldPhase.copyOf()
+            phases[index] = (value / currentFxPeriodMs().coerceAtLeast(1f)).coerceIn(-0.49f, 0.49f)
+            phaseHoldPhase = phases
+        } else fxPhaseOffsetMs = value
+    }
     private fun currentFxPhaseErrorMs(): Float {
         val latency = fxOutputLatencyMs
         if (!latency.isFinite()) return Float.NaN
@@ -148,7 +167,7 @@ class MainActivity : Activity() {
         // Display the requested jog position immediately. The DSP applies the
         // same offset with a short smoothing ramp, so using its lagging value
         // here made the arrows/jog appear frozen while the audible phase moved.
-        var error = (latency + fxPhaseOffsetMs + delaySyncOffsetMs) % period
+        var error = (latency + currentFxPhaseOffsetMs() + delaySyncOffsetMs) % period
         if (error > period * 0.5f) error -= period
         if (error < -period * 0.5f) error += period
         return error
@@ -165,7 +184,7 @@ class MainActivity : Activity() {
         val error = if (measuredError.isFinite()) {
             measuredError
         } else {
-            var requestedError = (fxPhaseOffsetMs + delaySyncOffsetMs) % period
+            var requestedError = (currentFxPhaseOffsetMs() + delaySyncOffsetMs) % period
             if (requestedError > period * 0.5f) requestedError -= period
             if (requestedError < -period * 0.5f) requestedError += period
             requestedError
@@ -1297,7 +1316,7 @@ class MainActivity : Activity() {
             val fxPhaseDelay = if (fxOutputLatencyMs.isFinite()) {
                 fxOutputLatencyMs + fxAppliedPhaseDelayMs + delaySyncOffsetMs
             } else {
-                fxPhaseOffsetMs
+                currentFxPhaseOffsetMs()
             }
             val fxPhase = phase + fxPhaseDelay.roundToLong()
             val fxBeatIndex = kotlin.math.floor((nowMs - fxPhase).toDouble() / fxPeriodMs).toLong()
@@ -1755,7 +1774,7 @@ class MainActivity : Activity() {
             // hold a slightly different effective FX BPM, amplified at the extremes.
             val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
             val stepMs = -fxPeriodMs * direction / 128f
-            fxPhaseOffsetMs = (fxPhaseOffsetMs + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f)
+            setCurrentFxPhaseOffsetMs((currentFxPhaseOffsetMs() + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f))
             refreshFxPhaseUi()
             // Keep the jog handle locked to the same measured phase used by
             // the yellow FX marker. The requested trim alone can point the hand
@@ -1774,10 +1793,10 @@ class MainActivity : Activity() {
             // Apply the inverse of the measured FX phase error. Wrap the
             // correction into one half-beat so the jog remains in its range.
             val fullRange = halfRange * 2f
-            var corrected = (fxPhaseOffsetMs - error) % fullRange
+            var corrected = (currentFxPhaseOffsetMs() - error) % fullRange
             if (corrected > halfRange) corrected -= fullRange
             if (corrected < -halfRange) corrected += fullRange
-            fxPhaseOffsetMs = corrected
+            setCurrentFxPhaseOffsetMs(corrected)
             fxBpmLastBeatIndex = Long.MIN_VALUE
             phaseJogLastProgress = 100
             fxPhaseSeek?.let { seek ->
@@ -1895,6 +1914,9 @@ class MainActivity : Activity() {
                 if (resetFxOffset > resetPeriod * 0.5f) resetFxOffset -= resetPeriod
                 if (resetFxOffset < -resetPeriod * 0.5f) resetFxOffset += resetPeriod
                 delaySyncOffsetMs = 0f
+                phaseHoldEnabled = BooleanArray(10)
+                phaseHoldPhase = FloatArray(10)
+                repaintDivisionButtons?.invoke()
                 fxPhaseOffsetMs = resetFxOffset
                 fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
@@ -2104,17 +2126,37 @@ class MainActivity : Activity() {
         fun paintDivisionButtons() {
             divisionViews.forEachIndexed { index, button ->
                 val selected = !delayManualMode && delayDivision == index
-                // Keep inactive BEAT buttons touchable: tapping one is the
-                // explicit way to switch ownership back from manual TIME.
+                val held = phaseHoldEnabled[index]
                 button.isEnabled = true
-                button.alpha = if (delayManualMode) 0.38f else 1f
+                button.alpha = if (held) 1f else if (delayManualMode) 0.38f else 1f
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     cornerRadius = dp(4).toFloat()
-                    setColor(if (selected) colorDelay else Color.rgb(55,62,72))
+                    setColor(if (selected || held) colorDelay else Color.rgb(55,62,72))
                     setStroke(dp(1), colorDelay)
                 }
-                button.setTextColor(if (selected) Color.BLACK else Color.WHITE)
+                button.setTextColor(if (selected || held) Color.BLACK else Color.WHITE)
             }
+        }
+        repaintDivisionButtons = { paintDivisionButtons() }
+        fun togglePhaseHold(index: Int) {
+            val enabled = phaseHoldEnabled.copyOf()
+            val phases = phaseHoldPhase.copyOf()
+            if (enabled[index]) {
+                if (!delayManualMode && delayDivision == index) fxPhaseOffsetMs = currentFxPhaseOffsetMs()
+                enabled[index] = false
+            } else {
+                val sourcePeriod = currentFxPeriodMs().coerceAtLeast(1f)
+                phases[index] = (currentFxPhaseOffsetMs() / sourcePeriod).coerceIn(-0.49f, 0.49f)
+                enabled[index] = true
+            }
+            phaseHoldPhase = phases
+            phaseHoldEnabled = enabled
+            paintDivisionButtons()
+            refreshFxPhaseUi()
+            syncFxPhaseSeekToMeasuredPhase()
+            fxBpmLastBeatIndex = Long.MIN_VALUE
+            save()
+            scheduleUpdate()
         }
         divisionLabels.forEachIndexed { index, caption ->
             val button = TextView(this).apply {
@@ -2123,6 +2165,10 @@ class MainActivity : Activity() {
                 setTypeface(typeface, Typeface.BOLD)
                 gravity = Gravity.CENTER
                 setPadding(dp(1), 0, dp(1), 0)
+                setOnLongClickListener {
+                    togglePhaseHold(index)
+                    true
+                }
                 setOnClickListener {
                     // A BEAT touch immediately takes ownership of delay time:
                     // disable manual TIME and zero its dial before selecting this division.
@@ -2151,8 +2197,7 @@ class MainActivity : Activity() {
             { value -> delayManualTimePercent = value.coerceIn(0f,100f); scheduleUpdate() },
             { manualDelayDivisionLabel() },
             onStart = {
-                // The first touch transfers ownership to TIME immediately:
-                // all BEAT selections are cleared visually and logically.
+                // TIME takes control of delay length but never clears per-division PHASE HOLD.
                 delayManualMode = true
                 delayDivision = 5
                 paintDivisionButtons()
@@ -2629,7 +2674,7 @@ class MainActivity : Activity() {
                                 fxLowEnabled, fxMidEnabled, fxHighEnabled,
                                 reverbLowEnabled, reverbMidEnabled, reverbHighEnabled,
                                 reverbFeedbackPercent, 50, reverbColorPercent,
-                                delaySyncOffsetMs, fxPhaseOffsetMs, reverbBeatPercent
+                                delaySyncOffsetMs, currentFxPhaseOffsetMs(), reverbBeatPercent
                             )
                             fxAppliedPhaseDelayMs = processor.getFxPhaseDelayMs()
                             var written = 0
@@ -2675,10 +2720,10 @@ class MainActivity : Activity() {
                                                     if (phaseError.isFinite()) {
                                                         val period = currentFxPeriodMs().coerceAtLeast(1f)
                                                         val half = period * 0.5f
-                                                        var correction = (fxPhaseOffsetMs - phaseError) % period
+                                                        var correction = (currentFxPhaseOffsetMs() - phaseError) % period
                                                         if (correction > half) correction -= period
                                                         if (correction < -half) correction += period
-                                                        fxPhaseOffsetMs = correction
+                                                        setCurrentFxPhaseOffsetMs(correction)
                                                         syncFxPhaseSeekToMeasuredPhase()
                                                         refreshFxPhaseUi()
                                                         scheduleUpdate()
