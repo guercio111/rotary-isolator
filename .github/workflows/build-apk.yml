@@ -66,6 +66,7 @@ jobs:
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/FreeformLayoutStore.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/FreeformLayoutStore.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/FreeformCanvasLayout.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/FreeformCanvasLayout.kt
 
       - name: Configure internal audio capture and preserve popup through rotation
         run: |
