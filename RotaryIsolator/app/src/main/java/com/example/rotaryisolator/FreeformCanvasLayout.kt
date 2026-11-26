@@ -60,7 +60,7 @@ internal class FreeformCanvasLayout @JvmOverloads constructor(
         onLayoutChanged = listener
     }
 
-    fun isInEditMode(): Boolean = editMode
+    fun isDesignerEditing(): Boolean = editMode
 
     fun setEditMode(enabled: Boolean) {
         editMode = enabled
