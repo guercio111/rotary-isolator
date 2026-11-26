@@ -2252,16 +2252,17 @@ class MainActivity : Activity() {
             { value -> delayManualTimePercent = value.coerceIn(0f,100f); scheduleUpdate() },
             { manualDelayDivisionLabel() },
             onStart = {
-                // TIME takes control of continuous delay length in milliseconds.
-                // Keep the last BEAT division as the phase/LOCK/HOLD reference.
-                // TIME excludes the beat keys visually without changing their stored states.
-                // Initialize TIME from the currently selected BEAT division before
-                // handing control to the dial; no jump from a stale TIME position.
-                delayManualTimePercent = timePercentForDelayMs(currentFxPeriodMs())
-                delayTimeDial?.setValueExternally(delayManualTimePercent)
-                delayManualMode = true
-                paintDivisionButtons()
-                save(); scheduleUpdate()
+                // Initialize from the selected BEAT division only when TIME first
+                // takes control. Mouse-wheel events also call onStart; reinitializing
+                // on every detent would snap the dial back to the BEAT value and
+                // prevent smooth, cumulative TIME adjustment.
+                if (!delayManualMode) {
+                    delayManualTimePercent = timePercentForDelayMs(currentFxPeriodMs())
+                    delayTimeDial?.setValueExternally(delayManualTimePercent)
+                    delayManualMode = true
+                    paintDivisionButtons()
+                    save(); scheduleUpdate()
+                }
             },
             onEnd = { save() }, titleInside = false, spaciousText = true,
             wheelMultiplier = { if (mouseWheelAdjustOn) mouseWheelSensitivity else 1f }
