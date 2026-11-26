@@ -69,7 +69,10 @@ internal class FreeLayoutHost(
 
         fun cloneDrawable(drawable: android.graphics.drawable.Drawable?): android.graphics.drawable.Drawable? {
             if (drawable == null || drawable.alpha <= 0) return null
-            return drawable.constantState?.newDrawable(resources)?.mutate()
+            // Some Android drawables (notably runtime-created GradientDrawable
+            // instances) have no ConstantState. Keep their appearance rather than
+            // silently dropping the panel artwork during extraction.
+            return drawable.constantState?.newDrawable(resources)?.mutate() ?: drawable.mutate()
         }
 
         fun collect(view: View, path: String) {
@@ -90,6 +93,7 @@ internal class FreeLayoutHost(
                         background = backgroundCopy
                         if (android.os.Build.VERSION.SDK_INT >= 23) foreground = foregroundCopy
                         alpha = view.alpha
+                        elevation = view.elevation
                         translationZ = view.translationZ
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                         isClickable = false
@@ -138,7 +142,7 @@ internal class FreeLayoutHost(
                 y = (top / height).coerceIn(0f, 0.99f),
                 width = (renderedWidth / width).coerceIn(0.01f, 1f),
                 height = (renderedHeight / height).coerceIn(0.01f, 1f),
-                zOrder = geometry.translationZ.roundToInt()
+                zOrder = (geometry.elevation + geometry.translationZ).roundToInt()
             ).normalized()
             (view.parent as? ViewGroup)?.removeView(view)
             addElement(elementId, view, placement)
