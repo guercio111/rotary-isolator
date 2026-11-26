@@ -133,6 +133,10 @@ class MainActivity : Activity() {
     // This keeps the same fader position/range when switching between all 10 divisions.
     // It never touches the master BeatEngine or BPM.
     @Volatile private var fxPhaseOffsetFraction = 0f
+    // Automatic route-latency compensation stays in absolute milliseconds.
+    // The normalized jog remains independent, so every unheld division receives
+    // the same physical latency correction while preserving the fader's range.
+    @Volatile private var fxAutoPhaseCompensationMs = 0f
     // PHASE HOLD is session-only: each beat division remembers its own normalized
     // FX read-head phase. Copy-on-write arrays make UI changes visible to the audio thread.
     @Volatile private var phaseHoldEnabled = BooleanArray(10)
@@ -144,25 +148,42 @@ class MainActivity : Activity() {
     @Volatile private var fxStartupPhaseAligned = false
     // Smoothed phase delay currently applied inside the DSP, not merely requested by the UI.
     @Volatile private var fxAppliedPhaseDelayMs = 0f
-    private fun currentFxPeriodMs(): Float {
-        val fraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[delayDivision.coerceIn(0, 9)]
+    private fun fxPeriodMsForDivision(index: Int): Float {
+        val fraction = floatArrayOf(1f / 16f, 1f / 8f, 1f / 4f, 1f / 2f, 3f / 4f, 1f, 2f, 4f, 8f, 16f)[index.coerceIn(0, 9)]
         return (60000f / delayBpm.coerceIn(60f, 180f) * fraction).coerceAtLeast(1f)
+    }
+    private fun currentFxPeriodMs(): Float = fxPeriodMsForDivision(delayDivision)
+    private fun wrapFxPhaseOffsetMs(value: Float, period: Float): Float {
+        var wrapped = value % period
+        if (wrapped > period * 0.5f) wrapped -= period
+        if (wrapped < -period * 0.5f) wrapped += period
+        return wrapped
     }
     private fun currentFxPhaseOffsetMs(): Float {
         val holds = phaseHoldEnabled
         val phases = phaseHoldPhase
         val index = delayDivision.coerceIn(0, 9)
         val period = currentFxPeriodMs()
-        return if (!delayManualMode && holds[index]) phases[index] * period else fxPhaseOffsetFraction * period
+        return if (!delayManualMode && holds[index]) {
+            phases[index] * period
+        } else {
+            wrapFxPhaseOffsetMs(
+                wrapFxPhaseOffsetMs(fxAutoPhaseCompensationMs, period) + fxPhaseOffsetFraction * period,
+                period
+            )
+        }
     }
     private fun setCurrentFxPhaseOffsetMs(value: Float) {
         val index = delayDivision.coerceIn(0, 9)
+        val period = currentFxPeriodMs().coerceAtLeast(1f)
         if (!delayManualMode && phaseHoldEnabled[index]) {
             val phases = phaseHoldPhase.copyOf()
-            phases[index] = (value / currentFxPeriodMs().coerceAtLeast(1f)).coerceIn(-0.49f, 0.49f)
+            phases[index] = (wrapFxPhaseOffsetMs(value, period) / period).coerceIn(-0.49f, 0.49f)
             phaseHoldPhase = phases
         } else {
-            fxPhaseOffsetFraction = (value / currentFxPeriodMs().coerceAtLeast(1f)).coerceIn(-0.49f, 0.49f)
+            val autoOffset = wrapFxPhaseOffsetMs(fxAutoPhaseCompensationMs, period)
+            fxPhaseOffsetFraction = (wrapFxPhaseOffsetMs(value - autoOffset, period) / period)
+                .coerceIn(-0.49f, 0.49f)
         }
     }
     private fun currentFxPhaseErrorMs(): Float {
@@ -1913,16 +1934,13 @@ class MainActivity : Activity() {
                 // clears the FX phase. Zeroing this trim would put the return late
                 // by the full output latency and can sound like counter-beat.
                 delayBpm = validatedBeatEngine.getClockBpm().takeIf { it > 0f }?.coerceIn(60f,180f) ?: delayBpm
-                val resetPeriod = currentFxPeriodMs().coerceAtLeast(1f)
-                var resetFxOffset = if (fxOutputLatencyMs.isFinite()) -fxOutputLatencyMs else 0f
-                resetFxOffset %= resetPeriod
-                if (resetFxOffset > resetPeriod * 0.5f) resetFxOffset -= resetPeriod
-                if (resetFxOffset < -resetPeriod * 0.5f) resetFxOffset += resetPeriod
+                val resetFxOffset = if (fxOutputLatencyMs.isFinite()) -fxOutputLatencyMs else 0f
                 delaySyncOffsetMs = 0f
                 phaseHoldEnabled = BooleanArray(10)
                 phaseHoldPhase = FloatArray(10)
                 repaintDivisionButtons?.invoke()
-                fxPhaseOffsetFraction = (resetFxOffset / resetPeriod).coerceIn(-0.49f, 0.49f)
+                fxAutoPhaseCompensationMs = resetFxOffset
+                fxPhaseOffsetFraction = 0f
                 fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
@@ -2152,12 +2170,22 @@ class MainActivity : Activity() {
             val phases = phaseHoldPhase.copyOf()
             if (enabled[index]) {
                 if (!delayManualMode && delayDivision == index) {
-                    fxPhaseOffsetFraction = (currentFxPhaseOffsetMs() / currentFxPeriodMs().coerceAtLeast(1f)).coerceIn(-0.49f, 0.49f)
+                    val period = currentFxPeriodMs().coerceAtLeast(1f)
+                    val autoOffset = wrapFxPhaseOffsetMs(fxAutoPhaseCompensationMs, period)
+                    fxPhaseOffsetFraction = (wrapFxPhaseOffsetMs(currentFxPhaseOffsetMs() - autoOffset, period) / period)
+                        .coerceIn(-0.49f, 0.49f)
                 }
                 enabled[index] = false
             } else {
-                val sourcePeriod = currentFxPeriodMs().coerceAtLeast(1f)
-                phases[index] = (currentFxPhaseOffsetMs() / sourcePeriod).coerceIn(-0.49f, 0.49f)
+                // Snapshot the phase this division currently uses, not the
+                // selected division's phase. This keeps HOLD independent per key.
+                val sourcePeriod = fxPeriodMsForDivision(index)
+                val autoOffset = wrapFxPhaseOffsetMs(fxAutoPhaseCompensationMs, sourcePeriod)
+                val sourceOffset = wrapFxPhaseOffsetMs(
+                    autoOffset + fxPhaseOffsetFraction * sourcePeriod,
+                    sourcePeriod
+                )
+                phases[index] = (sourceOffset / sourcePeriod).coerceIn(-0.49f, 0.49f)
                 enabled[index] = true
             }
             phaseHoldPhase = phases
@@ -2719,26 +2747,20 @@ class MainActivity : Activity() {
                                             smoothedFxLatencyMs * 0.90f + measuredLatencyMs.toFloat() * 0.10f
                                         } else measuredLatencyMs.toFloat()
                                         fxOutputLatencyMs = smoothedFxLatencyMs
-                                        // At the first trustworthy timestamp, compensate the
-                                        // capture-to-output latency once so MASTER and FX markers
-                                        // begin together. AUTO/SYNC remains authoritative if it
-                                        // has already acquired the beat phase.
+                                        // BeatEngine AUTO/LOCK aligns the musical input phase;
+                                        // it does not compensate the separate capture-to-output
+                                        // route latency. Keep that compensation in absolute ms so
+                                        // it remains correct for every beat division. HOLD values
+                                        // are snapshots and are deliberately left untouched.
                                         if (!fxStartupPhaseAligned) {
                                             fxStartupPhaseAligned = true
                                             handler.post {
-                                                if (!autoPhaseSynced && !delayClockLocked) {
-                                                    val phaseError = currentFxPhaseErrorMs()
-                                                    if (phaseError.isFinite()) {
-                                                        val period = currentFxPeriodMs().coerceAtLeast(1f)
-                                                        val half = period * 0.5f
-                                                        var correction = (currentFxPhaseOffsetMs() - phaseError) % period
-                                                        if (correction > half) correction -= period
-                                                        if (correction < -half) correction += period
-                                                        setCurrentFxPhaseOffsetMs(correction)
-                                                        syncFxPhaseSeekToMeasuredPhase()
-                                                        refreshFxPhaseUi()
-                                                        scheduleUpdate()
-                                                    }
+                                                val measuredLatency = fxOutputLatencyMs
+                                                if (measuredLatency.isFinite()) {
+                                                    fxAutoPhaseCompensationMs = -measuredLatency
+                                                    syncFxPhaseSeekToMeasuredPhase()
+                                                    refreshFxPhaseUi()
+                                                    scheduleUpdate()
                                                 }
                                             }
                                         }

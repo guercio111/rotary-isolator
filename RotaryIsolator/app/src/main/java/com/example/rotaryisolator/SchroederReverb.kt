@@ -489,6 +489,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // repeats as the cutoff is lowered, while remaining stable at both extremes.
         val targetReverbDamping = exp((-2.0 * PI * requestedLp / sampleRate).toFloat())
 
+        // Do not move the phase read head in the same audio block as a beat-tap
+        // handoff. The normalized phase target can change when the division changes;
+        // applying both ramps together creates an audible metallic sweep.
+        val freezePhaseOffsetForBlock = delayDivisionSwitch
         for (i in 0 until count) {
             val source = input[i] / 32768f
 
@@ -593,8 +597,10 @@ internal class SchroederReverb(private val sampleRate: Int) {
             wet *= 0.375f
             for (diffuser in outputDiffusers) wet = diffuser.tick(wet)
 
-            smoothedFxPhaseOffsetSamples +=
-                (targetFxPhaseOffsetSamples - smoothedFxPhaseOffsetSamples) * fxPhaseDelaySmoothing
+            if (!freezePhaseOffsetForBlock) {
+                smoothedFxPhaseOffsetSamples +=
+                    (targetFxPhaseOffsetSamples - smoothedFxPhaseOffsetSamples) * fxPhaseDelaySmoothing
+            }
             val phaseOffsetSamples = smoothedFxPhaseOffsetSamples
             val transitionProgress = (delayTransitionPosition.toFloat() / delayTransitionLength).coerceIn(0f, 1f)
             val transitionBlend = transitionProgress * transitionProgress * (3f - 2f * transitionProgress)
