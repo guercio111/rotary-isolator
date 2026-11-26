@@ -63,6 +63,7 @@ jobs:
         run: |
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/MainActivity.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/UiLayoutProfiles.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/UiLayoutProfiles.kt
+          cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/FreeLayoutHost.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/FreeLayoutHost.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/SchroederReverb.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/AudioCaptureForegroundService.kt
           cp RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java extracted/RotaryIsolator/app/src/main/java/com/example/rotaryisolator/BeatEngine.java
