@@ -403,7 +403,7 @@ internal class SchroederReverb(private val sampleRate: Int) {
         // transition never changes duration halfway through.
         if (!delayDivisionSwitch) {
             delayTransitionLength = (sampleRate * (fxPhasePeriodMs / 1000f * 0.08f))
-                .coerceIn(sampleRate * 0.002f, sampleRate * 0.012f)
+                .coerceIn(sampleRate * 0.006f, sampleRate * 0.012f)
                 .toInt().coerceAtLeast(1)
         }
         val targetFxPhaseOffsetSamples = (
