@@ -3081,9 +3081,10 @@ class MainActivity : Activity() {
             canvas.addLayoutElement(view, element)
             restoredIds.add(id)
         }
-        saved.filter { it.id !in restoredIds }.forEach { element ->
+        saved.filter { it.id !in restoredIds && !it.id.startsWith("view_") }.forEach { element ->
             canvas.addLayoutElement(createDesignerPlaceholder(element), element)
         }
+        canvas.restoreNestedTransforms(saved)
         canvas.setEditMode(false)
     }
 
@@ -3221,13 +3222,15 @@ class MainActivity : Activity() {
                 elements.add(element)
             }
 
-            stored.values.filter { saved -> existingViews.keys.none { saved.id == "section_$it" } }
-                .forEach { saved ->
-                    canvas.addLayoutElement(createDesignerPlaceholder(saved), saved)
-                    elements.add(saved)
-                }
+            stored.values.filter { saved ->
+                !saved.id.startsWith("view_") && existingViews.keys.none { saved.id == "section_$it" }
+            }.forEach { saved ->
+                canvas.addLayoutElement(createDesignerPlaceholder(saved), saved)
+                elements.add(saved)
+            }
 
-            FreeformLayoutStore.save(this, profile, elements)
+            canvas.restoreNestedTransforms(stored.values.filter { it.id.startsWith("view_") })
+            FreeformLayoutStore.save(this, profile, canvas.layoutElements())
             canvas.setEditMode(true)
         }
     }
