@@ -3265,12 +3265,8 @@ private class RotaryControl(
     private val labelScale:Float = 1f,
     private val wheelStep:Float = 0f,
     private val zeroCentered:Boolean = false
-):View(context){
-    private val p=Paint(Paint.ANTI_ALIAS_FLAG)
+):android.widget.FrameLayout(context){
     private var v=initial
-    private var downY=0f
-    private var downV=initial
-    private var dragged=false
     private val density get()=resources.displayMetrics.density
     private val layoutScale:Float get() {
         val cfg=resources.configuration
@@ -3278,116 +3274,145 @@ private class RotaryControl(
         return if(min(w,h)<600f && w>h) min(w/1280f,h/800f).coerceIn(0.42f,1f) else 1f
     }
     private fun dp(x:Float)=x*density*layoutScale
-    private val rect get()={
-        // In tablet portrait double-mid EQ, reserve a dedicated lower text lane
-        // for title and value. The dial itself is sized from the remaining square
-        // area, so the LOW face cannot be squeezed into an oval or cut by its labels.
-        val dialTextReserve=if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f)
-        val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .94f
-        val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
-        RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
-    }()
-    init{isFocusable=true;isClickable=true;contentDescription="$title rotary control"}
-    override fun onDraw(c:Canvas){
-        super.onDraw(c)
-        val r=rect;val cx=r.centerX();val cy=r.centerY();val rad=r.width()/2f
-        val arc=RectF(cx-rad+dp(5f),cy-rad+dp(5f),cx+rad-dp(5f),cy+rad-dp(5f))
-        p.style=Paint.Style.STROKE;p.strokeWidth=dp(6f);p.strokeCap=Paint.Cap.ROUND;p.color=0xFF454B55.toInt()
-        c.drawArc(arc,135f,270f,false,p)
-        // Clearly visible click targets around the dial.
-        for(i in 0..20){
-            val a=Math.toRadians((135.0+i*270.0/20.0))
-            val inner=rad*if(i%5==0) .78f else .84f
-            val outer=rad*.98f
-            p.color=if(i%5==0)accent else 0xFF9AA2AE.toInt()
-            p.strokeWidth=dp(if(i%5==0)2.5f else 1.3f)
-            c.drawLine(cx+cos(a).toFloat()*inner,cy+sin(a).toFloat()*inner,cx+cos(a).toFloat()*outer,cy+sin(a).toFloat()*outer,p)
-            if(i%5==0){
-                p.style=Paint.Style.FILL
-                c.drawCircle(cx+cos(a).toFloat()*rad*.91f,cy+sin(a).toFloat()*rad*.91f,dp(3.2f),p)
-                p.style=Paint.Style.STROKE
-            }
+    private val titleLabel = android.widget.TextView(context).apply {
+        text = title
+        textSize = 11f * labelScale
+        setTextColor(Color.WHITE)
+        gravity = Gravity.CENTER
+        maxLines = 1
+        includeFontPadding = false
+        contentDescription = "$title label"
+    }
+    private val valueLabel = android.widget.TextView(context).apply {
+        text = valueText()
+        textSize = 10f * labelScale
+        setTextColor(accent)
+        gravity = Gravity.CENTER
+        maxLines = 1
+        includeFontPadding = false
+        contentDescription = "$title value"
+    }
+    private val dial = object:View(context) {
+        private val p=Paint(Paint.ANTI_ALIAS_FLAG)
+        private val rect get()={
+            val dialTextReserve=if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f)
+            val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .94f
+            val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
+            RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
+        }()
+        private var downY=0f
+        private var downV=initial
+        private var dragged=false
+        init {
+            isFocusable=true
+            isClickable=true
+            contentDescription="$title rotary control"
         }
-        // ISOLATOR dials use 0 dB at the physical center of the sweep,
-        // even when the available positive and negative ranges are asymmetric.
-        val n=if(zeroCentered) {
-            if(v<=0f) (0.5f*(v-minV)/(0f-minV).coerceAtLeast(0.0001f)).coerceIn(0f,0.5f)
-            else (0.5f+0.5f*v/maxV.coerceAtLeast(0.0001f)).coerceIn(0.5f,1f)
-        } else ((v-minV)/(maxV-minV)).coerceIn(0f,1f)
-        p.color=accent;p.strokeWidth=dp(6f);c.drawArc(arc,135f,270f*n,false,p)
-        p.style=Paint.Style.FILL;p.color=0xFF292E36.toInt();c.drawCircle(cx,cy,rad*.70f,p)
-        val a=Math.toRadians((135+270*n).toDouble())
-        p.color=Color.WHITE;p.strokeWidth=dp(3f)
-        c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
-        p.textAlign=Paint.Align.CENTER
-        val titleSize=min(dp(11f*labelScale),r.width()*.86f/(title.length.coerceAtLeast(1)*.58f))
-        p.textSize=titleSize.coerceAtLeast(dp(5.5f));p.color=Color.WHITE
-        if(titleInside){p.textAlign=Paint.Align.CENTER;c.drawText(title,cx,cy+rad*.48f,p)}else{c.drawText(title,cx,height-dp((if(spaciousText)25f else 17f)+bottomTextLift),p)}
-        val value=valueText()
-        p.color=accent;p.textSize=min(dp(10f*labelScale),r.width()*.86f/(value.length.coerceAtLeast(1)*.58f)).coerceAtLeast(dp(5.5f));c.drawText(value,cx,height-dp((if(spaciousText)5f else 4f)+bottomTextLift),p)
-    }
-    fun setValueExternally(value:Float) {
-        v = quantize(value)
-        invalidate()
-    }
-    private fun quantize(value:Float):Float {
-        if (step <= 0f) return value.coerceIn(minV,maxV)
-        return (minV + ((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
-    }
-    private fun updateFromPoint(x:Float,y:Float){
-        val r=rect;val cx=r.centerX();val cy=r.centerY()
-        var degrees=Math.toDegrees(atan2((y-cy).toDouble(),(x-cx).toDouble())).toFloat()
-        if(degrees<0f)degrees+=360f
-        if(degrees<45f)degrees+=360f
-        val fraction=((degrees.coerceIn(135f,405f)-135f)/270f).coerceIn(0f,1f)
-        v=quantize(if(zeroCentered) {
-            if(fraction<=0.5f) minV+(fraction*2f)*(0f-minV)
-            else (fraction-0.5f)*2f*maxV
-        } else minV+fraction*(maxV-minV))
-        changed(v);invalidate()
-    }
-    override fun onTouchEvent(e:MotionEvent):Boolean{
-        when(e.action){
-            MotionEvent.ACTION_DOWN->{
-                onStart()
-                downY=e.y;downV=v;dragged=false
-                parent?.requestDisallowInterceptTouchEvent(true)
-                return true
-            }
-            MotionEvent.ACTION_MOVE->{
-                val delta=downY-e.y
-                if(abs(delta)>dp(if(step>0f)1f else 4f)) dragged=true
-                if(dragged){
-                    // Effect dials use a deliberately fine 1-unit-per-step feel;
-                    // the other mixer controls retain their original response.
-                    val sensitivity=(maxV-minV)*(if(step>0f)0.25f else 2.2f)/height.coerceAtLeast(1)
-                    v=quantize(downV+delta*sensitivity);changed(v);invalidate()
+        override fun onDraw(c:Canvas){
+            super.onDraw(c)
+            val r=rect;val cx=r.centerX();val cy=r.centerY();val rad=r.width()/2f
+            val arc=RectF(cx-rad+dp(5f),cy-rad+dp(5f),cx+rad-dp(5f),cy+rad-dp(5f))
+            p.style=Paint.Style.STROKE;p.strokeWidth=dp(6f);p.strokeCap=Paint.Cap.ROUND;p.color=0xFF454B55.toInt()
+            c.drawArc(arc,135f,270f,false,p)
+            for(i in 0..20){
+                val a=Math.toRadians((135.0+i*270.0/20.0))
+                val inner=rad*if(i%5==0) .78f else .84f
+                val outer=rad*.98f
+                p.color=if(i%5==0)accent else 0xFF9AA2AE.toInt()
+                p.strokeWidth=dp(if(i%5==0)2.5f else 1.3f)
+                c.drawLine(cx+cos(a).toFloat()*inner,cy+sin(a).toFloat()*inner,cx+cos(a).toFloat()*outer,cy+sin(a).toFloat()*outer,p)
+                if(i%5==0){
+                    p.style=Paint.Style.FILL
+                    c.drawCircle(cx+cos(a).toFloat()*rad*.91f,cy+sin(a).toFloat()*rad*.91f,dp(3.2f),p)
+                    p.style=Paint.Style.STROKE
                 }
-                return true
             }
-            MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);onEnd();performClick();return true}
-            MotionEvent.ACTION_CANCEL->{onEnd();return true}
+            val n=if(zeroCentered) {
+                if(v<=0f) (0.5f*(v-minV)/(0f-minV).coerceAtLeast(0.0001f)).coerceIn(0f,0.5f)
+                else (0.5f+0.5f*v/maxV.coerceAtLeast(0.0001f)).coerceIn(0.5f,1f)
+            } else ((v-minV)/(maxV-minV)).coerceIn(0f,1f)
+            p.color=accent;p.strokeWidth=dp(6f);c.drawArc(arc,135f,270f*n,false,p)
+            p.style=Paint.Style.FILL;p.color=0xFF292E36.toInt();c.drawCircle(cx,cy,rad*.70f,p)
+            val a=Math.toRadians((135+270*n).toDouble())
+            p.color=Color.WHITE;p.strokeWidth=dp(3f)
+            c.drawLine(cx,cy,cx+cos(a).toFloat()*rad*.52f,cy+sin(a).toFloat()*rad*.52f,p)
         }
-        return true
-    }
-    override fun onGenericMotionEvent(e:MotionEvent):Boolean{
-        if(e.action==MotionEvent.ACTION_SCROLL){
-            onStart()
-            val wheel = e.getAxisValue(MotionEvent.AXIS_VSCROLL)
-            // Match the main EQ wheel response exactly. The shared sensitivity
-            // option scales every dial, including the effect controls.
-            // Every mouse-wheel detent advances every rotary by the same fraction
-            // of its total travel: 1/28 of the range, matching EQ's 1 dB step
-            // across its 28 dB sweep. This keeps physical dial response identical.
-            val wheelUnit = if (wheelStep > 0f) wheelStep else (maxV - minV) / 28f
-            val delta = wheel * wheelUnit * wheelMultiplier().coerceIn(0.7f, 1.3f)
-            v=quantize(v+delta)
-            changed(v);invalidate();onEnd();return true
+        private fun quantize(value:Float):Float {
+            if (step <= 0f) return value.coerceIn(minV,maxV)
+            return (minV + ((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
         }
-        return super.onGenericMotionEvent(e)
+        private fun updateFromPoint(x:Float,y:Float){
+            val side=min(width.toFloat(),(height.toFloat()-(if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f))).coerceAtLeast(1f))*.94f
+            val cx=width/2f;val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
+            var degrees=Math.toDegrees(atan2((y-cy).toDouble(),(x-cx).toDouble())).toFloat()
+            if(degrees<0f)degrees+=360f
+            if(degrees<45f)degrees+=360f
+            val fraction=((degrees.coerceIn(135f,405f)-135f)/270f).coerceIn(0f,1f)
+            v=quantize(if(zeroCentered) {
+                if(fraction<=0.5f) minV+(fraction*2f)*(0f-minV)
+                else (fraction-0.5f)*2f*maxV
+            } else minV+fraction*(maxV-minV))
+            changed(v);invalidate();refreshValueLabel()
+        }
+        override fun onTouchEvent(e:MotionEvent):Boolean{
+            when(e.action){
+                MotionEvent.ACTION_DOWN->{
+                    onStart();downY=e.y;downV=v;dragged=false
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+                MotionEvent.ACTION_MOVE->{
+                    val delta=downY-e.y
+                    if(abs(delta)>dp(if(step>0f)1f else 4f)) dragged=true
+                    if(dragged){
+                        val sensitivity=(maxV-minV)*(if(step>0f)0.25f else 2.2f)/height.coerceAtLeast(1)
+                        v=quantize(downV+delta*sensitivity);changed(v);invalidate();refreshValueLabel()
+                    }
+                    return true
+                }
+                MotionEvent.ACTION_UP->{if(!dragged)updateFromPoint(e.x,e.y);onEnd();performClick();return true}
+                MotionEvent.ACTION_CANCEL->{onEnd();return true}
+            }
+            return true
+        }
+        override fun onGenericMotionEvent(e:MotionEvent):Boolean{
+            if(e.action==MotionEvent.ACTION_SCROLL){
+                onStart()
+                val wheel=e.getAxisValue(MotionEvent.AXIS_VSCROLL)
+                val wheelUnit=if(wheelStep>0f) wheelStep else (maxV-minV)/28f
+                val delta=wheel*wheelUnit*wheelMultiplier().coerceIn(0.7f,1.3f)
+                v=quantize(v+delta);changed(v);invalidate();refreshValueLabel();onEnd();return true
+            }
+            return super.onGenericMotionEvent(e)
+        }
+        override fun performClick():Boolean{super.performClick();return true}
     }
-    override fun performClick():Boolean{super.performClick();return true}
+    init {
+        clipChildren=false
+        clipToPadding=false
+        isFocusable=false
+        isClickable=false
+        addView(dial,android.widget.FrameLayout.LayoutParams(-1,-1))
+        if(titleInside){
+            addView(titleLabel,android.widget.FrameLayout.LayoutParams(-1,dp(18f).toInt(),Gravity.CENTER).apply {
+                topMargin=dp(28f).toInt()
+            })
+        }else{
+            addView(titleLabel,android.widget.FrameLayout.LayoutParams(-1,dp(18f).toInt(),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+                bottomMargin=dp((if(spaciousText)18f else 10f)+bottomTextLift).toInt()
+            })
+        }
+        addView(valueLabel,android.widget.FrameLayout.LayoutParams(-1,dp(16f).toInt(),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin=0
+        })
+    }
+    private fun refreshValueLabel(){ valueLabel.text=valueText() }
+    fun setValueExternally(value:Float) {
+        v = if(step<=0f) value.coerceIn(minV,maxV) else (minV+((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
+        dial.invalidate()
+        refreshValueLabel()
+    }
 }
 
-// Experimental master compressor prototype: Android DynamicsProcessing MBC.
+// Experimental master compressor prototype.: Android DynamicsProcessing MBC.
 
