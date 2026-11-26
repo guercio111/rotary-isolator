@@ -3016,9 +3016,138 @@ class MainActivity : Activity() {
         }catch(t:Throwable){runOnUiThread { if(::status.isInitialized) status.text="Audio DSP non supportato dal driver del dispositivo" }}
     }
 
+    private fun showLayoutDesigner() {
+        if (!::content.isInitialized || content.width <= 0 || content.height <= 0) {
+            Toast.makeText(this, "Schermata non ancora pronta", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val profile = FreeformLayoutStore.currentProfile(resources.configuration)
+        val existingViews = sections.toMap()
+        if (existingViews.isEmpty()) return
+
+        val canvas = FreeformCanvasLayout(this).apply {
+            setBackgroundColor(bg)
+            setOnLayoutChangedListener { elements ->
+                FreeformLayoutStore.save(this@MainActivity, profile, elements)
+            }
+        }
+        val screen = FrameLayout(this).apply {
+            setBackgroundColor(bg)
+            addView(canvas, FrameLayout.LayoutParams(-1, -1))
+        }
+        val toolbar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(6), dp(4), dp(6), dp(4))
+            setBackgroundColor(Color.rgb(28, 32, 39))
+        }
+        fun toolbarButton(caption: String, action: () -> Unit) {
+            val button = Button(this).apply {
+                text = caption
+                textSize = 9f
+                isAllCaps = false
+                setTextColor(Color.WHITE)
+                setPadding(dp(4), 0, dp(4), 0)
+                setOnClickListener { action() }
+            }
+            toolbar.addView(button, LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+                leftMargin = dp(2)
+                rightMargin = dp(2)
+            })
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("LAYOUT DESIGNER • $profile")
+            .setView(screen)
+            .create()
+
+        toolbarButton("CHIUDI") { dialog.dismiss() }
+        toolbarButton("ESPORTA") {
+            val record = FreeformLayoutStore.exportProject(this)
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "FREQUALIZER layout")
+                putExtra(android.content.Intent.EXTRA_TEXT, record)
+            }
+            startActivity(android.content.Intent.createChooser(send, "Esporta progetto FREQUALIZER"))
+        }
+        screen.addView(toolbar, FrameLayout.LayoutParams(-1, dp(48), Gravity.TOP))
+
+        dialog.setOnDismissListener {
+            // Rebuild the original hierarchy from live audio state. The designer
+            // moves the existing section Views temporarily; rebuilding restores
+            // their normal LinearLayout parents without touching DSP parameters.
+            buildUi()
+        }
+        dialog.show()
+        dialog.window?.setLayout(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT
+        )
+
+        canvas.post {
+            if (isFinishing || !dialog.isShowing || canvas.width <= 0 || canvas.height <= 0) return@post
+            val canvasLocation = IntArray(2)
+            canvas.getLocationOnScreen(canvasLocation)
+            val stored = FreeformLayoutStore.load(this, profile).associateBy { it.id }
+            val elements = mutableListOf<FreeformLayoutElement>()
+
+            existingViews.forEach { (key, view) ->
+                val id = "section_$key"
+                val savedElement = stored[id]
+                val element = if (savedElement != null) {
+                    savedElement
+                } else {
+                    val location = IntArray(2)
+                    view.getLocationOnScreen(location)
+                    FreeformLayoutElement(
+                        id = id,
+                        kind = "panel",
+                        title = key,
+                        x = ((location[0] - canvasLocation[0]).toFloat() / canvas.width).coerceIn(0f, 0.95f),
+                        y = ((location[1] - canvasLocation[1]).toFloat() / canvas.height).coerceIn(0f, 0.95f),
+                        width = (view.width.toFloat() / canvas.width).coerceIn(0.05f, 1f),
+                        height = (view.height.toFloat() / canvas.height).coerceIn(0.05f, 1f),
+                        zIndex = elements.size
+                    ).normalized()
+                }
+                (view.parent as? ViewGroup)?.removeView(view)
+                canvas.addLayoutElement(view, element)
+                elements.add(element)
+            }
+
+            stored.values.filter { saved -> existingViews.keys.none { saved.id == "section_$it" } }
+                .forEach { saved ->
+                    val placeholder = TextView(this).apply {
+                        text = saved.title.ifBlank { saved.kind.uppercase(Locale.US) }
+                        gravity = Gravity.CENTER
+                        textSize = 12f
+                        setTextColor(Color.WHITE)
+                        setPadding(dp(6), dp(6), dp(6), dp(6))
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            cornerRadius = dp(8).toFloat()
+                            setColor(Color.rgb(45, 51, 61))
+                            setStroke(dp(1), colorOptions)
+                        }
+                    }
+                    canvas.addLayoutElement(placeholder, saved)
+                    elements.add(saved)
+                }
+
+            if (stored.isEmpty()) FreeformLayoutStore.save(this, profile, elements)
+            canvas.setEditMode(true)
+        }
+    }
+
     private fun showOptions(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(8),dp(18),dp(4))}
         val names=listOf("Controlli EQ","Controlli Isolator","Controlli Filtri","Controlli Gain","Personalizza colori")
+        val layoutDesignerButton = Button(this).apply {
+            text = "LAYOUT DESIGNER"
+            textSize = 13f
+            setOnClickListener { showLayoutDesigner() }
+        }
+        panel.addView(layoutDesignerButton, LinearLayout.LayoutParams(-1, dp(46)))
         names.forEachIndexed{index,name->
             val b=Button(this).apply{text=name;textSize=13f;setOnClickListener{
                 when(index){
