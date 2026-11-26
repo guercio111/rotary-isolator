@@ -864,6 +864,7 @@ class MainActivity : Activity() {
             addGainSection(lowerLeft)
             addEffectsSection(lower)
         }
+        applySavedFreeformLayout(FreeformLayoutStore.currentProfile(resources.configuration))
         status=label("Connecting audio engine…",if(compactPhone)7f else 9f)
         root.addView(status,LinearLayout.LayoutParams(-1,dp(if(compactPhone)13 else 18)))
         container=FrameLayout(this).apply{clipChildren=true;clipToPadding=true}
@@ -3016,6 +3017,50 @@ class MainActivity : Activity() {
         }catch(t:Throwable){runOnUiThread { if(::status.isInitialized) status.text="Audio DSP non supportato dal driver del dispositivo" }}
     }
 
+    private fun applySavedFreeformLayout(profile: String) {
+        val saved = FreeformLayoutStore.load(this, profile)
+        if (saved.isEmpty()) return
+
+        val savedById = saved.associateBy { it.id }
+        val currentViews = sections.toMap()
+        currentViews.forEach { (_, view) ->
+            (view.parent as? ViewGroup)?.removeView(view)
+        }
+        content.removeAllViews()
+
+        val canvas = FreeformCanvasLayout(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnLayoutChangedListener { elements ->
+                FreeformLayoutStore.save(this@MainActivity, profile, elements)
+            }
+        }
+        content.addView(canvas, LinearLayout.LayoutParams(-1, -1))
+
+        val restoredIds = mutableSetOf<String>()
+        currentViews.forEach { (key, view) ->
+            val id = "section_$key"
+            val element = savedById[id] ?: return@forEach
+            canvas.addLayoutElement(view, element)
+            restoredIds.add(id)
+        }
+        saved.filter { it.id !in restoredIds }.forEach { element ->
+            val placeholder = TextView(this).apply {
+                text = element.title.ifBlank { element.kind.uppercase(Locale.US) }
+                gravity = Gravity.CENTER
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setPadding(dp(6), dp(6), dp(6), dp(6))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = dp(8).toFloat()
+                    setColor(Color.rgb(45, 51, 61))
+                    setStroke(dp(1), colorOptions)
+                }
+            }
+            canvas.addLayoutElement(placeholder, element)
+        }
+        canvas.setEditMode(false)
+    }
+
     private fun showLayoutDesigner() {
         if (!::content.isInitialized || content.width <= 0 || content.height <= 0) {
             Toast.makeText(this, "Schermata non ancora pronta", Toast.LENGTH_SHORT).show()
@@ -3026,21 +3071,21 @@ class MainActivity : Activity() {
         val existingViews = sections.toMap()
         if (existingViews.isEmpty()) return
 
-        val canvas = FreeformCanvasLayout(this).apply {
+        val screen = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setBackgroundColor(bg)
-            setOnLayoutChangedListener { elements ->
-                FreeformLayoutStore.save(this@MainActivity, profile, elements)
-            }
-        }
-        val screen = FrameLayout(this).apply {
-            setBackgroundColor(bg)
-            addView(canvas, FrameLayout.LayoutParams(-1, -1))
         }
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(6), dp(4), dp(6), dp(4))
             setBackgroundColor(Color.rgb(28, 32, 39))
+        }
+        val canvas = FreeformCanvasLayout(this).apply {
+            setBackgroundColor(bg)
+            setOnLayoutChangedListener { elements ->
+                FreeformLayoutStore.save(this@MainActivity, profile, elements)
+            }
         }
         fun toolbarButton(caption: String, action: () -> Unit) {
             val button = Button(this).apply {
@@ -3057,7 +3102,6 @@ class MainActivity : Activity() {
             })
         }
         val dialog = AlertDialog.Builder(this)
-            .setTitle("LAYOUT DESIGNER • $profile")
             .setView(screen)
             .create()
 
@@ -3071,12 +3115,12 @@ class MainActivity : Activity() {
             }
             startActivity(android.content.Intent.createChooser(send, "Esporta progetto FREQUALIZER"))
         }
-        screen.addView(toolbar, FrameLayout.LayoutParams(-1, dp(48), Gravity.TOP))
+        screen.addView(toolbar, LinearLayout.LayoutParams(-1, dp(48)))
+        screen.addView(canvas, LinearLayout.LayoutParams(-1, 0, 1f))
 
         dialog.setOnDismissListener {
-            // Rebuild the original hierarchy from live audio state. The designer
-            // moves the existing section Views temporarily; rebuilding restores
-            // their normal LinearLayout parents without touching DSP parameters.
+            // Rebuild the standard hierarchy from live audio state. Saved layout
+            // bounds are then applied to the same section Views in the main screen.
             buildUi()
         }
         dialog.show()
@@ -3087,8 +3131,8 @@ class MainActivity : Activity() {
 
         canvas.post {
             if (isFinishing || !dialog.isShowing || canvas.width <= 0 || canvas.height <= 0) return@post
-            val canvasLocation = IntArray(2)
-            canvas.getLocationOnScreen(canvasLocation)
+            val contentLocation = IntArray(2)
+            content.getLocationOnScreen(contentLocation)
             val stored = FreeformLayoutStore.load(this, profile).associateBy { it.id }
             val elements = mutableListOf<FreeformLayoutElement>()
 
@@ -3104,10 +3148,10 @@ class MainActivity : Activity() {
                         id = id,
                         kind = "panel",
                         title = key,
-                        x = ((location[0] - canvasLocation[0]).toFloat() / canvas.width).coerceIn(0f, 0.95f),
-                        y = ((location[1] - canvasLocation[1]).toFloat() / canvas.height).coerceIn(0f, 0.95f),
-                        width = (view.width.toFloat() / canvas.width).coerceIn(0.05f, 1f),
-                        height = (view.height.toFloat() / canvas.height).coerceIn(0.05f, 1f),
+                        x = ((location[0] - contentLocation[0]).toFloat() / content.width).coerceIn(0f, 0.95f),
+                        y = ((location[1] - contentLocation[1]).toFloat() / content.height).coerceIn(0f, 0.95f),
+                        width = (view.width.toFloat() / content.width).coerceIn(0.05f, 1f),
+                        height = (view.height.toFloat() / content.height).coerceIn(0.05f, 1f),
                         zIndex = elements.size
                     ).normalized()
                 }
@@ -3134,7 +3178,7 @@ class MainActivity : Activity() {
                     elements.add(saved)
                 }
 
-            if (stored.isEmpty()) FreeformLayoutStore.save(this, profile, elements)
+            FreeformLayoutStore.save(this, profile, elements)
             canvas.setEditMode(true)
         }
     }
