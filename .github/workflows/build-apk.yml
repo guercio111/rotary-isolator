@@ -113,27 +113,36 @@ jobs:
           manifest.write_text(xml)
           PY
 
-      - name: Set Java compatibility to 17
+      - name: Set Java compatibility and unique standalone package ID
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path("extracted/RotaryIsolator/app/build.gradle")
           if not p.exists():
               p = Path("extracted/RotaryIsolator/app/build.gradle.kts")
           s = p.read_text()
-          if p.name.endswith(".kts"):
-              block = "    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix = ".test"'
+          is_kts = p.name.endswith(".kts")
+          if is_kts:
+              block = "    compileOptions {\\n        sourceCompatibility = JavaVersion.VERSION_17\\n        targetCompatibility = JavaVersion.VERSION_17\\n    }\\n"
+              app_id_line = '        applicationId = "com.example.rotaryisolator.layoutdraft"\\n'
+              s = re.sub(r'(?m)^\\s*applicationIdSuffix\\s*=.*\\n', '', s)
+              s = re.sub(r'(?m)^\\s*applicationId\\s*=.*\\n', '', s)
           else:
-              block = "    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
-              app_id_suffix = 'defaultConfig {\n        applicationIdSuffix ".test"'
+              block = "    compileOptions {\\n        sourceCompatibility JavaVersion.VERSION_17\\n        targetCompatibility JavaVersion.VERSION_17\\n    }\\n"
+              app_id_line = '        applicationId "com.example.rotaryisolator.layoutdraft"\\n'
+              s = re.sub(r'(?m)^\\s*applicationIdSuffix\\s+.*\\n', '', s)
+              s = re.sub(r'(?m)^\\s*applicationId\\s+.*\\n', '', s)
           if "defaultConfig {" not in s:
               raise SystemExit("defaultConfig block not found")
-          s = s.replace("defaultConfig {", app_id_suffix, 1)
-          s = s.replace("android {", "android {\n" + block, 1)
+          s = re.sub(r'defaultConfig\\s*\\{', lambda m: m.group(0) + "\\n" + app_id_line.rstrip("\\n"), s, count=1)
+          if "android {" not in s:
+              raise SystemExit("android block not found")
+          if "sourceCompatibility" not in s:
+              s = s.replace("android {", "android {\\n" + block, 1)
           p.write_text(s)
+          print("Configured unique applicationId: com.example.rotaryisolator.layoutdraft")
           PY
-
       - name: Build APK
         run: |
           cd extracted/RotaryIsolator
