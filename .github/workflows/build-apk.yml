@@ -142,7 +142,7 @@ jobs:
           if not p.exists():
               p = Path("extracted/RotaryIsolator/app/build.gradle.kts")
           s = p.read_text()
-          m = re.search(r'defaultConfig\\s*\\{', s)
+          m = re.search(r'defaultConfig\s*\{', s)
           if not m:
               raise SystemExit("defaultConfig block not found")
           depth = 1
@@ -154,10 +154,10 @@ jobs:
           if depth:
               raise SystemExit("defaultConfig block is unbalanced")
           block = s[m.end():i-1]
-          block = re.sub(r'^\\s*applicationIdSuffix\\s*=?.*$\\n?', '', block, flags=re.M)
-          block = re.sub(r'^\\s*applicationId\\s*=?.*$\\n?', '', block, flags=re.M)
-          app_id = '        applicationId = "com.example.rotaryisolator.layoutpreview"\\n' if p.name.endswith(".kts") else '        applicationId "com.example.rotaryisolator.layoutpreview"\\n'
-          block = block.rstrip() + "\\n" + app_id + "    "
+          block = re.sub(r'^\s*applicationIdSuffix\s*=?.*$\n?', '', block, flags=re.M)
+          block = re.sub(r'^\s*applicationId\s*=?.*$\n?', '', block, flags=re.M)
+          app_id = '        applicationId = "com.example.rotaryisolator.layoutpreview"\n' if p.name.endswith(".kts") else '        applicationId "com.example.rotaryisolator.layoutpreview"\n'
+          block = block.rstrip() + "\n" + app_id + "    "
           s = s[:m.end()] + block + s[i-1:]
           p.write_text(s)
           print("Forced applicationId: com.example.rotaryisolator.layoutpreview")
