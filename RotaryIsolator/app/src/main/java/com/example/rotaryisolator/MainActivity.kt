@@ -2214,6 +2214,23 @@ class MainActivity : Activity() {
                     delayManualMode = false
                     delayManualTimePercent = 0f
                     delayTimeDial?.setValueExternally(0f)
+                    // Build 918 kept one absolute phase trim across division changes.
+                    // Carry that shared (non-HOLD) offset into the new period instead
+                    // of reusing the same normalized fraction, which changes its timing.
+                    // A division with HOLD enabled keeps its own independent snapshot.
+                    if (!phaseHoldEnabled[index]) {
+                        val oldPeriod = currentFxPeriodMs().coerceAtLeast(1f)
+                        val sharedOffset = wrapFxPhaseOffsetMs(
+                            wrapFxPhaseOffsetMs(fxAutoPhaseCompensationMs, oldPeriod) +
+                                fxPhaseOffsetFraction * oldPeriod,
+                            oldPeriod
+                        )
+                        val newPeriod = fxPeriodMsForDivision(index).coerceAtLeast(1f)
+                        val newAutoOffset = wrapFxPhaseOffsetMs(fxAutoPhaseCompensationMs, newPeriod)
+                        fxPhaseOffsetFraction = (
+                            wrapFxPhaseOffsetMs(sharedOffset - newAutoOffset, newPeriod) / newPeriod
+                        ).coerceIn(-0.49f, 0.49f)
+                    }
                     delayDivision = index
                     phaseJogLastProgress = 100
                     fxPhaseSeek?.progress = 100
@@ -2747,20 +2764,28 @@ class MainActivity : Activity() {
                                             smoothedFxLatencyMs * 0.90f + measuredLatencyMs.toFloat() * 0.10f
                                         } else measuredLatencyMs.toFloat()
                                         fxOutputLatencyMs = smoothedFxLatencyMs
-                                        // BeatEngine AUTO/LOCK aligns the musical input phase;
-                                        // it does not compensate the separate capture-to-output
-                                        // route latency. Keep that compensation in absolute ms so
-                                        // it remains correct for every beat division. HOLD values
-                                        // are snapshots and are deliberately left untouched.
+                                        // Restore Build 918 startup ownership: if AUTO/LOCK has
+                                        // already acquired the musical phase, do not apply a second
+                                        // independent latency correction. Otherwise make the same
+                                        // one-shot measured correction as 918, through the shared
+                                        // phase setter so the normalized fader and HOLD snapshots
+                                        // remain independent.
                                         if (!fxStartupPhaseAligned) {
                                             fxStartupPhaseAligned = true
                                             handler.post {
-                                                val measuredLatency = fxOutputLatencyMs
-                                                if (measuredLatency.isFinite()) {
-                                                    fxAutoPhaseCompensationMs = -measuredLatency
-                                                    syncFxPhaseSeekToMeasuredPhase()
-                                                    refreshFxPhaseUi()
-                                                    scheduleUpdate()
+                                                if (!autoPhaseSynced && !delayClockLocked) {
+                                                    val phaseError = currentFxPhaseErrorMs()
+                                                    if (phaseError.isFinite()) {
+                                                        val period = currentFxPeriodMs().coerceAtLeast(1f)
+                                                        val correction = wrapFxPhaseOffsetMs(
+                                                            currentFxPhaseOffsetMs() - phaseError,
+                                                            period
+                                                        )
+                                                        setCurrentFxPhaseOffsetMs(correction)
+                                                        syncFxPhaseSeekToMeasuredPhase()
+                                                        refreshFxPhaseUi()
+                                                        scheduleUpdate()
+                                                    }
                                                 }
                                             }
                                         }
