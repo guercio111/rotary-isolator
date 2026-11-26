@@ -303,9 +303,9 @@ internal class FreeLayoutHost(
     }
 
     override fun dispatchDraw(canvas: Canvas) {
+        if (editMode && showGrid) drawGrid(canvas)
         super.dispatchDraw(canvas)
         if (!editMode) return
-        if (showGrid) drawGrid(canvas)
         if (drawingPanel) canvas.drawRect(minOf(drawStartX, drawNowX), minOf(drawStartY, drawNowY), maxOf(drawStartX, drawNowX), maxOf(drawStartY, drawNowY), draftPaint)
         drawEditorToolbar(canvas)
         val id = selectedId ?: return
