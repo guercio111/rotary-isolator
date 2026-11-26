@@ -69,7 +69,7 @@ internal class FreeLayoutHost(
                 view.isClickable ||
                 view.isLongClickable ||
                 view.isFocusable ||
-                view.background != null
+                (group !is android.widget.LinearLayout && (view.background?.alpha ?: 0) > 0)
             )
             if (group != null && !keepAsUnit) {
                 for (index in 0 until group.childCount) {
