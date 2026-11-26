@@ -1755,7 +1755,7 @@ class MainActivity : Activity() {
                         // AUTO's pending acquisition from re-syncing it.
                         autoPhaseSynced = true
                         delayBpm = validatedBeatEngine.getClockBpm().coerceIn(60f,180f)
-                        // Center only the jog control; keep fxPhaseOffsetMs intact.
+                        // Center only the jog control; preserve the normalized FX phase trim.
                         phaseJogLastProgress = 100
                         fxPhaseSeek?.let { seek ->
                             android.animation.ValueAnimator.ofInt(seek.progress, 100).apply {
