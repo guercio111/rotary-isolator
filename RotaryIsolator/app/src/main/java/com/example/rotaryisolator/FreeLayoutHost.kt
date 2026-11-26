@@ -6,7 +6,6 @@ import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -100,10 +99,9 @@ internal class FreeLayoutHost(
                     .firstOrNull { it.visibility == View.VISIBLE && event.x >= it.left && event.x <= it.right && event.y >= it.top && event.y <= it.bottom }
                 selectedId = picked?.tag as? String ?: return true
                 startPlacement = placements[selectedId]
-                val nearHandle = picked != null &&
+                resizing = picked != null &&
                     event.x >= picked.right - handleSize && event.y >= picked.bottom - handleSize
-                resizing = nearHandle
-                moving = !nearHandle
+                moving = !resizing
                 parent?.requestDisallowInterceptTouchEvent(true)
                 invalidate()
                 return true
@@ -115,15 +113,17 @@ internal class FreeLayoutHost(
                 val hostHeight = height.coerceAtLeast(1).toFloat()
                 val dx = (event.x - downX) / hostWidth
                 val dy = (event.y - downY) / hostHeight
+                val maxWidth = 1f - original.x
+                val maxHeight = 1f - original.y
                 val updated = if (resizing) {
                     original.copy(
-                        width = (original.width + dx).coerceIn(0.04f, 1f - original.x),
-                        height = (original.height + dy).coerceIn(0.04f, 1f - original.y)
+                        width = (original.width + dx).coerceIn(min(0.04f, maxWidth), maxWidth),
+                        height = (original.height + dy).coerceIn(min(0.04f, maxHeight), maxHeight)
                     )
                 } else if (moving) {
                     original.copy(
-                        x = (original.x + dx).coerceIn(0f, 1f - original.width),
-                        y = (original.y + dy).coerceIn(0f, 1f - original.height)
+                        x = (original.x + dx).coerceIn(0f, maxWidth),
+                        y = (original.y + dy).coerceIn(0f, maxHeight)
                     )
                 } else original
                 placements[id] = updated.normalized()
