@@ -129,8 +129,10 @@ class MainActivity : Activity() {
     @Volatile private var delayBpmCorrection = 0f
     @Volatile private var autoBpmEnabled = false
     @Volatile private var delaySyncOffsetMs = 0f
-    // Independent FX-only phase trim. It never touches the master BeatEngine or BPM.
-    @Volatile private var fxPhaseOffsetMs = 0f
+    // Shared FX-only phase trim stored as a normalized beat fraction, not milliseconds.
+    // This keeps the same fader position/range when switching between all 10 divisions.
+    // It never touches the master BeatEngine or BPM.
+    @Volatile private var fxPhaseOffsetFraction = 0f
     // PHASE HOLD is session-only: each beat division remembers its own normalized
     // FX read-head phase. Copy-on-write arrays make UI changes visible to the audio thread.
     @Volatile private var phaseHoldEnabled = BooleanArray(10)
@@ -150,7 +152,8 @@ class MainActivity : Activity() {
         val holds = phaseHoldEnabled
         val phases = phaseHoldPhase
         val index = delayDivision.coerceIn(0, 9)
-        return if (!delayManualMode && holds[index]) phases[index] * currentFxPeriodMs() else fxPhaseOffsetMs
+        val period = currentFxPeriodMs()
+        return if (!delayManualMode && holds[index]) phases[index] * period else fxPhaseOffsetFraction * period
     }
     private fun setCurrentFxPhaseOffsetMs(value: Float) {
         val index = delayDivision.coerceIn(0, 9)
@@ -158,7 +161,9 @@ class MainActivity : Activity() {
             val phases = phaseHoldPhase.copyOf()
             phases[index] = (value / currentFxPeriodMs().coerceAtLeast(1f)).coerceIn(-0.49f, 0.49f)
             phaseHoldPhase = phases
-        } else fxPhaseOffsetMs = value
+        } else {
+            fxPhaseOffsetFraction = (value / currentFxPeriodMs().coerceAtLeast(1f)).coerceIn(-0.49f, 0.49f)
+        }
     }
     private fun currentFxPhaseErrorMs(): Float {
         val latency = fxOutputLatencyMs
@@ -1774,7 +1779,7 @@ class MainActivity : Activity() {
             // hold a slightly different effective FX BPM, amplified at the extremes.
             val fxPeriodMs = currentFxPeriodMs().coerceAtLeast(1f)
             val stepMs = -fxPeriodMs * direction / 128f
-            setCurrentFxPhaseOffsetMs((currentFxPhaseOffsetMs() + stepMs).coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f))
+            setCurrentFxPhaseOffsetMs((currentFxPhaseOffsetMs() + stepMs).coerceIn(-fxPeriodMs * 0.49f, fxPeriodMs * 0.49f))
             refreshFxPhaseUi()
             // Keep the jog handle locked to the same measured phase used by
             // the yellow FX marker. The requested trim alone can point the hand
@@ -1917,7 +1922,7 @@ class MainActivity : Activity() {
                 phaseHoldEnabled = BooleanArray(10)
                 phaseHoldPhase = FloatArray(10)
                 repaintDivisionButtons?.invoke()
-                fxPhaseOffsetMs = resetFxOffset
+                fxPhaseOffsetFraction = (resetFxOffset / resetPeriod).coerceIn(-0.49f, 0.49f)
                 fxBpmLastBeatIndex = Long.MIN_VALUE
                 refreshFxPhaseUi()
                 fxPhaseSeek?.progress = 100
@@ -2039,10 +2044,12 @@ class MainActivity : Activity() {
                         // Use the exact period used by the DSP and phase markers.
                         // Deriving it from the MASTER detector instead can diverge
                         // from the locked FX BPM, especially at 1/16 and 16 beats.
-                        // One full fader travel corresponds to half an FX beat.
-                        val stepMs = -delta * fxPeriodMs / 400f
+                        // The thumb is spring-centred: centre-to-edge spans half an FX beat.
+                        // Full travel therefore spans one complete selected FX period,
+                        // matching the phase-marker mapping and the arrow adjustment range.
+                        val stepMs = -delta * fxPeriodMs / 200f
                         setCurrentFxPhaseOffsetMs((currentFxPhaseOffsetMs() + stepMs)
-                            .coerceIn(-fxPeriodMs * 0.5f, fxPeriodMs * 0.5f))
+                            .coerceIn(-fxPeriodMs * 0.49f, fxPeriodMs * 0.49f))
                         refreshFxPhaseUi()
                         bar?.invalidate()
                         fxBpmLastBeatIndex = Long.MIN_VALUE
@@ -2144,7 +2151,9 @@ class MainActivity : Activity() {
             val enabled = phaseHoldEnabled.copyOf()
             val phases = phaseHoldPhase.copyOf()
             if (enabled[index]) {
-                if (!delayManualMode && delayDivision == index) fxPhaseOffsetMs = currentFxPhaseOffsetMs()
+                if (!delayManualMode && delayDivision == index) {
+                    fxPhaseOffsetFraction = (currentFxPhaseOffsetMs() / currentFxPeriodMs().coerceAtLeast(1f)).coerceIn(-0.49f, 0.49f)
+                }
                 enabled[index] = false
             } else {
                 val sourcePeriod = currentFxPeriodMs().coerceAtLeast(1f)
