@@ -44,7 +44,7 @@ internal class FreeLayoutHost(
     private var movementStepDp = 5f
     private val gridStep get() = 16f * resources.displayMetrics.density
     private val expandedRailWidth get() = 108f * resources.displayMetrics.density
-    private val railWidth get() = (if (toolbarCollapsed) 30f else expandedRailWidth) * resources.displayMetrics.density / resources.displayMetrics.density
+    private val railWidth get() = if (toolbarCollapsed) 30f * resources.displayMetrics.density else expandedRailWidth
     private val toolbarLabels = listOf("ELEMENTI", "AREA", "SPOSTA", "DIMENS.", "GRIGLIA", "AGGANCIO", "UNDO", "REDO", "CENTRA", "SALVA", "NASCONDI", "RETURN")
     private val railPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEE171B22.toInt(); style = Paint.Style.FILL }
     private val buttonPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF303943.toInt(); style = Paint.Style.FILL }
