@@ -236,11 +236,7 @@ internal class FreeLayoutHost(
                     !hasInteractiveDescendant(group) && !hasSubstantiallySmallerContent(group)))
             val exposeTextChildren = group != null && hasTextDescendant(group)
             if (group != null && (!keepAsUnit || exposeTextChildren)) {
-                if (keepAsUnit) {
-                    // Keep the rotary/control itself selectable, but also expose
-                    // nested labels and numeric values as independent elements.
-                    addCandidate(view)
-                } else {
+                if (!keepAsUnit) {
                     val (backgroundArtwork, foregroundArtwork) = takeDecorations(view)
                     if (backgroundArtwork != null || foregroundArtwork != null) {
                         val decoration = View(this@FreeLayoutHost.context).apply {
@@ -254,7 +250,10 @@ internal class FreeLayoutHost(
                         candidates.add(Candidate(decoration, view, "__visual_decoration__${path}"))
                     }
                 }
+                // Detach descendants before moving their parent into the host;
+                // this preserves their original screen coordinates during adoption.
                 for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
+                if (keepAsUnit) addCandidate(view)
             } else if (view !== source && view.width > 0 && view.height > 0) {
                 addCandidate(view)
             }
