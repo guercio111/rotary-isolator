@@ -259,9 +259,9 @@ internal class FreeLayoutHost(
                         ((horizontal && linear.orientation == LinearLayout.HORIZONTAL) ||
                          (!horizontal && linear.orientation == LinearLayout.VERTICAL))
                     val weight = (params as? LinearLayout.LayoutParams)?.weight ?: 0f
-                    if (isWeightedAxis && weight > 0f && parentSize > 0) {
-                        var fixed = if (horizontal) linear!!.paddingLeft + linear.paddingRight
-                            else linear!!.paddingTop + linear.paddingBottom
+                    if (linear != null && isWeightedAxis && weight > 0f && parentSize > 0) {
+                        var fixed = if (horizontal) linear.paddingLeft + linear.paddingRight
+                            else linear.paddingTop + linear.paddingBottom
                         var totalWeight = 0f
                         for (index in 0 until linear.childCount) {
                             val sibling = linear.getChildAt(index)
