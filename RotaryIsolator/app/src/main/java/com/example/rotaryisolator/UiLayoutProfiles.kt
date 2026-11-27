@@ -20,7 +20,9 @@ internal data class UiElementPlacement(
     val height: Float,
     val zOrder: Int = 0,
     val sizePreset: Int = 2,
-    val visible: Boolean = true
+    val visible: Boolean = true,
+    // Unknown per-element JSON properties survive import/save/export.
+    val extraFieldsJson: String = "{}"
 ) {
     fun normalized(): UiElementPlacement {
         // Reject NaN/infinite coordinates from malformed or partially edited
@@ -72,6 +74,24 @@ internal enum class UiLayoutProfile(val storageKey: String) {
  * audio parameters, effect settings and DSP preferences remain untouched.
  */
 internal class UiLayoutProfileStore(context: Context) {
+    private val placementKeys = setOf("x", "y", "width", "height", "zOrder", "sizePreset", "visible")
+    private fun extraFields(item: JSONObject): String {
+        val extras = JSONObject(item.toString())
+        placementKeys.forEach { extras.remove(it) }
+        return extras.toString()
+    }
+    private fun placementJson(placement: UiElementPlacement): JSONObject {
+        val item = try { JSONObject(placement.extraFieldsJson) } catch (_: Exception) { JSONObject() }
+        return item
+            .put("x", placement.x.toDouble())
+            .put("y", placement.y.toDouble())
+            .put("width", placement.width.toDouble())
+            .put("height", placement.height.toDouble())
+            .put("zOrder", placement.zOrder)
+            .put("sizePreset", placement.sizePreset)
+            .put("visible", placement.visible)
+    }
+
     private val preferences: SharedPreferences =
         context.getSharedPreferences("frequalizer_ui_layout_profiles_v1", Context.MODE_PRIVATE)
 
@@ -93,7 +113,8 @@ internal class UiLayoutProfileStore(context: Context) {
                     height = item.optDouble("height", 0.1).toFloat(),
                     zOrder = item.optInt("zOrder", 0),
                     sizePreset = item.optInt("sizePreset", 2),
-                    visible = item.optBoolean("visible", true)
+                    visible = item.optBoolean("visible", true),
+                    extraFieldsJson = extraFields(item)
                 ).normalized()
             }
             result
@@ -108,14 +129,7 @@ internal class UiLayoutProfileStore(context: Context) {
         placements.forEach { placement ->
             if (placement.elementId.isBlank()) return@forEach
             val item = placement.normalized()
-            root.put(item.elementId, JSONObject()
-                .put("x", item.x.toDouble())
-                .put("y", item.y.toDouble())
-                .put("width", item.width.toDouble())
-                .put("height", item.height.toDouble())
-                .put("zOrder", item.zOrder)
-                .put("sizePreset", item.sizePreset)
-                .put("visible", item.visible))
+            root.put(item.elementId, placementJson(item))
         }
         if (root.length() == 0) return false
         val serialized = root.toString()
@@ -134,14 +148,7 @@ internal class UiLayoutProfileStore(context: Context) {
             val placements = JSONObject()
             load(profile).values.forEach { placement ->
                 val item = placement.normalized()
-                placements.put(item.elementId, JSONObject()
-                    .put("x", item.x.toDouble())
-                    .put("y", item.y.toDouble())
-                    .put("width", item.width.toDouble())
-                    .put("height", item.height.toDouble())
-                    .put("zOrder", item.zOrder)
-                    .put("sizePreset", item.sizePreset)
-                    .put("visible", item.visible))
+                placements.put(item.elementId, placementJson(item))
             }
             profiles.put(profile.storageKey, placements)
         }
@@ -151,7 +158,7 @@ internal class UiLayoutProfileStore(context: Context) {
         }
         return JSONObject()
             .put("format", "FREQUALIZER_LAYOUT_PROJECT")
-            .put("schemaVersion", 1)
+            .put("schemaVersion", 2)
             .put("profiles", profiles)
             .put("elementCounts", counts)
             .put("exportedAtEpochMs", System.currentTimeMillis())
@@ -166,7 +173,10 @@ internal class UiLayoutProfileStore(context: Context) {
         require(json.length <= 5_000_000) { "File progetto troppo grande" }
         val root = JSONObject(json)
         require(root.optString("format") == "FREQUALIZER_LAYOUT_PROJECT") { "Formato progetto non riconosciuto" }
-        require(root.optInt("schemaVersion", -1) == 1) { "Versione progetto non supportata" }
+        // Version 1 is the legacy format; import migrates it in memory.
+        // Version 2 preserves unknown per-element visual metadata.
+        val importedSchema = root.optInt("schemaVersion", 1)
+        require(importedSchema in 1..2) { "Versione progetto non supportata: $importedSchema" }
         val profiles = root.optJSONObject("profiles")
             ?: throw IllegalArgumentException("Profili layout mancanti")
         val parsed = LinkedHashMap<UiLayoutProfile, String>()
@@ -189,21 +199,15 @@ internal class UiLayoutProfileStore(context: Context) {
                     height = item.getDouble("height").toFloat(),
                     zOrder = item.optInt("zOrder", 0),
                     sizePreset = item.optInt("sizePreset", 2),
-                    visible = item.optBoolean("visible", true)
+                    visible = item.optBoolean("visible", true),
+                    extraFieldsJson = extraFields(item)
                 )
                 require(placement.x.isFinite() && placement.y.isFinite() &&
                     placement.width.isFinite() && placement.height.isFinite()) {
                     "Coordinate non valide per $id"
                 }
                 val safe = placement.normalized()
-                clean.put(id, JSONObject()
-                    .put("x", safe.x.toDouble())
-                    .put("y", safe.y.toDouble())
-                    .put("width", safe.width.toDouble())
-                    .put("height", safe.height.toDouble())
-                    .put("zOrder", safe.zOrder)
-                    .put("sizePreset", safe.sizePreset)
-                    .put("visible", safe.visible))
+                clean.put(id, placementJson(safe))
                 total++
                 require(total <= 5000) { "Troppi elementi nel progetto" }
             }
