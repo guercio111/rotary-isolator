@@ -3341,7 +3341,7 @@ private class RotaryControl(
     private val labelScale:Float = 1f,
     private val wheelStep:Float = 0f,
     private val zeroCentered:Boolean = false
-):android.widget.FrameLayout(context){
+):android.widget.FrameLayout(context), FreeLayoutVisualBoundsProvider {
     private var v=initial
     private val density get()=resources.displayMetrics.density
     private val layoutScale:Float get() {
@@ -3482,6 +3482,30 @@ private class RotaryControl(
             bottomMargin=0
         })
     }
+
+    override fun freeLayoutVisualBounds(): android.graphics.RectF {
+        if (width <= 0 || height <= 0) return android.graphics.RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val reserve = if (portraitDialFit) dp(27f) else if (spaciousText) dp(32f) else dp(18f)
+        val side = min(width.toFloat(), (height.toFloat() - reserve).coerceAtLeast(1f)) * .94f
+        val cy = if (portraitDialFit) (height - dp(27f)) / 2f
+            else if (spaciousText) (height - dp(32f)) / 2f else (height - dp(26f)) / 2f
+        val result = android.graphics.RectF(width / 2f - side / 2f, cy - side / 2f,
+            width / 2f + side / 2f, cy + side / 2f)
+        fun includeText(label: android.widget.TextView) {
+            val text = label.text?.toString().orEmpty()
+            if (text.isEmpty() || label.width <= 0 || label.height <= 0) return
+            val textWidth = label.paint.measureText(text).coerceAtMost(label.width.toFloat())
+            val fm = label.paint.fontMetrics
+            val textHeight = (fm.descent - fm.ascent).coerceAtMost(label.height.toFloat())
+            val l = label.left + (label.width - textWidth) / 2f
+            val t = label.top + (label.height - textHeight) / 2f
+            result.union(android.graphics.RectF(l, t, l + textWidth, t + textHeight))
+        }
+        includeText(titleLabel)
+        includeText(valueLabel)
+        return result
+    }
+
     private fun refreshValueLabel(){ valueLabel.text=valueText() }
     fun setValueExternally(value:Float) {
         v = if(step<=0f) value.coerceIn(minV,maxV) else (minV+((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
