@@ -1055,7 +1055,7 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},zeroCentered=key=="ISOLATOR")
+                val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=false,bottomTextLift=0f,spaciousText=false,labelScale=1f,zeroCentered=key=="ISOLATOR")
                 knob.isEnabled=active[i]
                 // In portrait each dial occupies the same flexible column; the
                 // control measures itself from its row, never from a guessed width.
@@ -1206,19 +1206,19 @@ class MainActivity : Activity() {
         val masterItemHeight=if(compact)dp(110) else -1
         row.addView(gainDial,LinearLayout.LayoutParams(0,masterItemHeight,1f))
         if(!wideLayout){
-            val compColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val compColumn=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
                 compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()
             }
-            compColumn.addView(compToggle,LinearLayout.LayoutParams(-1,dp(26)))
-            compColumn.addView(compDial,LinearLayout.LayoutParams(-1,0,1f))
+            compColumn.addView(compDial,LinearLayout.LayoutParams(0,-1,1f))
+            compColumn.addView(compToggle,LinearLayout.LayoutParams(dp(34),dp(34)).apply{leftMargin=dp(3)})
             row.addView(compColumn,LinearLayout.LayoutParams(0,masterItemHeight,1f).apply{leftMargin=dp(4);rightMargin=dp(4)})
-            val loudColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val loudColumn=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
             val loudToggle=roundAction("",if(loudnessOn)"ON" else "OFF",loudnessOn){
                 loudnessOn=!loudnessOn;save();refreshUi();scheduleUpdate()
             }
-            loudColumn.addView(loudToggle,LinearLayout.LayoutParams(-1,dp(26)))
-            loudColumn.addView(loudDial,LinearLayout.LayoutParams(-1,0,1f))
+            loudColumn.addView(loudDial,LinearLayout.LayoutParams(0,-1,1f))
+            loudColumn.addView(loudToggle,LinearLayout.LayoutParams(dp(34),dp(34)).apply{leftMargin=dp(3)})
             row.addView(loudColumn,LinearLayout.LayoutParams(0,masterItemHeight,1f).apply{leftMargin=dp(4)})
         }else{
             row.addView(compDial,LinearLayout.LayoutParams(0,masterItemHeight,1f).apply{leftMargin=dp(4);rightMargin=dp(4)})
