@@ -2633,11 +2633,20 @@ class MainActivity : Activity() {
         if (requestCode == layoutExportRequestCode) {
             if (resultCode != RESULT_OK || data?.data == null) return
             try {
-                freeLayoutHost?.saveProfile()
+                check(freeLayoutHost?.saveProfile() == true) { "Salvataggio layout non riuscito: esportazione annullata" }
                 val project = uiLayoutProfileStore.exportProject()
-                contentResolver.openOutputStream(data.data!!)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(project) }
+                val output = contentResolver.openOutputStream(data.data!!)
                     ?: throw IllegalStateException("Impossibile creare il file")
-                Toast.makeText(this, "Progetto esportato: tutti e quattro i layout sono al sicuro", Toast.LENGTH_LONG).show()
+                output.bufferedWriter(Charsets.UTF_8).use { it.write(project); it.flush() }
+                val counts = org.json.JSONObject(project).getJSONObject("elementCounts")
+                val currentProfile = UiLayoutProfile.detect(
+                    resources.configuration.smallestScreenWidthDp,
+                    resources.configuration.screenWidthDp,
+                    resources.configuration.screenHeightDp
+                )
+                val exportedCount = counts.optInt(currentProfile.storageKey, 0)
+                check(exportedCount > 0) { "Il profilo corrente risulta vuoto nell'esportazione" }
+                Toast.makeText(this, "Progetto esportato e verificato: $exportedCount elementi nel layout corrente", Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 Toast.makeText(this, "Esportazione non riuscita: ${error.message}", Toast.LENGTH_LONG).show()
             }
