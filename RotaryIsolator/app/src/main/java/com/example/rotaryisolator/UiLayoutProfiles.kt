@@ -27,12 +27,15 @@ internal data class UiElementPlacement(
         // profiles before clamping. Keep the complete rectangle on-screen.
         val safeX = (if (x.isFinite()) x else 0f).coerceIn(0f, 0.99f)
         val safeY = (if (y.isFinite()) y else 0f).coerceIn(0f, 0.99f)
-        val remainingWidth = (1f - safeX).coerceAtLeast(0.01f)
-        val remainingHeight = (1f - safeY).coerceAtLeast(0.01f)
+        // Tiny but valid controls must remain resizable as part of a group.
+        // A 1% floor prevents shrinking any element that is already smaller.
+        val minimumSize = 0.0001f
+        val remainingWidth = (1f - safeX).coerceAtLeast(minimumSize)
+        val remainingHeight = (1f - safeY).coerceAtLeast(minimumSize)
         val safeWidth = (if (width.isFinite()) width else 0.1f)
-            .coerceIn(0.01f, remainingWidth)
+            .coerceIn(minimumSize, remainingWidth)
         val safeHeight = (if (height.isFinite()) height else 0.1f)
-            .coerceIn(0.01f, remainingHeight)
+            .coerceIn(minimumSize, remainingHeight)
         return copy(
             x = safeX,
             y = safeY,
