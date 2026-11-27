@@ -36,9 +36,6 @@ private class VisualBoundsFrame(
     private val baseHeight: Int,
     private val visualBounds: RectF
 ) : FrameLayout(context) {
-    private var contentScaleX = 1f
-    private var contentScaleY = 1f
-
     init {
         clipChildren = false
         clipToPadding = false
@@ -49,22 +46,23 @@ private class VisualBoundsFrame(
         val targetWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(1)
         val targetHeight = MeasureSpec.getSize(heightMeasureSpec).coerceAtLeast(1)
         setMeasuredDimension(targetWidth, targetHeight)
+        // The wrapper represents only the visible selection bounds. Keep the
+        // original control at its unmodified dimensions: never scale its canvas,
+        // rotary dial, labels, touch target or child hierarchy to fit the wrapper.
         content.measure(
             MeasureSpec.makeMeasureSpec(baseWidth, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(baseHeight, MeasureSpec.EXACTLY)
         )
-        contentScaleX = targetWidth / visualBounds.width().coerceAtLeast(1f)
-        contentScaleY = targetHeight / visualBounds.height().coerceAtLeast(1f)
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         content.layout(0, 0, baseWidth, baseHeight)
         content.pivotX = 0f
         content.pivotY = 0f
-        content.scaleX = contentScaleX
-        content.scaleY = contentScaleY
-        content.translationX = -visualBounds.left * contentScaleX
-        content.translationY = -visualBounds.top * contentScaleY
+        content.scaleX = 1f
+        content.scaleY = 1f
+        content.translationX = -visualBounds.left
+        content.translationY = -visualBounds.top
     }
 }
 
