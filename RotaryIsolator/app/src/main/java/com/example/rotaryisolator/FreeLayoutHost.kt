@@ -57,17 +57,19 @@ private class VisualBoundsFrame(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         content.layout(0, 0, baseWidth, baseHeight)
-        // DIMENS must resize the actual visible control, not just this yellow
-        // editor frame. Scale the original view to the new visual-bounds size,
-        // compensating for any transparent/layout margins around its artwork.
-        val sx = (width.toFloat() / visualBounds.width().coerceAtLeast(1f))
-        val sy = (height.toFloat() / visualBounds.height().coerceAtLeast(1f))
+        // Resize the visible control uniformly. Layout placements are scaled
+        // proportionally, so one scale factor keeps circles circular and text
+        // and rectangular controls at their original aspect ratio.
+        val scale = minOf(
+            width.toFloat() / visualBounds.width().coerceAtLeast(1f),
+            height.toFloat() / visualBounds.height().coerceAtLeast(1f)
+        )
         content.pivotX = 0f
         content.pivotY = 0f
-        content.scaleX = sx
-        content.scaleY = sy
-        content.translationX = -visualBounds.left * sx
-        content.translationY = -visualBounds.top * sy
+        content.scaleX = scale
+        content.scaleY = scale
+        content.translationX = -visualBounds.left * scale
+        content.translationY = -visualBounds.top * scale
     }
 }
 
@@ -748,8 +750,8 @@ internal class FreeLayoutHost(
         row("LARGHEZZA", true, 0.01f)
         row("ALTEZZA", false, 0.01f)
         val uniformRow = LinearLayout(context).apply { gravity = Gravity.CENTER }
-        val uniformMinus = Button(context).apply { text = "− UNIFORME"; setOnClickListener { resizeSelected(-0.01f, -0.01f) } }
-        val uniformPlus = Button(context).apply { text = "+ UNIFORME"; setOnClickListener { resizeSelected(0.01f, 0.01f) } }
+        val uniformMinus = Button(context).apply { text = "− UNIFORME"; setOnClickListener { resizeSelectedByFactor(0.99f) } }
+        val uniformPlus = Button(context).apply { text = "+ UNIFORME"; setOnClickListener { resizeSelectedByFactor(1.01f) } }
         uniformRow.addView(uniformMinus, LinearLayout.LayoutParams(0, dp(48), 1f))
         uniformRow.addView(uniformPlus, LinearLayout.LayoutParams(0, dp(48), 1f))
         root.addView(uniformRow)
@@ -768,35 +770,54 @@ internal class FreeLayoutHost(
     private fun resizeSelected(dw: Float, dh: Float) {
         val targets = selectedPlacements()
         if (targets.isEmpty()) { requireSelection(); return }
+        val left = targets.minOf { it.x }
+        val top = targets.minOf { it.y }
+        val right = targets.maxOf { it.x + it.width }
+        val bottom = targets.maxOf { it.y + it.height }
+        val groupWidth = (right - left).coerceAtLeast(0.02f)
+        val groupHeight = (bottom - top).coerceAtLeast(0.02f)
+        val widthChange = if (dw != 0f) dw / groupWidth else 0f
+        val heightChange = if (dh != 0f) dh / groupHeight else 0f
+        val factor = when {
+            dw != 0f && dh == 0f -> 1f + widthChange
+            dh != 0f && dw == 0f -> 1f + heightChange
+            else -> 1f + (widthChange + heightChange) / 2f
+        }
+        resizeSelectedByFactor(factor)
+    }
+
+    /** Scale the selected item(s) uniformly around their group centre. */
+    private fun resizeSelectedByFactor(requestedFactor: Float) {
+        val targets = selectedPlacements()
+        if (targets.isEmpty()) { requireSelection(); return }
+        val left = targets.minOf { it.x }
+        val top = targets.minOf { it.y }
+        val right = targets.maxOf { it.x + it.width }
+        val bottom = targets.maxOf { it.y + it.height }
+        val centerX = (left + right) / 2f
+        val centerY = (top + bottom) / 2f
+        val halfW = (right - left) / 2f
+        val halfH = (bottom - top) / 2f
+
+        // Keep the whole selection inside the canvas while preserving its ratio.
+        var maxFactor = Float.MAX_VALUE
+        if (halfW > 0f) maxFactor = minOf(maxFactor, centerX / halfW, (1f - centerX) / halfW)
+        if (halfH > 0f) maxFactor = minOf(maxFactor, centerY / halfH, (1f - centerY) / halfH)
+        val minFactor = targets.maxOf { maxOf(0.02f / it.width, 0.02f / it.height) }
+        val factor = requestedFactor.coerceIn(minFactor, maxFactor.coerceAtLeast(minFactor))
+
         rememberUndo()
-        if (targets.size == 1) {
-            val old = targets.first()
-            val w = (old.width + dw).coerceIn(0.02f, 1f - old.x)
-            val h = (old.height + dh).coerceIn(0.02f, 1f - old.y)
-            placements[old.elementId] = old.copy(width = w, height = h).normalized()
-        } else {
-            val hostW = width.coerceAtLeast(1).toFloat()
-            val hostH = height.coerceAtLeast(1).toFloat()
-            val left = targets.minOf { it.x }
-            val top = targets.minOf { it.y }
-            val right = targets.maxOf { it.x + it.width }
-            val bottom = targets.maxOf { it.y + it.height }
-            val oldW = (right - left).coerceAtLeast(0.02f)
-            val oldH = (bottom - top).coerceAtLeast(0.02f)
-            val newW = (oldW + dw).coerceIn(0.02f, 1f - left)
-            val newH = (oldH + dh).coerceIn(0.02f, 1f - top)
-            val sx = newW / oldW
-            val sy = newH / oldH
-            targets.forEach { old ->
-                val nx = left + (old.x - left) * sx
-                val ny = top + (old.y - top) * sy
-                placements[old.elementId] = old.copy(
-                    x = nx.coerceIn(0f, 1f - old.width * sx),
-                    y = ny.coerceIn(0f, 1f - old.height * sy),
-                    width = (old.width * sx).coerceIn(0.01f, 1f - nx),
-                    height = (old.height * sy).coerceIn(0.01f, 1f - ny)
-                ).normalized()
-            }
+        targets.forEach { old ->
+            val newWidth = old.width * factor
+            val newHeight = old.height * factor
+            val newX = centerX + (old.x - centerX) * factor
+            val newY = centerY + (old.y - centerY) * factor
+            placements[old.elementId] = old.copy(
+                x = newX.coerceIn(0f, 1f - newWidth),
+                y = newY.coerceIn(0f, 1f - newHeight),
+                width = newWidth.coerceIn(0.02f, 1f),
+                height = newHeight.coerceIn(0.02f, 1f)
+            ).normalized()
         }
         requestLayout(); invalidate(); saveProfile()
     }
@@ -806,10 +827,7 @@ internal class FreeLayoutHost(
         if (targets.isEmpty()) { requireSelection(); return }
         val factors = listOf(0.65f, 0.8f, 1f, 1.2f, 1.4f, 1.6f)
         val current = factors[targets.first().sizePreset.coerceIn(0, 5)]
-        val factor = factors[index] / current
-        val groupWidth = targets.maxOf { it.x + it.width } - targets.minOf { it.x }
-        val groupHeight = targets.maxOf { it.y + it.height } - targets.minOf { it.y }
-        resizeSelected(groupWidth * (factor - 1f), groupHeight * (factor - 1f))
+        resizeSelectedByFactor(factors[index] / current)
         selectedPlacements().forEach { placement ->
             placements[placement.elementId] = placement.copy(sizePreset = index).normalized()
         }
