@@ -57,12 +57,17 @@ private class VisualBoundsFrame(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         content.layout(0, 0, baseWidth, baseHeight)
+        // DIMENS must resize the actual visible control, not just this yellow
+        // editor frame. Scale the original view to the new visual-bounds size,
+        // compensating for any transparent/layout margins around its artwork.
+        val sx = (width.toFloat() / visualBounds.width().coerceAtLeast(1f))
+        val sy = (height.toFloat() / visualBounds.height().coerceAtLeast(1f))
         content.pivotX = 0f
         content.pivotY = 0f
-        content.scaleX = 1f
-        content.scaleY = 1f
-        content.translationX = -visualBounds.left
-        content.translationY = -visualBounds.top
+        content.scaleX = sx
+        content.scaleY = sy
+        content.translationX = -visualBounds.left * sx
+        content.translationY = -visualBounds.top * sy
     }
 }
 
