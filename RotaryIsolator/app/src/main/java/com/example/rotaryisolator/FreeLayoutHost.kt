@@ -140,7 +140,7 @@ internal class FreeLayoutHost(
                         translationZ = view.translationZ
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     }
-                    candidates.add(Candidate(decoration, view, "element_${path}_decoration"))
+                    candidates.add(Candidate(decoration, view, "__visual_decoration__${path}"))
                 }
                 for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
             } else if (view !== source && view.width > 0 && view.height > 0) {
@@ -232,6 +232,8 @@ internal class FreeLayoutHost(
     private var exportProjectAction: (() -> Unit)? = null
     private var importProjectAction: (() -> Unit)? = null
 
+    private fun isSelectableElement(id: String): Boolean = !id.startsWith("__visual_decoration__")
+
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean = editMode
 
     /** Tap selects only. Position changes are performed through the precision controls. */
@@ -257,7 +259,8 @@ internal class FreeLayoutHost(
                 val picked = (childCount - 1 downTo 0).asSequence()
                     .map { getChildAt(it) }
                     .firstOrNull { child ->
-                        child.visibility == View.VISIBLE && event.x >= child.left && event.x <= child.right &&
+                        val childId = child.tag as? String
+                        childId != null && isSelectableElement(childId) && child.visibility == View.VISIBLE && event.x >= child.left && event.x <= child.right &&
                             event.y >= child.top && event.y <= child.bottom
                     }
                 val pickedId = picked?.tag as? String
@@ -294,7 +297,7 @@ internal class FreeLayoutHost(
                     for (i in 0 until childCount) {
                         val child = getChildAt(i)
                         val id = child.tag as? String ?: continue
-                        if (child.visibility != View.VISIBLE) continue
+                        if (!isSelectableElement(id) || child.visibility != View.VISIBLE) continue
                         // Use the exact bounds used by the selection outline and
                         // movement controls; the center must fall inside the marquee.
                         val centerX = (child.left + child.right) * 0.5f
@@ -324,7 +327,7 @@ internal class FreeLayoutHost(
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         if (!editMode) return
-        selectedIds.forEach { id ->
+        selectedIds.filter(::isSelectableElement).forEach { id ->
             val child = findElement(id)
             if (child != null) {
                 canvas.drawRect(child.left.toFloat(), child.top.toFloat(), child.right.toFloat(), child.bottom.toFloat(), outlinePaint)
@@ -460,6 +463,7 @@ internal class FreeLayoutHost(
         val entries = (0 until childCount).mapNotNull { index ->
             val view = getChildAt(index)
             val id = view.tag as? String ?: return@mapNotNull null
+            if (!isSelectableElement(id)) return@mapNotNull null
             val hidden = placements[id]?.visible == false
             "${elementTitle(view)}${if (hidden) "  (NASCOSTO)" else ""}  ·  ${index + 1}" to id
         }
@@ -515,7 +519,8 @@ internal class FreeLayoutHost(
     }
 
     private fun selectedPlacements(): List<UiElementPlacement> {
-        val ids = if (selectedIds.isNotEmpty()) selectedIds else listOfNotNull(selectedId)
+        val ids = (if (selectedIds.isNotEmpty()) selectedIds.toList() else listOfNotNull(selectedId))
+            .filter(::isSelectableElement)
         val hostW = width.coerceAtLeast(1).toFloat()
         val hostH = height.coerceAtLeast(1).toFloat()
         return ids.mapNotNull { id ->
