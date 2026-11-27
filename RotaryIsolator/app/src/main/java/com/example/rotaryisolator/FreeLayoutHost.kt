@@ -209,31 +209,54 @@ internal class FreeLayoutHost(
             // controls. This keeps each selection rectangle and movement limit
             // tied to the control itself rather than a full-width parent panel.
             val visualProvider = view as? FreeLayoutVisualBoundsProvider
+            fun addCandidate(candidateView: View) {
+                if (candidateView.width <= 0 || candidateView.height <= 0) return
+                val stablePart = if (candidateView.id != View.NO_ID) "id_${candidateView.id}" else
+                    candidateView.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
+                    ?: (candidateView as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
+                    ?: candidateView.javaClass.simpleName.lowercase()
+                val boundsProvider = candidateView as? FreeLayoutVisualBoundsProvider
+                val visualBounds = boundsProvider?.freeLayoutVisualBounds()
+                    ?: (candidateView as? TextView)?.let { text -> textViewVisualBounds(text) }
+                candidates.add(Candidate(candidateView, candidateView,
+                    "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}", visualBounds))
+            }
+            fun hasTextDescendant(parent: ViewGroup): Boolean {
+                for (childIndex in 0 until parent.childCount) {
+                    val child = parent.getChildAt(childIndex)
+                    if (child.visibility != View.VISIBLE) continue
+                    if (child is TextView) return true
+                    val nested = child as? ViewGroup
+                    if (nested != null && hasTextDescendant(nested)) return true
+                }
+                return false
+            }
             val keepAsUnit = view !== source && (visualProvider != null || group == null ||
                 ((view.isClickable || view.isLongClickable || view.isFocusable) &&
                     !hasInteractiveDescendant(group) && !hasSubstantiallySmallerContent(group)))
-            if (group != null && !keepAsUnit) {
-                val (backgroundArtwork, foregroundArtwork) = takeDecorations(view)
-                if (backgroundArtwork != null || foregroundArtwork != null) {
-                    val decoration = View(this@FreeLayoutHost.context).apply {
-                        background = backgroundArtwork
-                        if (android.os.Build.VERSION.SDK_INT >= 23) foreground = foregroundArtwork
-                        alpha = view.alpha
-                        elevation = view.elevation
-                        translationZ = view.translationZ
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            val exposeTextChildren = group != null && hasTextDescendant(group)
+            if (group != null && (!keepAsUnit || exposeTextChildren)) {
+                if (keepAsUnit) {
+                    // Keep the rotary/control itself selectable, but also expose
+                    // nested labels and numeric values as independent elements.
+                    addCandidate(view)
+                } else {
+                    val (backgroundArtwork, foregroundArtwork) = takeDecorations(view)
+                    if (backgroundArtwork != null || foregroundArtwork != null) {
+                        val decoration = View(this@FreeLayoutHost.context).apply {
+                            background = backgroundArtwork
+                            if (android.os.Build.VERSION.SDK_INT >= 23) foreground = foregroundArtwork
+                            alpha = view.alpha
+                            elevation = view.elevation
+                            translationZ = view.translationZ
+                            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                        }
+                        candidates.add(Candidate(decoration, view, "__visual_decoration__${path}"))
                     }
-                    candidates.add(Candidate(decoration, view, "__visual_decoration__${path}"))
                 }
                 for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
             } else if (view !== source && view.width > 0 && view.height > 0) {
-                val stablePart = if (view.id != View.NO_ID) "id_${view.id}" else
-                    view.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
-                    ?: (view as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
-                    ?: view.javaClass.simpleName.lowercase()
-                val visualBounds = visualProvider?.freeLayoutVisualBounds()
-                    ?: (view as? TextView)?.let { text -> textViewVisualBounds(text) }
-                candidates.add(Candidate(view, view, "element_${view.javaClass.simpleName.lowercase()}_${stablePart}", visualBounds))
+                addCandidate(view)
             }
         }
 
@@ -403,13 +426,17 @@ internal class FreeLayoutHost(
                     invalidate()
                     return true
                 }
+                // When a label/value overlaps its rotary's larger hit area,
+                // select the smallest visible element under the pointer first.
                 val picked = (childCount - 1 downTo 0).asSequence()
                     .map { getChildAt(it) }
-                    .firstOrNull { child ->
+                    .filter { child ->
                         val childId = child.tag as? String
-                        childId != null && isSelectableElement(childId) && child.visibility == View.VISIBLE && event.x >= child.left && event.x <= child.right &&
+                        childId != null && isSelectableElement(childId) && child.visibility == View.VISIBLE &&
+                            event.x >= child.left && event.x <= child.right &&
                             event.y >= child.top && event.y <= child.bottom
                     }
+                    .minByOrNull { child -> child.width.toLong() * child.height.toLong() }
                 val pickedId = picked?.tag as? String
                 if (manualMultiSelectionMode) {
                     if (pickedId != null) {
@@ -793,8 +820,8 @@ internal class FreeLayoutHost(
         row("LARGHEZZA", true, 0.01f)
         row("ALTEZZA", false, 0.01f)
         val uniformRow = LinearLayout(context).apply { gravity = Gravity.CENTER }
-        val uniformMinus = Button(context).apply { text = "− UNIFORME"; setOnClickListener { resizeSelectedByFactor(0.99f) } }
-        val uniformPlus = Button(context).apply { text = "+ UNIFORME"; setOnClickListener { resizeSelectedByFactor(1.01f) } }
+        val uniformMinus = Button(context).apply { text = "− UNIFORME"; setOnClickListener { resizeSelectedByFactor(0.95f) } }
+        val uniformPlus = Button(context).apply { text = "+ UNIFORME"; setOnClickListener { resizeSelectedByFactor(1.05f) } }
         uniformRow.addView(uniformMinus, LinearLayout.LayoutParams(0, dp(48), 1f))
         uniformRow.addView(uniformPlus, LinearLayout.LayoutParams(0, dp(48), 1f))
         root.addView(uniformRow)
@@ -829,27 +856,34 @@ internal class FreeLayoutHost(
         resizeSelectedByFactor(factor)
     }
 
-    /** Scale the selected item(s) uniformly around their group centre. */
+    /** Scale selected items uniformly in physical pixels around the group centre. */
     private fun resizeSelectedByFactor(requestedFactor: Float) {
         val targets = selectedPlacements()
         if (targets.isEmpty()) { requireSelection(); return }
-        val left = targets.minOf { it.x }
-        val top = targets.minOf { it.y }
-        val right = targets.maxOf { it.x + it.width }
-        val bottom = targets.maxOf { it.y + it.height }
-        val centerX = (left + right) / 2f
-        val centerY = (top + bottom) / 2f
-        val halfW = (right - left) / 2f
-        val halfH = (bottom - top) / 2f
+        val hostW = width.coerceAtLeast(1).toFloat()
+        val hostH = height.coerceAtLeast(1).toFloat()
+        val pixelRects = targets.map { item ->
+            floatArrayOf(item.x * hostW, item.y * hostH,
+                (item.x + item.width) * hostW, (item.y + item.height) * hostH)
+        }
+        val left = pixelRects.minOf { it[0] }
+        val top = pixelRects.minOf { it[1] }
+        val right = pixelRects.maxOf { it[2] }
+        val bottom = pixelRects.maxOf { it[3] }
+        val centerX = (left + right) * 0.5f
+        val centerY = (top + bottom) * 0.5f
+        val halfW = (right - left) * 0.5f
+        val halfH = (bottom - top) * 0.5f
 
-        // Keep the whole selection inside the canvas while preserving its ratio.
+        // Calculate one shared factor that keeps the entire group on the canvas.
         var maxFactor = Float.MAX_VALUE
-        if (halfW > 0f) maxFactor = minOf(maxFactor, centerX / halfW, (1f - centerX) / halfW)
-        if (halfH > 0f) maxFactor = minOf(maxFactor, centerY / halfH, (1f - centerY) / halfH)
-        // Minimum element size is a lower bound only when shrinking.
-        // Applying it to growth could turn a 1% step into a multi-fold jump
-        // whenever one selected element is currently smaller than 0.02.
-        val minFactor = targets.maxOf { maxOf(0.0001f / it.width, 0.0001f / it.height) }
+        if (halfW > 0f) maxFactor = minOf(maxFactor, centerX / halfW, (hostW - centerX) / halfW)
+        if (halfH > 0f) maxFactor = minOf(maxFactor, centerY / halfH, (hostH - centerY) / halfH)
+        val minFactor = targets.indices.maxOf { index ->
+            val rect = pixelRects[index]
+            maxOf(0.5f / (rect[2] - rect[0]).coerceAtLeast(0.5f),
+                0.5f / (rect[3] - rect[1]).coerceAtLeast(0.5f))
+        }
         val factor = if (requestedFactor < 1f) {
             requestedFactor.coerceAtLeast(minFactor).coerceAtMost(1f)
         } else {
@@ -857,19 +891,22 @@ internal class FreeLayoutHost(
         }
 
         rememberUndo()
-        targets.forEach { old ->
-            val newWidth = old.width * factor
-            val newHeight = old.height * factor
-            val newX = centerX + (old.x - centerX) * factor
-            val newY = centerY + (old.y - centerY) * factor
+        targets.forEachIndexed { index, old ->
+            val rect = pixelRects[index]
+            val newWidthPx = (rect[2] - rect[0]) * factor
+            val newHeightPx = (rect[3] - rect[1]) * factor
+            val newLeftPx = centerX + (rect[0] - centerX) * factor
+            val newTopPx = centerY + (rect[1] - centerY) * factor
             placements[old.elementId] = old.copy(
-                x = newX.coerceIn(0f, 1f - newWidth),
-                y = newY.coerceIn(0f, 1f - newHeight),
-                width = newWidth.coerceIn(0.0001f, 1f),
-                height = newHeight.coerceIn(0.0001f, 1f)
+                x = (newLeftPx / hostW).coerceIn(0f, 1f),
+                y = (newTopPx / hostH).coerceIn(0f, 1f),
+                width = (newWidthPx / hostW).coerceIn(0.0001f, 1f),
+                height = (newHeightPx / hostH).coerceIn(0.0001f, 1f)
             ).normalized()
         }
-        requestLayout(); invalidate(); saveProfile()
+        requestLayout()
+        invalidate()
+        saveProfile()
     }
 
     private fun applySizePreset(index: Int) {
