@@ -1085,18 +1085,20 @@ class MainActivity : Activity() {
             }
             col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
-            bandActions.addView(circleAction("↶",actionReturnSize) {
+            val returnButton = circleAction("↶",actionReturnSize) {
                 val old=if(key=="EQ")previousEq[i] else previousIso[i]
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=old.coerceIn(bandRange.start,bandRange.endInclusive); save(); refreshBandControls(); scheduleUpdate()
-            },LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
-            bandActions.addView(circleAction("F",actionFlatSize) {
+            }.apply { contentDescription = "$key ${names[pos]} return" }
+            bandActions.addView(returnButton,LinearLayout.LayoutParams(dp(actionReturnSize),dp(actionReturnSize)).apply{rightMargin=dp(actionGap)})
+            val flatButton = circleAction("F",actionFlatSize) {
                 if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]
                 values[i]=0f
                 save()
                 scheduleUpdate()
                 refreshBandControls()
-            },LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
+            }.apply { contentDescription = "$key ${names[pos]} flat" }
+            bandActions.addView(flatButton,LinearLayout.LayoutParams(dp(actionFlatSize),dp(actionFlatSize)))
             col.addView(bandActions,if(useVerticalRows)LinearLayout.LayoutParams(dp(actionReturnSize+actionFlatSize+actionGap),-1) else LinearLayout.LayoutParams(-1,dp(actionHeight)))
             row.addView(col,if(useVerticalRows)LinearLayout.LayoutParams(-1,0,1f) else LinearLayout.LayoutParams(0,-2,1f))
         }
@@ -1164,11 +1166,12 @@ class MainActivity : Activity() {
                     .apply { rightMargin = dp(5) }
             )
         }
-        headerControls.addView(circleAction("F",if(compactHeader)30 else 38) {
+        val sectionFlatButton = circleAction("F",if(compactHeader)30 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
             scheduleUpdate();refreshBandControls()
-        },LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
+        }.apply { contentDescription = "$key flat all" }
+        headerControls.addView(sectionFlatButton,LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
         parent.addView(box,if(parent===content) LinearLayout.LayoutParams(-1,-2) else LinearLayout.LayoutParams(0,-1,1f));sections[key]=box
     }
@@ -1262,7 +1265,7 @@ class MainActivity : Activity() {
         }
         val returnAction=roundAction("↶","RETURN",true){
             restore();save();refreshMasterControls();scheduleUpdate()
-        }
+        }.apply { contentDescription = "$title return" }
         if(compactActions){
             actions.addView(onAction,LinearLayout.LayoutParams(-1,dp(24)).apply{bottomMargin=dp(5)})
             actions.addView(returnAction,LinearLayout.LayoutParams(-1,dp(24)))
