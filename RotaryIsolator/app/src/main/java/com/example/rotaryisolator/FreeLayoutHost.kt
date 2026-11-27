@@ -84,7 +84,7 @@ private class VisualBoundsFrame(
         hostWidth: Int,
         hostHeight: Int
     ): UiElementPlacement? {
-        if (content !is TextView || content is Button) return null
+        if (content !is TextView) return null
         val w = hostWidth.coerceAtLeast(1).toFloat()
         val h = hostHeight.coerceAtLeast(1).toFloat()
         val naturalWidth = visualBounds.width().coerceAtLeast(1f)
