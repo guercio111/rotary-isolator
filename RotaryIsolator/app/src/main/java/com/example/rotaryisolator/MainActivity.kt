@@ -832,6 +832,9 @@ class MainActivity : Activity() {
     }
 
     private fun buildUi() {
+        // Preserve the live Designer geometry before rebuilding the Android view tree.
+        // The next host restores placements by stable source-tree IDs.
+        freeLayoutHost?.saveProfile()
         val compactPhone = phonePortrait && !wideLayout
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
