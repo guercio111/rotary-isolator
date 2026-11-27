@@ -3542,6 +3542,9 @@ private class RotaryControl(
         clipToPadding=false
         isFocusable=false
         isClickable=false
+        // Give the whole rotary a semantic identity independent of its value,
+        // child order or implementation class.
+        contentDescription = "$title rotary control"
         addView(dial,android.widget.FrameLayout.LayoutParams(-1,-1))
         // One shared rotary typography/layout style for every control and orientation.
         addView(titleLabel,android.widget.FrameLayout.LayoutParams(-1,dp(18f).toInt(),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
