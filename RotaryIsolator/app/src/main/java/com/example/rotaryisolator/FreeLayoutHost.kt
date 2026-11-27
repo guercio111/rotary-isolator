@@ -42,6 +42,24 @@ private class VisualBoundsFrame(
         addView(content, LayoutParams(baseWidth, baseHeight))
     }
 
+    fun editorLabel(): String? {
+        val direct = content.contentDescription?.toString()?.takeIf { it.isNotBlank() }
+            ?: (content as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }
+        if (direct != null) return direct
+        fun firstText(view: View): String? {
+            val group = view as? ViewGroup ?: return null
+            for (index in 0 until group.childCount) {
+                val child = group.getChildAt(index)
+                if (child.visibility != View.VISIBLE) continue
+                val value = (child as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }
+                    ?: firstText(child)
+                if (value != null) return value
+            }
+            return null
+        }
+        return firstText(content)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val targetWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(1)
         val targetHeight = MeasureSpec.getSize(heightMeasureSpec).coerceAtLeast(1)
@@ -424,6 +442,25 @@ internal class FreeLayoutHost(
     }
 
     fun saveProfile(): Boolean {
+        // Every adopted real control must have a persisted placement. If an imported
+        // project omitted an element, retain its existing/default geometry instead of
+        // silently dropping that control from the next save/export.
+        val hostW = width.coerceAtLeast(1).toFloat()
+        val hostH = height.coerceAtLeast(1).toFloat()
+        for (index in 0 until childCount) {
+            val child = getChildAt(index)
+            val id = child.tag as? String ?: continue
+            if (!isSelectableElement(id) || placements.containsKey(id)) continue
+            if (child.width <= 0 || child.height <= 0) continue
+            placements[id] = UiElementPlacement(
+                id,
+                (child.left / hostW).coerceIn(0f, 0.99f),
+                (child.top / hostH).coerceIn(0f, 0.99f),
+                (child.width / hostW).coerceIn(0.0001f, 1f),
+                (child.height / hostH).coerceIn(0.0001f, 1f),
+                child.translationZ.roundToInt()
+            ).normalized()
+        }
         if (placements.isEmpty()) return false
         return store.save(profile, placements.values.toList())
     }
@@ -439,6 +476,11 @@ internal class FreeLayoutHost(
         // An empty profile means this orientation was not included in the
         // project yet. Never clear a working in-memory layout in that case.
         if (imported.isNotEmpty()) {
+            // Keep the live/default placements as a safety net. Older or partial
+            // JSON projects may not contain every control currently in the app.
+            // Replacing the whole map made those controls un-layoutable and caused
+            // them to disappear from subsequent exports (notably BEAT division "2").
+            val retained = LinkedHashMap(placements)
             val migrated = LinkedHashMap<String, UiElementPlacement>()
             imported.forEach { (importedId, placement) ->
                 val legacyPart = importedId.removePrefix("element_").substringAfter('_', "")
@@ -451,6 +493,9 @@ internal class FreeLayoutHost(
                     ?: importedId
                 migrated[stableId] = placement.copy(elementId = stableId)
             }
+            // Imported coordinates win; controls absent from the JSON keep their
+            // current/default positions and remain selectable/editable.
+            retained.forEach { (id, placement) -> migrated.putIfAbsent(id, placement) }
             placements.clear()
             placements.putAll(migrated)
         }
@@ -710,7 +755,18 @@ internal class FreeLayoutHost(
     private fun elementTitle(view: View): String {
         val description = view.contentDescription?.toString()?.takeIf { it.isNotBlank() }
         val text = (view as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }
-        return description ?: text ?: view.javaClass.simpleName
+        val wrappedText = (view as? VisualBoundsFrame)?.editorLabel()
+        val label = description ?: text ?: wrappedText
+        if (!label.isNullOrBlank()) {
+            // Give the ten rhythmic division keys a recognizable group name.
+            return if (label in setOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")) {
+                "BEAT – $label"
+            } else label
+        }
+        val resourceName = if (view.id != View.NO_ID) {
+            runCatching { resources.getResourceEntryName(view.id) }.getOrNull()
+        } else null
+        return resourceName ?: view.javaClass.simpleName.removeSuffix("Frame")
     }
 
     private fun showEditorDialog(builder: AlertDialog.Builder): AlertDialog {
