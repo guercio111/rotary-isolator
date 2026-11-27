@@ -3372,7 +3372,7 @@ private class RotaryControl(
     private fun dp(x:Float)=x*density*layoutScale
     private val titleLabel = android.widget.TextView(context).apply {
         text = title
-        textSize = 11f * labelScale
+        textSize = 11f
         setTextColor(Color.WHITE)
         gravity = Gravity.CENTER
         maxLines = 1
@@ -3381,7 +3381,7 @@ private class RotaryControl(
     }
     private val valueLabel = android.widget.TextView(context).apply {
         text = valueText()
-        textSize = 10f * labelScale
+        textSize = 10f
         setTextColor(accent)
         gravity = Gravity.CENTER
         maxLines = 1
@@ -3391,9 +3391,9 @@ private class RotaryControl(
     private val dial = object:View(context) {
         private val p=Paint(Paint.ANTI_ALIAS_FLAG)
         private val rect get()={
-            val dialTextReserve=if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f)
+            val dialTextReserve=dp(18f)
             val side=min(width.toFloat(),(height.toFloat()-dialTextReserve).coerceAtLeast(1f))* .94f
-            val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
+            val cy=(height-dp(26f))/2f
             RectF(width/2f-side/2,cy-side/2,width/2f+side/2,cy+side/2)
         }()
         private var downY=0f
@@ -3438,8 +3438,8 @@ private class RotaryControl(
             return (minV + ((value-minV)/step).roundToInt()*step).coerceIn(minV,maxV)
         }
         private fun updateFromPoint(x:Float,y:Float){
-            val side=min(width.toFloat(),(height.toFloat()-(if(portraitDialFit) dp(27f) else if(spaciousText) dp(32f) else dp(18f))).coerceAtLeast(1f))*.94f
-            val cx=width/2f;val cy=if(portraitDialFit) (height-dp(27f))/2f else if(spaciousText) (height-dp(32f))/2f else (height-dp(26f))/2f
+            val side=min(width.toFloat(),(height.toFloat()-(dp(18f))).coerceAtLeast(1f))*.94f
+            val cx=width/2f;val cy=(height-dp(26f))/2f
             var degrees=Math.toDegrees(atan2((y-cy).toDouble(),(x-cx).toDouble())).toFloat()
             if(degrees<0f)degrees+=360f
             if(degrees<45f)degrees+=360f
@@ -3489,15 +3489,10 @@ private class RotaryControl(
         isFocusable=false
         isClickable=false
         addView(dial,android.widget.FrameLayout.LayoutParams(-1,-1))
-        if(titleInside){
-            addView(titleLabel,android.widget.FrameLayout.LayoutParams(-1,dp(18f).toInt(),Gravity.CENTER).apply {
-                topMargin=dp(28f).toInt()
-            })
-        }else{
-            addView(titleLabel,android.widget.FrameLayout.LayoutParams(-1,dp(18f).toInt(),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                bottomMargin=dp((if(spaciousText)18f else 10f)+bottomTextLift).toInt()
-            })
-        }
+        // One shared rotary typography/layout style for every control and orientation.
+        addView(titleLabel,android.widget.FrameLayout.LayoutParams(-1,dp(18f).toInt(),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin=dp(10f).toInt()
+        })
         addView(valueLabel,android.widget.FrameLayout.LayoutParams(-1,dp(16f).toInt(),Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
             bottomMargin=0
         })
@@ -3505,10 +3500,9 @@ private class RotaryControl(
 
     override fun freeLayoutVisualBounds(): android.graphics.RectF {
         if (width <= 0 || height <= 0) return android.graphics.RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val reserve = if (portraitDialFit) dp(27f) else if (spaciousText) dp(32f) else dp(18f)
+        val reserve = dp(18f)
         val side = min(width.toFloat(), (height.toFloat() - reserve).coerceAtLeast(1f)) * .94f
-        val cy = if (portraitDialFit) (height - dp(27f)) / 2f
-            else if (spaciousText) (height - dp(32f)) / 2f else (height - dp(26f)) / 2f
+        val cy = (height - dp(26f)) / 2f
         val result = android.graphics.RectF(width / 2f - side / 2f, cy - side / 2f,
             width / 2f + side / 2f, cy + side / 2f)
         // The dial is its own selectable/resizable object. Its title and value
