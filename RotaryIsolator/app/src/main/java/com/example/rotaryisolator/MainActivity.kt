@@ -357,6 +357,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private val sections = mutableMapOf<String, LinearLayout>()
     private val bandUiRefreshers = mutableListOf<() -> Unit>()
+    private val isolatorUiRefreshers = mutableListOf<() -> Unit>()
     private val masterUiRefreshers = mutableListOf<() -> Unit>()
     private val gold get() = colorEq
     private val bg get() = colorBackground
@@ -838,6 +839,7 @@ class MainActivity : Activity() {
         // The next host restores placements by stable source-tree IDs.
         freeLayoutHost?.saveProfile()
         bandUiRefreshers.clear()
+        isolatorUiRefreshers.clear()
         masterUiRefreshers.clear()
         val compactPhone = phonePortrait && !wideLayout
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
@@ -1082,6 +1084,13 @@ class MainActivity : Activity() {
                     knob.isEnabled = active[i]
                     vLabel.text = "${names[pos]}  ${fmt(values[i])} dB"
                 }
+                if (key == "ISOLATOR") {
+                    isolatorUiRefreshers.add {
+                        knob.setValueExternally(values[i])
+                        knob.isEnabled = active[i]
+                        vLabel.text = "${names[pos]}  ${fmt(values[i])} dB"
+                    }
+                }
             }
             col.addView(controlRow,if(useVerticalRows)LinearLayout.LayoutParams(0,-1,1f) else LinearLayout.LayoutParams(-1,dialHeight()))
             val bandActions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER }
@@ -1169,7 +1178,13 @@ class MainActivity : Activity() {
         val sectionFlatButton = circleAction("F",if(compactHeader)30 else 38) {
             val previous=if(key=="EQ")sectionPreviousEq else sectionPreviousIso
             for(i in 0..(if(key=="EQ")3 else 2)){previous[i]=values[i];values[i]=0f}
-            scheduleUpdate();refreshBandControls()
+            save()
+            scheduleUpdate()
+            if (key == "ISOLATOR") {
+                isolatorUiRefreshers.forEach { refresh -> try { refresh() } catch (error: Exception) {
+                    android.util.Log.w("FREQUALIZER_UI", "Isolator control refresh failed", error)
+                } }
+            } else refreshBandControls()
         }.apply { contentDescription = "$key flat all" }
         headerControls.addView(sectionFlatButton,LinearLayout.LayoutParams(dp(if(compactHeader)30 else 38),dp(if(compactHeader)30 else 38)))
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
