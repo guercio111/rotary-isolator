@@ -114,6 +114,8 @@ internal class FreeLayoutHost(
     private val legacyIdAliases = HashMap<String, String>()
     private val legacyPartAliases = HashMap<String, String>()
     private val ambiguousLegacyParts = HashSet<String>()
+    private val legacySemanticAliases = HashMap<String, String>()
+    private val ambiguousLegacySemanticAliases = HashSet<String>()
     private val undoHistory = ArrayDeque<Map<String, UiElementPlacement>>()
     private val redoHistory = ArrayDeque<Map<String, UiElementPlacement>>()
     private var editMode = false
@@ -316,6 +318,18 @@ internal class FreeLayoutHost(
                     ambiguousLegacyParts.add(legacyPart)
                 }
             }
+            // Value labels may include a live number in their old ID. Strip only
+            // numeric/unit suffixes and use this fallback only when unique.
+            val semanticPart = legacyPart
+                .replace(Regex("_\\d+(?:_\\d+)?"), "")
+                .replace(Regex("_(db|bpm|hz|percent)$"), "")
+            if (semanticPart.isNotBlank() && semanticPart !in ambiguousLegacySemanticAliases) {
+                val previousTarget = legacySemanticAliases.putIfAbsent(semanticPart, elementId)
+                if (previousTarget != null && previousTarget != elementId) {
+                    legacySemanticAliases.remove(semanticPart)
+                    ambiguousLegacySemanticAliases.add(semanticPart)
+                }
+            }
             // Migrate a pre-path ID the first time this element is adopted.
             // Thereafter its identity is independent of the displayed text.
             if (!placements.containsKey(elementId)) {
@@ -418,8 +432,12 @@ internal class FreeLayoutHost(
             val migrated = LinkedHashMap<String, UiElementPlacement>()
             imported.forEach { (importedId, placement) ->
                 val legacyPart = importedId.removePrefix("element_").substringAfter('_', "")
+                val semanticPart = legacyPart
+                    .replace(Regex("_\\d+(?:_\\d+)?"), "")
+                    .replace(Regex("_(db|bpm|hz|percent)$"), "")
                 val stableId = legacyIdAliases[importedId]
                     ?: legacyPartAliases[legacyPart]
+                    ?: legacySemanticAliases[semanticPart]
                     ?: importedId
                 migrated[stableId] = placement.copy(elementId = stableId)
             }
