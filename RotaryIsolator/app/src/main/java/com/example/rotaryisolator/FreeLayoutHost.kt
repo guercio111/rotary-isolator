@@ -288,8 +288,16 @@ internal class FreeLayoutHost(
                     ?: (candidateView as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
                     ?: candidateView.javaClass.simpleName.lowercase()
                 val boundsProvider = candidateView as? FreeLayoutVisualBoundsProvider
+                val isBeatDivisionKey = (candidateView as? TextView)?.let { text ->
+                    text.hasOnClickListeners() && text.text.toString().trim() in
+                        setOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
+                } == true
+                // Beat division keys are complete clickable cells, not just text glyphs.
+                // Their editor bounds must cover one key cell so the selection frame
+                // cannot stretch across the entire keyboard row or clip the key.
                 val visualBounds = boundsProvider?.freeLayoutVisualBounds()
-                    ?: (candidateView as? TextView)?.let { text -> textViewVisualBounds(text) }
+                    ?: if (isBeatDivisionKey) RectF(0f, 0f, baseWidth.toFloat(), baseHeight.toFloat())
+                    else (candidateView as? TextView)?.let { text -> textViewVisualBounds(text) }
                 val screen = IntArray(2)
                 candidateView.getLocationOnScreen(screen)
                 // New IDs are based on the stable position in the source view tree,
@@ -406,11 +414,19 @@ internal class FreeLayoutHost(
                     ambiguousLegacySemanticAliases.add(semanticPart)
                 }
             }
+            val isBeatDivisionControl = (candidate.view as? TextView)?.let { text ->
+                text.hasOnClickListeners() && text.text.toString().trim() in
+                    setOf("1/16", "1/8", "1/4", "1/2", "3/4", "1", "2", "4", "8", "16")
+            } == true
             // Migrate a pre-path ID the first time this element is adopted.
-            // Thereafter its identity is independent of the displayed text.
+            // Beat keys are deliberately excluded: older JSON may have assigned
+            // their text-derived alias to a full-width parent/wrapper. Reusing that
+            // stale rectangle makes the real key tiny inside a huge selection frame.
             if (!placements.containsKey(elementId)) {
                 val legacyPlacement = placements.remove(legacyId)
-                if (legacyPlacement != null) placements[elementId] = legacyPlacement.copy(elementId = elementId)
+                if (legacyPlacement != null && !isBeatDivisionControl) {
+                    placements[elementId] = legacyPlacement.copy(elementId = elementId)
+                }
             }
             val bounds = candidate.visualBounds?.let { sourceBounds ->
                 RectF(
@@ -432,6 +448,20 @@ internal class FreeLayoutHost(
                 (visualHeight / height).coerceIn(0.01f, 1f),
                 (candidate.geometry.elevation + candidate.geometry.translationZ).roundToInt()
             ).normalized()
+            if (isBeatDivisionControl) {
+                val imported = placements[elementId]
+                val expectedWidth = (placement.width * width).coerceAtLeast(1f)
+                val expectedHeight = (placement.height * height).coerceAtLeast(1f)
+                val importedWidth = (imported?.width ?: 0f) * width
+                val importedHeight = (imported?.height ?: 0f) * height
+                val staleBounds = imported != null && (
+                    importedWidth > expectedWidth * 1.8f || importedWidth < expectedWidth * 0.5f ||
+                    importedHeight > expectedHeight * 1.8f || importedHeight < expectedHeight * 0.5f
+                )
+                // Preserve a valid user placement. Reset only a missing or clearly
+                // mismatched legacy rectangle, using the native bounds of this key.
+                if (imported == null || staleBounds) placements[elementId] = placement
+            }
             (candidate.view.parent as? ViewGroup)?.removeView(candidate.view)
             // Every selectable item gets an independent, non-scaling frame.
             // DIMENS changes only this editor frame; the original Android view
