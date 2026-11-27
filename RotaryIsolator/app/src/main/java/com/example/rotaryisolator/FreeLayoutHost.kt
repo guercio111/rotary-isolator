@@ -156,7 +156,7 @@ internal class FreeLayoutHost(
         clipToPadding = false
         placements.putAll(store.load(profile))
         setWillNotDraw(false)
-        isClickable = true
+        isClickable = false
     }
 
 
@@ -327,6 +327,10 @@ internal class FreeLayoutHost(
     fun setEditMode(enabled: Boolean) {
         if (editMode == enabled) return
         editMode = enabled
+        // The editor host must not remain a clickable touch sink after RETURN.
+        // With editing disabled, all touch events pass directly to the original controls.
+        isClickable = enabled
+        isFocusable = enabled
         if (!enabled) {
             selectedId = null
             selectedIds.clear()
@@ -359,7 +363,10 @@ internal class FreeLayoutHost(
         invalidate()
     }
 
-    fun saveProfile() = store.save(profile, placements.values.toList())
+    fun saveProfile(): Boolean {
+        if (placements.isEmpty()) return false
+        return store.save(profile, placements.values.toList())
+    }
     fun allPlacements(): List<UiElementPlacement> = placements.values.toList()
 
     fun setProjectActions(onExport: () -> Unit, onImport: () -> Unit) {
@@ -368,8 +375,13 @@ internal class FreeLayoutHost(
     }
 
     fun reloadProfile() {
-        placements.clear()
-        placements.putAll(store.load(profile))
+        val imported = store.load(profile)
+        // An empty profile means this orientation was not included in the
+        // project yet. Never clear a working in-memory layout in that case.
+        if (imported.isNotEmpty()) {
+            placements.clear()
+            placements.putAll(imported)
+        }
         // Legacy JSON does not contain the source text metrics. Reconcile plain
         // text placements against the current native text bounds after import.
         val hostWidth = width.coerceAtLeast(1)
@@ -382,7 +394,9 @@ internal class FreeLayoutHost(
                 ?.safeImportedTextPlacement(saved, hostWidth, hostHeight)
             if (safe != null) placements[id] = safe
         }
-        store.save(profile, placements.values.toList())
+        if (placements.isNotEmpty()) {
+            check(saveProfile()) { "Verifica del salvataggio layout non riuscita" }
+        }
         selectedIds.clear()
         selectedId = null
         selectingArea = false
