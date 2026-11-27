@@ -3,10 +3,12 @@ package com.example.rotaryisolator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -73,6 +75,7 @@ internal class FreeLayoutHost(
         clipToPadding = false
         placements.putAll(store.load(profile))
         setWillNotDraw(false)
+        isClickable = true
     }
 
     /** Extract independent visible controls from the initial legacy layout tree. */
@@ -236,16 +239,29 @@ internal class FreeLayoutHost(
                     val top = minOf(selectionStartY, selectionEndY)
                     val bottom = maxOf(selectionStartY, selectionEndY)
                     selectedIds.clear()
+                    val hostW = width.coerceAtLeast(1).toFloat()
+                    val hostH = height.coerceAtLeast(1).toFloat()
+                    // Use the same normalized placement geometry used by the layout engine.
+                    // This keeps area selection aligned with the visible element bounds.
                     for (i in 0 until childCount) {
                         val child = getChildAt(i)
                         val id = child.tag as? String ?: continue
-                        if (child.visibility == View.VISIBLE &&
-                            child.left >= left && child.right <= right &&
-                            child.top >= top && child.bottom <= bottom) selectedIds.add(id)
+                        val placement = placements[id] ?: continue
+                        if (child.visibility != View.VISIBLE || !placement.visible) continue
+                        val childLeft = placement.x * hostW
+                        val childTop = placement.y * hostH
+                        val childRight = childLeft + placement.width * hostW
+                        val childBottom = childTop + placement.height * hostH
+                        val tolerance = resources.displayMetrics.density
+                        if (childLeft >= left - tolerance && childRight <= right + tolerance &&
+                            childTop >= top - tolerance && childBottom <= bottom + tolerance) {
+                            selectedIds.add(id)
+                        }
                     }
                     selectedId = selectedIds.firstOrNull()
                     selectingArea = false
                     selectionMode = false
+                    Toast.makeText(context, if (selectedIds.isEmpty()) "Nessun elemento completamente incluso" else "${selectedIds.size} elementi selezionati", Toast.LENGTH_SHORT).show()
                     invalidate()
                 }
                 return true
@@ -377,6 +393,21 @@ internal class FreeLayoutHost(
         return description ?: text ?: view.javaClass.simpleName
     }
 
+    private fun showEditorDialog(builder: AlertDialog.Builder): AlertDialog {
+        val dialog = builder.create()
+        dialog.setOnShowListener {
+            dialog.window?.let { window ->
+                window.setDimAmount(0f)
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                window.setBackgroundDrawable(ColorDrawable(0xE6171B22.toInt()))
+                // A slight window alpha lets the layout remain visible behind controls.
+                window.decorView.alpha = 0.94f
+            }
+        }
+        dialog.show()
+        return dialog
+    }
+
     private fun showElementPicker() {
         val entries = (0 until childCount).mapNotNull { index ->
             val view = getChildAt(index)
@@ -385,7 +416,7 @@ internal class FreeLayoutHost(
             "${elementTitle(view)}${if (hidden) "  (NASCOSTO)" else ""}  ·  ${index + 1}" to id
         }
         if (entries.isEmpty()) return
-        AlertDialog.Builder(context)
+        showEditorDialog(AlertDialog.Builder(context)
             .setTitle("SELEZIONA ELEMENTO")
             .setItems(entries.map { it.first }.toTypedArray()) { _, which ->
                 val id = entries[which].second
@@ -402,8 +433,7 @@ internal class FreeLayoutHost(
                 selectedId = id
                 invalidate()
             }
-            .setNegativeButton("CHIUDI", null)
-            .show()
+            .setNegativeButton("CHIUDI", null))
     }
 
     private fun deleteSelectedElements() {
@@ -438,7 +468,21 @@ internal class FreeLayoutHost(
 
     private fun selectedPlacements(): List<UiElementPlacement> {
         val ids = if (selectedIds.isNotEmpty()) selectedIds else listOfNotNull(selectedId)
-        return ids.mapNotNull { placements[it] }
+        val hostW = width.coerceAtLeast(1).toFloat()
+        val hostH = height.coerceAtLeast(1).toFloat()
+        return ids.mapNotNull { id ->
+            val stored = placements[id] ?: return@mapNotNull null
+            val view = findElement(id) ?: return@mapNotNull stored
+            if (view.visibility != View.VISIBLE || view.width <= 0 || view.height <= 0) return@mapNotNull stored
+            // Reconcile geometry against the actual laid-out view so movement limits
+            // never include stale or oversized placement bounds.
+            stored.copy(
+                x = (view.left / hostW).coerceIn(0f, 1f),
+                y = (view.top / hostH).coerceIn(0f, 1f),
+                width = (view.width / hostW).coerceIn(0.01f, 1f),
+                height = (view.height / hostH).coerceIn(0.01f, 1f)
+            ).normalized()
+        }
     }
 
     private fun rememberUndo() {
@@ -501,8 +545,8 @@ internal class FreeLayoutHost(
         }
         val row3 = LinearLayout(context).apply { gravity = Gravity.CENTER; addView(down, LinearLayout.LayoutParams(dp(76), dp(48))) }
         root.addView(row1); root.addView(row2); root.addView(row3)
-        AlertDialog.Builder(context).setTitle("SPOSTAMENTO PRECISO").setView(root)
-            .setNegativeButton("CHIUDI", null).show()
+        showEditorDialog(AlertDialog.Builder(context).setTitle("SPOSTAMENTO PRECISO").setView(root)
+            .setNegativeButton("CHIUDI", null))
     }
 
     private fun moveSelected(dx: Int, dy: Int, stepDp: Float) {
@@ -562,8 +606,8 @@ internal class FreeLayoutHost(
             presets.addView(b, LinearLayout.LayoutParams(0, dp(44), 1f))
         }
         root.addView(presets)
-        AlertDialog.Builder(context).setTitle("DIMENSIONI ELEMENTO").setView(root)
-            .setNegativeButton("CHIUDI", null).show()
+        showEditorDialog(AlertDialog.Builder(context).setTitle("DIMENSIONI ELEMENTO").setView(root)
+            .setNegativeButton("CHIUDI", null))
     }
 
     private fun resizeSelected(dw: Float, dh: Float) {
