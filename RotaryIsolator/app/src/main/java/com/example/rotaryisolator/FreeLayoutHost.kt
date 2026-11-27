@@ -382,18 +382,9 @@ internal class FreeLayoutHost(
             placements.clear()
             placements.putAll(imported)
         }
-        // Legacy JSON does not contain the source text metrics. Reconcile plain
-        // text placements against the current native text bounds after import.
-        val hostWidth = width.coerceAtLeast(1)
-        val hostHeight = height.coerceAtLeast(1)
-        for (index in 0 until childCount) {
-            val child = getChildAt(index)
-            val id = child.tag as? String ?: continue
-            val saved = placements[id] ?: continue
-            val safe = (child as? VisualBoundsFrame)
-                ?.safeImportedTextPlacement(saved, hostWidth, hostHeight)
-            if (safe != null) placements[id] = safe
-        }
+        // Keep imported geometry byte-for-byte (after normal validation).
+        // In particular, do not shrink TextView placements to their current
+        // native metrics: that discarded user-defined title dimensions on import.
         if (placements.isNotEmpty()) {
             check(saveProfile()) { "Verifica del salvataggio layout non riuscita" }
         }
