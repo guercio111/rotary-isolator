@@ -162,39 +162,55 @@ internal class UiLayoutProfileStore(context: Context) {
      * Validate the entire project before writing anything. The preferences update
      * is committed atomically and touches only this layout store, never audio prefs.
      */
-    fun importProject(json: String): Int {
+    fun importProject(json: String, fallbackProfile: UiLayoutProfile = UiLayoutProfile.TABLET_LANDSCAPE): Int {
         require(json.length <= 5_000_000) { "File progetto troppo grande" }
         val root = JSONObject(json)
-        require(root.optString("format") == "FREQUALIZER_LAYOUT_PROJECT") { "Formato progetto non riconosciuto" }
-        require(root.optInt("schemaVersion", -1) == 1) { "Versione progetto non supportata" }
-        val profiles = root.optJSONObject("profiles")
-            ?: throw IllegalArgumentException("Profili layout mancanti")
+        val format = root.optString("format", "")
+        require(format.isBlank() || format == "FREQUALIZER_LAYOUT_PROJECT") { "Formato progetto non riconosciuto" }
+        val schemaVersion = root.optInt("schemaVersion", 1)
+        require(schemaVersion in 0..2) { "Versione progetto futura non supportata: $schemaVersion" }
+
+        // Accept both the current envelope and earlier exports that used
+        // "layouts", omitted empty orientations, or stored profiles at root.
+        val profileSource = root.optJSONObject("profiles")
+            ?: root.optJSONObject("layouts")
+            ?: root
         val parsed = LinkedHashMap<UiLayoutProfile, String>()
+        val recognized = listOf(
+            UiLayoutProfile.TABLET_LANDSCAPE to listOf("tablet_landscape", "tabletLandscape", "landscape_tablet"),
+            UiLayoutProfile.TABLET_PORTRAIT to listOf("tablet_portrait", "tabletPortrait", "portrait_tablet"),
+            UiLayoutProfile.PHONE_LANDSCAPE to listOf("phone_landscape", "phoneLandscape", "landscape_phone"),
+            UiLayoutProfile.PHONE_PORTRAIT to listOf("phone_portrait", "phonePortrait", "portrait_phone")
+        )
         var total = 0
-        UiLayoutProfile.values().forEach { profile ->
-            val source = profiles.optJSONObject(profile.storageKey)
-                ?: throw IllegalArgumentException("Profilo mancante: ${profile.storageKey}")
+
+        fun readPlacements(source: JSONObject, profile: UiLayoutProfile): String {
             val clean = JSONObject()
             val keys = source.keys()
             while (keys.hasNext()) {
                 val id = keys.next()
-                require(id.isNotBlank() && id.length <= 240) { "ID elemento non valido" }
-                val item = source.optJSONObject(id)
-                    ?: throw IllegalArgumentException("Dati elemento non validi: $id")
+                if (id.isBlank() || id == "format" || id == "schemaVersion" ||
+                    id == "exportedAtEpochMs" || id == "elementCounts") continue
+                val item = source.optJSONObject(id) ?: continue
+                require(id.length <= 240) { "ID elemento non valido" }
+                // Legacy files used both width/height and w/h.
+                val x = item.optDouble("x", item.optDouble("left", Double.NaN))
+                val y = item.optDouble("y", item.optDouble("top", Double.NaN))
+                val width = item.optDouble("width", item.optDouble("w", Double.NaN))
+                val height = item.optDouble("height", item.optDouble("h", Double.NaN))
+                require(x.isFinite() && y.isFinite() && width.isFinite() && height.isFinite()) {
+                    "Coordinate non valide per $id"
+                }
                 val placement = UiElementPlacement(
                     elementId = id,
-                    x = item.getDouble("x").toFloat(),
-                    y = item.getDouble("y").toFloat(),
-                    width = item.getDouble("width").toFloat(),
-                    height = item.getDouble("height").toFloat(),
-                    zOrder = item.optInt("zOrder", 0),
+                    x = x.toFloat(),
+                    y = y.toFloat(),
+                    width = width.toFloat(),
+                    height = height.toFloat(),
+                    zOrder = item.optInt("zOrder", item.optInt("z", 0)),
                     sizePreset = item.optInt("sizePreset", 2),
                     visible = item.optBoolean("visible", true)
                 )
-                require(placement.x.isFinite() && placement.y.isFinite() &&
-                    placement.width.isFinite() && placement.height.isFinite()) {
-                    "Coordinate non valide per $id"
-                }
                 val safe = placement.normalized()
                 clean.put(id, JSONObject()
                     .put("x", safe.x.toDouble())
@@ -207,13 +223,28 @@ internal class UiLayoutProfileStore(context: Context) {
                 total++
                 require(total <= 5000) { "Troppi elementi nel progetto" }
             }
-            parsed[profile] = clean.toString()
+            return clean.toString()
         }
-        require(total > 0) { "Il progetto non contiene alcun elemento: nessun layout è stato modificato" }
 
-        // Preserve the complete pre-import state before touching any profile.
-        // Empty profiles are common when only one orientation has been edited;
-        // they must never erase an existing layout on this device.
+        recognized.forEach { (profile, aliases) ->
+            val source = aliases.firstNotNullOfOrNull { key -> profileSource.optJSONObject(key) }
+            if (source != null) parsed[profile] = readPlacements(source, profile)
+        }
+
+        // Very old single-layout exports did not wrap their elements in a
+        // profiles object. Import them into the currently selected orientation.
+        if (parsed.isEmpty()) {
+            val legacySingle = root.optJSONObject("placements")
+                ?: root.optJSONObject("elements")
+                ?: root.optJSONObject("layout")
+                ?: if (format.isBlank()) root else null
+            if (legacySingle != null) parsed[fallbackProfile] = readPlacements(legacySingle, fallbackProfile)
+        }
+
+        require(parsed.isNotEmpty()) { "Nessun layout compatibile trovato nel file JSON" }
+        require(total > 0) { "Il progetto non contiene elementi validi: nessun layout è stato modificato" }
+
+        // Keep the existing profiles not present in a partial legacy export.
         val backup = JSONObject()
         UiLayoutProfile.values().forEach { profile ->
             val previous = preferences.getString(profile.storageKey, null)
@@ -225,7 +256,6 @@ internal class UiLayoutProfileStore(context: Context) {
         }
         check(editor.commit()) { "Impossibile salvare il progetto importato; i layout precedenti sono rimasti invariati" }
 
-        // Verify every non-empty imported profile after the atomic commit.
         parsed.forEach { (profile, value) ->
             if (JSONObject(value).length() > 0) {
                 val stored = preferences.getString(profile.storageKey, null)
