@@ -256,11 +256,25 @@ internal class FreeLayoutHost(
                             screen[0], screen[1], view.width, view.height))
                     }
                 }
-                // Register the rotary/control before its labels so it remains a
-                // first-class selectable item. Candidate geometry is snapshotted
-                // immediately, before any ancestor is detached or reparented.
+                // A visual-bounds control (for example RotaryControl) is one
+                // selectable object. Keep its graphic children attached to it:
+                // detaching the dial View creates a competing full-row hit target
+                // and leaves the rotary's own selectable frame visually empty.
+                // Only expose its text labels as independent elements.
                 if (keepAsUnit) addCandidate(view)
-                for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
+                if (visualProvider != null) {
+                    fun collectTextDescendants(parent: ViewGroup, parentPath: String) {
+                        for (index in 0 until parent.childCount) {
+                            val child = parent.getChildAt(index)
+                            val childPath = "$parentPath/$index"
+                            if (child is TextView) collect(child, childPath)
+                            else (child as? ViewGroup)?.let { collectTextDescendants(it, childPath) }
+                        }
+                    }
+                    collectTextDescendants(group, path)
+                } else {
+                    for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
+                }
             } else if (view !== source && view.width > 0 && view.height > 0) {
                 addCandidate(view)
             }
