@@ -1055,7 +1055,7 @@ class MainActivity : Activity() {
                 }
                 controlRow.addView(seek,LinearLayout.LayoutParams(0,dp(48),1f))
             } else {
-                val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},portraitDialFit=useVerticalRows,zeroCentered=key=="ISOLATOR")
+                val knob=RotaryControl(this,names[pos],values[i],bandRange.start,bandRange.endInclusive,sectionAccent,{v->values[i]=v.coerceIn(bandRange.start,bandRange.endInclusive);vLabel.text="${names[pos]}  ${fmt(values[i])} dB";scheduleUpdate()},{fmt(values[i])+" dB"},onStart={if(key=="EQ")previousEq[i]=values[i] else previousIso[i]=values[i]},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f},zeroCentered=key=="ISOLATOR")
                 knob.isEnabled=active[i]
                 // In portrait each dial occupies the same flexible column; the
                 // control measures itself from its row, never from a guessed width.
@@ -1203,7 +1203,27 @@ class MainActivity : Activity() {
         }else RotaryControl(this,"GAIN",gain,-12f,12f,accent,{v->gain=v;scheduleUpdate()},{fmt(gain)+" dB"},titleInside=false,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
         val compDial=RotaryControl(this,"COMP",compMakeup,0f,100f,accent,{v->compMakeup=v.coerceIn(0f,100f);scheduleUpdate()},{compMakeup.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
         val loudDial=RotaryControl(this,"LOUDNESS",loudness,0f,100f,accent,{v->loudness=v.coerceIn(0f,100f);scheduleUpdate()},{loudness.roundToInt().toString()+"%"},titleInside=false,onEnd={save()},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
-        listOf(gainDial,compDial,loudDial).forEachIndexed{index,dial->row.addView(dial,LinearLayout.LayoutParams(0,if(compact)dp(110) else -1,1f).apply{leftMargin=if(index==0)0 else dp(4);rightMargin=if(index==2)0 else dp(4)})}
+        val masterItemHeight=if(compact)dp(110) else -1
+        row.addView(gainDial,LinearLayout.LayoutParams(0,masterItemHeight,1f))
+        if(!wideLayout){
+            val compColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val compToggle=roundAction("",if(compressorOn)"ON" else "OFF",compressorOn){
+                compressorOn=!compressorOn;save();refreshUi();scheduleUpdate()
+            }
+            compColumn.addView(compToggle,LinearLayout.LayoutParams(-1,dp(26)))
+            compColumn.addView(compDial,LinearLayout.LayoutParams(-1,0,1f))
+            row.addView(compColumn,LinearLayout.LayoutParams(0,masterItemHeight,1f).apply{leftMargin=dp(4);rightMargin=dp(4)})
+            val loudColumn=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER}
+            val loudToggle=roundAction("",if(loudnessOn)"ON" else "OFF",loudnessOn){
+                loudnessOn=!loudnessOn;save();refreshUi();scheduleUpdate()
+            }
+            loudColumn.addView(loudToggle,LinearLayout.LayoutParams(-1,dp(26)))
+            loudColumn.addView(loudDial,LinearLayout.LayoutParams(-1,0,1f))
+            row.addView(loudColumn,LinearLayout.LayoutParams(0,masterItemHeight,1f).apply{leftMargin=dp(4)})
+        }else{
+            row.addView(compDial,LinearLayout.LayoutParams(0,masterItemHeight,1f).apply{leftMargin=dp(4);rightMargin=dp(4)})
+            row.addView(loudDial,LinearLayout.LayoutParams(0,masterItemHeight,1f).apply{leftMargin=dp(4)})
+        }
         box.addView(row,LinearLayout.LayoutParams(-1,0,1f))
         parent.addView(box,if(parent===content)LinearLayout.LayoutParams(-1,-1) else LinearLayout.LayoutParams(0,-1,1f))
         sections["GAIN"]=box
@@ -3491,18 +3511,9 @@ private class RotaryControl(
             else if (spaciousText) (height - dp(32f)) / 2f else (height - dp(26f)) / 2f
         val result = android.graphics.RectF(width / 2f - side / 2f, cy - side / 2f,
             width / 2f + side / 2f, cy + side / 2f)
-        fun includeText(label: android.widget.TextView) {
-            val text = label.text?.toString().orEmpty()
-            if (text.isEmpty() || label.width <= 0 || label.height <= 0) return
-            val textWidth = label.paint.measureText(text).coerceAtMost(label.width.toFloat())
-            val fm = label.paint.fontMetrics
-            val textHeight = (fm.descent - fm.ascent).coerceAtMost(label.height.toFloat())
-            val l = label.left + (label.width - textWidth) / 2f
-            val t = label.top + (label.height - textHeight) / 2f
-            result.union(android.graphics.RectF(l, t, l + textWidth, t + textHeight))
-        }
-        includeText(titleLabel)
-        includeText(valueLabel)
+        // The dial is its own selectable/resizable object. Its title and value
+        // labels are exposed separately by the editor, so they must not inflate
+        // the rotary's selection frame downward.
         return result
     }
 
