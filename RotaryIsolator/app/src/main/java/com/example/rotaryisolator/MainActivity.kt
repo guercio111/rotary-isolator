@@ -3177,7 +3177,11 @@ class MainActivity : Activity() {
             val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
             dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
-        }catch(t:Throwable){audioReady=false;status.text="Effetto globale non disponibile su questo dispositivo"}
+        }catch(t:Throwable){
+            audioReady=false
+            android.util.Log.e("FREQUALIZER_AUDIO_INIT","DynamicsProcessing initialization failed",t)
+            status.text="DSP NON DISPONIBILE • ${t.javaClass.simpleName}: ${t.message ?: "errore senza dettagli"}"
+        }
     }
 
     private fun applyDsp(){ scheduleUpdate() }
@@ -3251,7 +3255,12 @@ class MainActivity : Activity() {
 
             val message=if(!appEnabled)"APP OFF • BYPASS" else if(fx.enabled)"Processing ON • EQ / ISO / COMP" else "BYPASS"
             runOnUiThread { if(::status.isInitialized) status.text=message }
-        }catch(t:Throwable){runOnUiThread { if(::status.isInitialized) status.text="Audio DSP non supportato dal driver del dispositivo" }}
+        }catch(t:Throwable){
+            android.util.Log.e("FREQUALIZER_DSP","DynamicsProcessing update failed",t)
+            runOnUiThread {
+                if(::status.isInitialized) status.text="DSP UPDATE ERROR • ${t.javaClass.simpleName}: ${t.message ?: "errore senza dettagli"}"
+            }
+        }
     }
 
     private fun showOptions(){
