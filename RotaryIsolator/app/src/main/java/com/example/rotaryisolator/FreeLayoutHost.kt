@@ -308,6 +308,16 @@ internal class FreeLayoutHost(
             var legacySuffix = 2
             while (!usedLegacyIds.add(legacyId)) legacyId = "${candidate.legacyId}_${legacySuffix++}"
             legacyIdAliases[legacyId] = elementId
+            // Before semantic descriptions were added, rotary containers all used
+            // the class-name fallback. Preserve those exact v1 aliases as well.
+            if (candidate.view.javaClass.simpleName.equals("RotaryControl", ignoreCase = true)) {
+                var oldRotaryId = "element_rotarycontrol_rotarycontrol"
+                var oldRotarySuffix = 2
+                while (!usedLegacyIds.add(oldRotaryId)) {
+                    oldRotaryId = "element_rotarycontrol_rotarycontrol_${oldRotarySuffix++}"
+                }
+                legacyIdAliases[oldRotaryId] = elementId
+            }
             // Also support old IDs when a view changed class (for example rotary to
             // slider). Only use this text/description suffix when it is unambiguous.
             val legacyPart = legacyId.removePrefix("element_").substringAfter('_', "")
