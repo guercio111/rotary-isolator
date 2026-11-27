@@ -126,9 +126,11 @@ internal class FreeLayoutHost(
             // Expand oversized clickable/layout wrappers into their real child
             // controls. This keeps each selection rectangle and movement limit
             // tied to the control itself rather than a full-width parent panel.
-            val keepAsUnit = view !== source && (group == null ||
-                ((view.isClickable || view.isLongClickable || view.isFocusable) &&
-                    !hasInteractiveDescendant(group) && !hasSubstantiallySmallerContent(group)))
+            // A ViewGroup is a layout container, not a selectable control.
+            // Always expose its actual children independently; this prevents a
+            // full-row/full-panel wrapper from ever defining a yellow selection
+            // rectangle or constraining horizontal movement.
+            val keepAsUnit = group == null || group.childCount == 0
             if (group != null && !keepAsUnit) {
                 val (backgroundArtwork, foregroundArtwork) = takeDecorations(view)
                 if (backgroundArtwork != null || foregroundArtwork != null) {
@@ -327,12 +329,20 @@ internal class FreeLayoutHost(
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         if (!editMode) return
-        selectedIds.filter(::isSelectableElement).forEach { id ->
-            val child = findElement(id)
-            if (child != null) {
-                canvas.drawRect(child.left.toFloat(), child.top.toFloat(), child.right.toFloat(), child.bottom.toFloat(), outlinePaint)
-                canvas.drawCircle(child.right - handleSize, child.bottom - handleSize, handleSize * 0.65f, handlePaint)
-            }
+        val selectedBounds = selectedIds.asSequence()
+            .filter(::isSelectableElement)
+            .mapNotNull { findElement(it) }
+            .filter { it.visibility == View.VISIBLE && it.width > 0 && it.height > 0 }
+            .toList()
+        if (selectedBounds.isNotEmpty()) {
+            // One element: exact element bounds. Multiple elements: tight union
+            // of the selected elements only, never their former parent panels.
+            val left = selectedBounds.minOf { it.left }.toFloat()
+            val top = selectedBounds.minOf { it.top }.toFloat()
+            val right = selectedBounds.maxOf { it.right }.toFloat()
+            val bottom = selectedBounds.maxOf { it.bottom }.toFloat()
+            canvas.drawRect(left, top, right, bottom, outlinePaint)
+            canvas.drawCircle(right - handleSize, bottom - handleSize, handleSize * 0.65f, handlePaint)
         }
         if (selectingArea) {
             val areaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
