@@ -438,8 +438,8 @@ internal class FreeLayoutHost(
             // keeps its measured size, canvas, text metrics and touch geometry.
             val frameBounds = bounds ?: RectF(
                 0f, 0f,
-                candidate.geometry.width.toFloat(),
-                candidate.geometry.height.toFloat()
+                candidate.width.toFloat(),
+                candidate.height.toFloat()
             )
             val editorView = VisualBoundsFrame(
                 context, candidate.view, candidate.width,
