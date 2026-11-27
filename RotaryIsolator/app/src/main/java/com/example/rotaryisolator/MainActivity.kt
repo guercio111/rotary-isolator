@@ -357,6 +357,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private val sections = mutableMapOf<String, LinearLayout>()
     private val bandUiRefreshers = mutableListOf<() -> Unit>()
+    private val masterUiRefreshers = mutableListOf<() -> Unit>()
     private val gold get() = colorEq
     private val bg get() = colorBackground
     private fun accentFor(key:String) = when(key) { "EQ" -> colorEq; "ISOLATOR" -> colorIso; "FILTERS" -> colorFilters; else -> colorMaster }
@@ -837,6 +838,7 @@ class MainActivity : Activity() {
         // The next host restores placements by stable source-tree IDs.
         freeLayoutHost?.saveProfile()
         bandUiRefreshers.clear()
+        masterUiRefreshers.clear()
         val compactPhone = phonePortrait && !wideLayout
         root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4),dp(if(compactPhone)3 else 8),dp(if(compactPhone)1 else 4));setBackgroundColor(bg);clipChildren=false;clipToPadding=false}
         val titleBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
@@ -1259,7 +1261,7 @@ class MainActivity : Activity() {
             setEnabled(!enabled);save();refreshUi();scheduleUpdate()
         }
         val returnAction=roundAction("↶","RETURN",true){
-            restore();save();refreshUi();scheduleUpdate()
+            restore();save();refreshMasterControls();scheduleUpdate()
         }
         if(compactActions){
             actions.addView(onAction,LinearLayout.LayoutParams(-1,dp(24)).apply{bottomMargin=dp(5)})
@@ -1269,8 +1271,11 @@ class MainActivity : Activity() {
             actions.addView(returnAction,LinearLayout.LayoutParams(-2,dp(24)).apply{leftMargin=dp(8)})
         }
         col.addView(actions,LinearLayout.LayoutParams(-1,dp(if(compactActions)56 else 28)))
-        col.addView(RotaryControl(this,title,value,0f,100f,accentFor("MASTER"),{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
-            LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
+        val masterDial = RotaryControl(this,title,value,0f,100f,accentFor("MASTER"),{v->setValue(v);scheduleUpdate()},{if(title=="BASS BOOST")"${bassBoost.roundToInt()}%" else "${loudness.roundToInt()}%"},onStart=remember,wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f})
+        col.addView(masterDial, LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
+        masterUiRefreshers.add {
+            masterDial.setValueExternally(if(title=="BASS BOOST") bassBoost else loudness)
+        }
         return col
     }
 
@@ -1303,6 +1308,12 @@ class MainActivity : Activity() {
         },{"${compMakeup.roundToInt()}%"},wheelMultiplier={if(mouseWheelAdjustOn)mouseWheelSensitivity else 1f}),
             LinearLayout.LayoutParams(-1,masterDialHeight()).apply{topMargin=dp(6)})
         return col
+    }
+
+    private fun refreshMasterControls() {
+        masterUiRefreshers.forEach { refresh -> try { refresh() } catch (error: Exception) {
+            android.util.Log.w("FREQUALIZER_UI", "Master control refresh failed", error)
+        } }
     }
 
     private fun refreshBandControls() {
