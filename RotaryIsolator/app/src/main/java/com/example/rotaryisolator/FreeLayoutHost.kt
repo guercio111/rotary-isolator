@@ -631,8 +631,8 @@ internal class FreeLayoutHost(
             "UNDO" -> undo()
             "REDO" -> redo()
             "CENTRA" -> centerSelected()
-            "SALVA" -> { saveProfile(); Toast.makeText(context, "Layout salvato", Toast.LENGTH_SHORT).show() }
-            "ESPORTA" -> { saveProfile(); exportProjectAction?.invoke() }
+            "SALVA" -> { Toast.makeText(context, if (saveProfile()) "Layout salvato e verificato" else "Salvataggio non riuscito: layout non modificato", Toast.LENGTH_SHORT).show() }
+            "ESPORTA" -> { if (saveProfile()) exportProjectAction?.invoke() else Toast.makeText(context, "Esportazione annullata: prima salva un layout valido", Toast.LENGTH_LONG).show() }
             "IMPORTA" -> importProjectAction?.invoke()
             "NASCONDI" -> toolbarCollapsed = true
             "RETURN" -> setEditMode(false)
