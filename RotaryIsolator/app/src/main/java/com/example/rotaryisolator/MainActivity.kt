@@ -282,6 +282,8 @@ class MainActivity : Activity() {
     }
     private val captureRequestCode = 7420
     private val capturePermissionRequestCode = 7421
+    private val layoutExportRequestCode = 7422
+    private val layoutImportRequestCode = 7423
     private var audioReady = false
     private var appEnabled = true
     private var defaultSettingsOnStart = true
@@ -933,6 +935,10 @@ class MainActivity : Activity() {
         )
         val freeHost = FreeLayoutHost(this, layoutProfile, uiLayoutProfileStore)
         freeLayoutHost = freeHost
+        freeHost.setProjectActions(
+            onExport = { launchLayoutProjectExport() },
+            onImport = { launchLayoutProjectImport() }
+        )
         container.addView(freeHost, FrameLayout.LayoutParams(-1,-1,Gravity.TOP or Gravity.START))
         setContentView(container)
         container.addOnLayoutChangeListener { view,_,_,_,_,_,_,_,_ ->
@@ -2569,9 +2575,67 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun launchLayoutProjectExport() {
+        val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(android.content.Intent.EXTRA_TITLE, "FREQUALIZER-layout-project.json")
+        }
+        try {
+            startActivityForResult(intent, layoutExportRequestCode)
+        } catch (error: Exception) {
+            Toast.makeText(this, "Impossibile aprire il salvataggio file: ${error.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun launchLayoutProjectImport() {
+        AlertDialog.Builder(this)
+            .setTitle("IMPORTA PROGETTO")
+            .setMessage("L'importazione sostituirà i quattro layout attualmente salvati. Prima puoi annullare; esporta un backup se vuoi conservare anche la versione attuale.")
+            .setNegativeButton("ANNULLA", null)
+            .setPositiveButton("CONTINUA") { _, _ ->
+                val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                    type = "application/json"
+                }
+                try {
+                    startActivityForResult(intent, layoutImportRequestCode)
+                } catch (error: Exception) {
+                    Toast.makeText(this, "Impossibile aprire i file: ${error.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+            .show()
+    }
+
     @Deprecated("Deprecated in Android API  Activity Result migration is not required for this diagnostic")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == layoutExportRequestCode) {
+            if (resultCode != RESULT_OK || data?.data == null) return
+            try {
+                freeLayoutHost?.saveProfile()
+                val project = uiLayoutProfileStore.exportProject()
+                contentResolver.openOutputStream(data.data!!)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(project) }
+                    ?: throw IllegalStateException("Impossibile creare il file")
+                Toast.makeText(this, "Progetto esportato: tutti e quattro i layout sono al sicuro", Toast.LENGTH_LONG).show()
+            } catch (error: Exception) {
+                Toast.makeText(this, "Esportazione non riuscita: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+            return
+        }
+        if (requestCode == layoutImportRequestCode) {
+            if (resultCode != RESULT_OK || data?.data == null) return
+            try {
+                val json = contentResolver.openInputStream(data.data!!)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                    ?: throw IllegalStateException("Impossibile leggere il file")
+                val count = uiLayoutProfileStore.importProject(json)
+                freeLayoutHost?.reloadProfile()
+                Toast.makeText(this, "Progetto importato: $count elementi ripristinati nei quattro layout", Toast.LENGTH_LONG).show()
+            } catch (error: Exception) {
+                Toast.makeText(this, "Importazione annullata: ${error.message}", Toast.LENGTH_LONG).show()
+            }
+            return
+        }
         if (requestCode != captureRequestCode) return
         if (resultCode != RESULT_OK || data == null) {
             captureConsentLocked = true
