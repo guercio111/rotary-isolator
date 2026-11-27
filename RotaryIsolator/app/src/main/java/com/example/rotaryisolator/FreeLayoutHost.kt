@@ -23,6 +23,51 @@ import kotlin.math.roundToInt
  * Precision layout editor. The editor changes view geometry only; it never
  * changes audio parameters, listeners, DSP or effect state.
  */
+/** A component may expose the actual visible bounds inside its Android layout view. */
+internal interface FreeLayoutVisualBoundsProvider {
+    fun freeLayoutVisualBounds(): RectF
+}
+
+/** Keeps a full Android view intact while exposing only its visible content bounds to the editor. */
+private class VisualBoundsFrame(
+    context: Context,
+    private val content: View,
+    private val baseWidth: Int,
+    private val baseHeight: Int,
+    private val visualBounds: RectF
+) : FrameLayout(context) {
+    private var contentScaleX = 1f
+    private var contentScaleY = 1f
+
+    init {
+        clipChildren = false
+        clipToPadding = false
+        addView(content, LayoutParams(baseWidth, baseHeight))
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val targetWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(1)
+        val targetHeight = MeasureSpec.getSize(heightMeasureSpec).coerceAtLeast(1)
+        setMeasuredDimension(targetWidth, targetHeight)
+        content.measure(
+            MeasureSpec.makeMeasureSpec(baseWidth, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(baseHeight, MeasureSpec.EXACTLY)
+        )
+        contentScaleX = targetWidth / visualBounds.width().coerceAtLeast(1f)
+        contentScaleY = targetHeight / visualBounds.height().coerceAtLeast(1f)
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        content.layout(0, 0, baseWidth, baseHeight)
+        content.pivotX = 0f
+        content.pivotY = 0f
+        content.scaleX = contentScaleX
+        content.scaleY = contentScaleY
+        content.translationX = -visualBounds.left * contentScaleX
+        content.translationY = -visualBounds.top * contentScaleY
+    }
+}
+
 internal class FreeLayoutHost(
     context: Context,
     private val profile: UiLayoutProfile,
@@ -79,51 +124,6 @@ internal class FreeLayoutHost(
         isClickable = true
     }
 
-
-/** A component may expose the actual visible bounds inside its Android layout view. */
-internal interface FreeLayoutVisualBoundsProvider {
-    fun freeLayoutVisualBounds(): RectF
-}
-
-/** Keeps a full Android view intact while exposing only its visible content bounds to the editor. */
-private class VisualBoundsFrame(
-    context: Context,
-    private val content: View,
-    private val baseWidth: Int,
-    private val baseHeight: Int,
-    private val visualBounds: RectF
-) : FrameLayout(context) {
-    private var contentScaleX = 1f
-    private var contentScaleY = 1f
-
-    init {
-        clipChildren = false
-        clipToPadding = false
-        addView(content, LayoutParams(baseWidth, baseHeight))
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val targetWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(1)
-        val targetHeight = MeasureSpec.getSize(heightMeasureSpec).coerceAtLeast(1)
-        setMeasuredDimension(targetWidth, targetHeight)
-        content.measure(
-            MeasureSpec.makeMeasureSpec(baseWidth, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(baseHeight, MeasureSpec.EXACTLY)
-        )
-        contentScaleX = targetWidth / visualBounds.width().coerceAtLeast(1f)
-        contentScaleY = targetHeight / visualBounds.height().coerceAtLeast(1f)
-    }
-
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        content.layout(0, 0, baseWidth, baseHeight)
-        content.pivotX = 0f
-        content.pivotY = 0f
-        content.scaleX = contentScaleX
-        content.scaleY = contentScaleY
-        content.translationX = -visualBounds.left * contentScaleX
-        content.translationY = -visualBounds.top * contentScaleY
-    }
-}
 
     /** Extract independent visible controls from the initial legacy layout tree. */
     fun adoptLaidOutTree(source: ViewGroup, referenceScale: Float = 1f) {
