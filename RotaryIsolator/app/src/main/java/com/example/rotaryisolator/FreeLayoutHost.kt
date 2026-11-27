@@ -803,8 +803,15 @@ internal class FreeLayoutHost(
         var maxFactor = Float.MAX_VALUE
         if (halfW > 0f) maxFactor = minOf(maxFactor, centerX / halfW, (1f - centerX) / halfW)
         if (halfH > 0f) maxFactor = minOf(maxFactor, centerY / halfH, (1f - centerY) / halfH)
+        // Minimum element size is a lower bound only when shrinking.
+        // Applying it to growth could turn a 1% step into a multi-fold jump
+        // whenever one selected element is currently smaller than 0.02.
         val minFactor = targets.maxOf { maxOf(0.02f / it.width, 0.02f / it.height) }
-        val factor = requestedFactor.coerceIn(minFactor, maxFactor.coerceAtLeast(minFactor))
+        val factor = if (requestedFactor < 1f) {
+            requestedFactor.coerceAtLeast(minFactor).coerceAtMost(1f)
+        } else {
+            requestedFactor.coerceAtMost(maxFactor.coerceAtLeast(1f))
+        }
 
         rememberUndo()
         targets.forEach { old ->
