@@ -71,6 +71,36 @@ private class VisualBoundsFrame(
         content.translationX = -visualBounds.left * scale
         content.translationY = -visualBounds.top * scale
     }
+
+    /**
+     * Schema-v1 projects store only normalized bounds, not the original text
+     * metrics. If those metrics changed between app builds, restoring the old
+     * rectangle can magnify a label several times. Keep imported plain text at
+     * its native size (or smaller), honoring an explicit size preset up to its
+     * documented scale. The resulting placement still matches the visible text.
+     */
+    fun safeImportedTextPlacement(
+        placement: UiElementPlacement,
+        hostWidth: Int,
+        hostHeight: Int
+    ): UiElementPlacement? {
+        if (content !is TextView || content is Button) return null
+        val w = hostWidth.coerceAtLeast(1).toFloat()
+        val h = hostHeight.coerceAtLeast(1).toFloat()
+        val naturalWidth = visualBounds.width().coerceAtLeast(1f)
+        val naturalHeight = visualBounds.height().coerceAtLeast(1f)
+        val presetMax = floatArrayOf(0.65f, 0.8f, 1f, 1.2f, 1.4f, 1.6f)
+            .getOrElse(placement.sizePreset.coerceIn(0, 5)) { 1f }
+        val scale = minOf(
+            presetMax,
+            placement.width * w / naturalWidth,
+            placement.height * h / naturalHeight
+        ).coerceAtLeast(0.0001f)
+        return placement.copy(
+            width = naturalWidth * scale / w,
+            height = naturalHeight * scale / h
+        ).normalized()
+    }
 }
 
 internal class FreeLayoutHost(
@@ -299,6 +329,19 @@ internal class FreeLayoutHost(
     fun reloadProfile() {
         placements.clear()
         placements.putAll(store.load(profile))
+        // Legacy JSON does not contain the source text metrics. Reconcile plain
+        // text placements against the current native text bounds after import.
+        val hostWidth = width.coerceAtLeast(1)
+        val hostHeight = height.coerceAtLeast(1)
+        for (index in 0 until childCount) {
+            val child = getChildAt(index)
+            val id = child.tag as? String ?: continue
+            val saved = placements[id] ?: continue
+            val safe = (child as? VisualBoundsFrame)
+                ?.safeImportedTextPlacement(saved, hostWidth, hostHeight)
+            if (safe != null) placements[id] = safe
+        }
+        store.save(profile, placements.values.toList())
         selectedIds.clear()
         selectedId = null
         selectingArea = false
@@ -636,8 +679,8 @@ internal class FreeLayoutHost(
             stored.copy(
                 x = (view.left / hostW).coerceIn(0f, 1f),
                 y = (view.top / hostH).coerceIn(0f, 1f),
-                width = (view.width / hostW).coerceIn(0.01f, 1f),
-                height = (view.height / hostH).coerceIn(0.01f, 1f)
+                width = (view.width / hostW).coerceIn(0.0001f, 1f),
+                height = (view.height / hostH).coerceIn(0.0001f, 1f)
             ).normalized()
         }
     }
@@ -806,7 +849,7 @@ internal class FreeLayoutHost(
         // Minimum element size is a lower bound only when shrinking.
         // Applying it to growth could turn a 1% step into a multi-fold jump
         // whenever one selected element is currently smaller than 0.02.
-        val minFactor = targets.maxOf { maxOf(0.02f / it.width, 0.02f / it.height) }
+        val minFactor = targets.maxOf { maxOf(0.0001f / it.width, 0.0001f / it.height) }
         val factor = if (requestedFactor < 1f) {
             requestedFactor.coerceAtLeast(minFactor).coerceAtMost(1f)
         } else {
@@ -822,8 +865,8 @@ internal class FreeLayoutHost(
             placements[old.elementId] = old.copy(
                 x = newX.coerceIn(0f, 1f - newWidth),
                 y = newY.coerceIn(0f, 1f - newHeight),
-                width = newWidth.coerceIn(0.02f, 1f),
-                height = newHeight.coerceIn(0.02f, 1f)
+                width = newWidth.coerceIn(0.0001f, 1f),
+                height = newHeight.coerceIn(0.0001f, 1f)
             ).normalized()
         }
         requestLayout(); invalidate(); saveProfile()
@@ -901,8 +944,8 @@ internal class FreeLayoutHost(
             if (view == null) placement else placement.copy(
                 x = (view.left / hostWidth).coerceIn(0f, 1f),
                 y = (view.top / hostHeight).coerceIn(0f, 1f),
-                width = (view.width / hostWidth).coerceIn(0.01f, 1f),
-                height = (view.height / hostHeight).coerceIn(0.01f, 1f)
+                width = (view.width / hostWidth).coerceIn(0.0001f, 1f),
+                height = (view.height / hostHeight).coerceIn(0.0001f, 1f)
             )
         }
     }
