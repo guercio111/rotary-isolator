@@ -33,6 +33,7 @@ internal class FreeLayoutHost(
     private var selectedId: String? = null
     private val selectedIds = LinkedHashSet<String>()
     private var selectionMode = false
+    private var manualMultiSelectionMode = false
     private var selectionStartX = 0f
     private var selectionStartY = 0f
     private var selectionEndX = 0f
@@ -45,7 +46,7 @@ internal class FreeLayoutHost(
     private val gridStep get() = 16f * resources.displayMetrics.density
     private val expandedRailWidth get() = 108f * resources.displayMetrics.density
     private val railWidth get() = if (toolbarCollapsed) 30f * resources.displayMetrics.density else expandedRailWidth
-    private val toolbarLabels = listOf("ELEMENTI", "AREA", "SPOSTA", "DIMENS.", "GRIGLIA", "AGGANCIO", "UNDO", "REDO", "CENTRA", "SALVA", "NASCONDI", "RETURN")
+    private val toolbarLabels = listOf("ELEMENTI", "MULTI", "AREA", "SPOSTA", "DIMENS.", "ELIMINA", "GRIGLIA", "AGGANCIO", "UNDO", "REDO", "CENTRA", "SALVA", "NASCONDI", "RETURN")
     private val railPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEE171B22.toInt(); style = Paint.Style.FILL }
     private val buttonPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF303943.toInt(); style = Paint.Style.FILL }
     private val activePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF9B7417.toInt(); style = Paint.Style.FILL }
@@ -147,6 +148,7 @@ internal class FreeLayoutHost(
             selectedIds.clear()
             selectingArea = false
             selectionMode = false
+            manualMultiSelectionMode = false
             saveProfile()
         }
         invalidate()
@@ -204,8 +206,15 @@ internal class FreeLayoutHost(
                         child.visibility == View.VISIBLE && event.x >= child.left && event.x <= child.right &&
                             event.y >= child.top && event.y <= child.bottom
                     }
-                selectedIds.clear()
-                (picked?.tag as? String)?.let { selectedIds.add(it) }
+                val pickedId = picked?.tag as? String
+                if (manualMultiSelectionMode) {
+                    if (pickedId != null) {
+                        if (!selectedIds.add(pickedId)) selectedIds.remove(pickedId)
+                    }
+                } else {
+                    selectedIds.clear()
+                    pickedId?.let { selectedIds.add(it) }
+                }
                 selectedId = selectedIds.firstOrNull()
                 invalidate()
                 return true
@@ -231,8 +240,8 @@ internal class FreeLayoutHost(
                         val child = getChildAt(i)
                         val id = child.tag as? String ?: continue
                         if (child.visibility == View.VISIBLE &&
-                            child.right >= left && child.left <= right &&
-                            child.bottom >= top && child.top <= bottom) selectedIds.add(id)
+                            child.left >= left && child.right <= right &&
+                            child.top >= top && child.bottom <= bottom) selectedIds.add(id)
                     }
                     selectedId = selectedIds.firstOrNull()
                     selectingArea = false
@@ -288,8 +297,10 @@ internal class FreeLayoutHost(
     }
 
     private fun buttonHeight(): Float {
-        val available = height - 12f * resources.displayMetrics.density
-        return (available / toolbarLabels.size).coerceIn(27f * resources.displayMetrics.density, 43f * resources.displayMetrics.density)
+        val density = resources.displayMetrics.density
+        val gap = 2f * density
+        val available = height - 10f * density - gap * (toolbarLabels.size - 1)
+        return (available / toolbarLabels.size).coerceIn(18f * density, 43f * density)
     }
 
     private fun drawEditorToolbar(canvas: Canvas) {
@@ -305,7 +316,8 @@ internal class FreeLayoutHost(
         var top = 5f * resources.displayMetrics.density
         toolbarLabels.forEach { label ->
             val active = (label == "GRIGLIA" && showGrid) ||
-                (label == "AGGANCIO" && snapEnabled) || (label == "AREA" && selectionMode)
+                (label == "AGGANCIO" && snapEnabled) || (label == "AREA" && selectionMode) ||
+                (label == "MULTI" && manualMultiSelectionMode)
             canvas.drawRoundRect(left + 5f, top, width - 5f, top + bh, 6f, 6f, if (active) activePaint else buttonPaint)
             canvas.drawText(label, left + railWidth / 2f, top + bh / 2f + textPaint.textSize / 3f, textPaint)
             top += bh + gap
@@ -325,13 +337,24 @@ internal class FreeLayoutHost(
         if (index !in toolbarLabels.indices) return true
         when (toolbarLabels[index]) {
             "ELEMENTI" -> showElementPicker()
+            "MULTI" -> {
+                manualMultiSelectionMode = !manualMultiSelectionMode
+                selectionMode = false
+                selectingArea = false
+                selectedIds.clear()
+                selectedId = null
+                Toast.makeText(context, if (manualMultiSelectionMode) "Tocca gli elementi per aggiungerli o toglierli dal gruppo" else "Selezione multipla manuale disattivata", Toast.LENGTH_SHORT).show()
+            }
             "AREA" -> {
                 selectionMode = !selectionMode
+                manualMultiSelectionMode = false
                 selectingArea = false
+                if (selectionMode) { selectedIds.clear(); selectedId = null }
                 Toast.makeText(context, if (selectionMode) "Traccia un rettangolo per selezionare più elementi" else "Selezione area disattivata", Toast.LENGTH_SHORT).show()
             }
             "SPOSTA" -> showMoveControls()
             "DIMENS." -> showSizeControls()
+            "ELIMINA" -> deleteSelectedElements()
             "GRIGLIA" -> showGrid = !showGrid
             "AGGANCIO" -> snapEnabled = !snapEnabled
             "UNDO" -> undo()
@@ -358,19 +381,50 @@ internal class FreeLayoutHost(
         val entries = (0 until childCount).mapNotNull { index ->
             val view = getChildAt(index)
             val id = view.tag as? String ?: return@mapNotNull null
-            "${elementTitle(view)}  ·  ${index + 1}" to id
+            val hidden = placements[id]?.visible == false
+            "${elementTitle(view)}${if (hidden) "  (NASCOSTO)" else ""}  ·  ${index + 1}" to id
         }
         if (entries.isEmpty()) return
         AlertDialog.Builder(context)
             .setTitle("SELEZIONA ELEMENTO")
             .setItems(entries.map { it.first }.toTypedArray()) { _, which ->
+                val id = entries[which].second
+                val placement = placements[id]
+                if (placement?.visible == false) {
+                    rememberUndo()
+                    placements[id] = placement.copy(visible = true).normalized()
+                    saveProfile()
+                    requestLayout()
+                    Toast.makeText(context, "Elemento ripristinato", Toast.LENGTH_SHORT).show()
+                }
                 selectedIds.clear()
-                selectedIds.add(entries[which].second)
-                selectedId = entries[which].second
+                selectedIds.add(id)
+                selectedId = id
                 invalidate()
             }
             .setNegativeButton("CHIUDI", null)
             .show()
+    }
+
+    private fun deleteSelectedElements() {
+        val targets = selectedPlacements().filter { it.visible }
+        if (targets.isEmpty()) {
+            Toast.makeText(context, "Seleziona prima gli elementi da eliminare", Toast.LENGTH_SHORT).show()
+            return
+        }
+        rememberUndo()
+        targets.forEach { placement ->
+            placements[placement.elementId] = placement.copy(visible = false).normalized()
+            findElement(placement.elementId)?.visibility = View.GONE
+        }
+        selectedIds.clear()
+        selectedId = null
+        selectionMode = false
+        manualMultiSelectionMode = false
+        requestLayout()
+        invalidate()
+        saveProfile()
+        Toast.makeText(context, "${targets.size} elemento/i rimosso/i dal layout. Ripristino da ELEMENTI.", Toast.LENGTH_LONG).show()
     }
 
     private fun requireSelection(): Pair<String, UiElementPlacement>? {
