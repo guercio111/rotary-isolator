@@ -165,7 +165,7 @@ internal class FreeLayoutHost(
         if (width <= 0 || height <= 0) return
         val hostLocation = IntArray(2)
         getLocationOnScreen(hostLocation)
-        data class Candidate(val view: View, val geometry: View, val proposedId: String, val visualBounds: RectF? = null, val screenX: Int, val screenY: Int, val width: Int, val height: Int)
+        data class Candidate(val view: View, val geometry: View, val proposedId: String, val legacyId: String, val visualBounds: RectF? = null, val screenX: Int, val screenY: Int, val width: Int, val height: Int)
         val candidates = ArrayList<Candidate>()
 
         fun takeDecorations(view: View): Pair<android.graphics.drawable.Drawable?, android.graphics.drawable.Drawable?> {
@@ -220,9 +220,14 @@ internal class FreeLayoutHost(
                     ?: (candidateView as? TextView)?.let { text -> textViewVisualBounds(text) }
                 val screen = IntArray(2)
                 candidateView.getLocationOnScreen(screen)
+                // New IDs are based on the stable position in the source view tree,
+                // never on visible text that can change after FLAT/RETURN or a toggle.
+                // Keep the old text/description-derived ID as a one-time import alias.
+                val stablePath = path.replace('/', '_')
                 candidates.add(Candidate(candidateView, candidateView,
-                    "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}", visualBounds,
-                    screen[0], screen[1], candidateView.width, candidateView.height))
+                    "element_${candidateView.javaClass.simpleName.lowercase()}_path_${stablePath}",
+                    "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}",
+                    visualBounds, screen[0], screen[1], candidateView.width, candidateView.height))
             }
             fun hasTextDescendant(parent: ViewGroup): Boolean {
                 for (childIndex in 0 until parent.childCount) {
@@ -252,8 +257,8 @@ internal class FreeLayoutHost(
                         }
                         val screen = IntArray(2)
                         view.getLocationOnScreen(screen)
-                        candidates.add(Candidate(decoration, view, "__visual_decoration__${path}", null,
-                            screen[0], screen[1], view.width, view.height))
+                        candidates.add(Candidate(decoration, view, "__visual_decoration__${path}",
+                            "__visual_decoration__${path}", null, screen[0], screen[1], view.width, view.height))
                     }
                 }
                 // A visual-bounds control (for example RotaryControl) is one
@@ -282,10 +287,20 @@ internal class FreeLayoutHost(
 
         for (index in 0 until source.childCount) collect(source.getChildAt(index), index.toString())
         val usedIds = HashSet<String>()
+        val usedLegacyIds = HashSet<String>()
         candidates.forEach { candidate ->
             var elementId = candidate.proposedId
             var suffix = 2
             while (!usedIds.add(elementId)) elementId = "${candidate.proposedId}_${suffix++}"
+            var legacyId = candidate.legacyId
+            var legacySuffix = 2
+            while (!usedLegacyIds.add(legacyId)) legacyId = "${candidate.legacyId}_${legacySuffix++}"
+            // Migrate a pre-path ID the first time this element is adopted.
+            // Thereafter its identity is independent of the displayed text.
+            if (!placements.containsKey(elementId)) {
+                val legacyPlacement = placements.remove(legacyId)
+                if (legacyPlacement != null) placements[elementId] = legacyPlacement.copy(elementId = elementId)
+            }
             val bounds = candidate.visualBounds?.let { sourceBounds ->
                 RectF(
                     sourceBounds.left.coerceIn(0f, candidate.width.toFloat()),
