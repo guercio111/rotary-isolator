@@ -98,18 +98,37 @@ internal class FreeLayoutHost(
             fun hasInteractiveDescendant(parent: ViewGroup): Boolean {
                 for (childIndex in 0 until parent.childCount) {
                     val child = parent.getChildAt(childIndex)
-                    if (child.isClickable || child.isLongClickable || child.isFocusable) return true
+                    if (child.visibility == View.VISIBLE &&
+                        (child.isClickable || child.isLongClickable || child.isFocusable || child.hasOnClickListeners())) return true
                     val nested = child as? ViewGroup
                     if (nested != null && hasInteractiveDescendant(nested)) return true
                 }
                 return false
             }
-            // A clickable wrapper often spans an entire section. When it contains
-            // real controls, expose those controls individually instead of giving
-            // the wrapper an oversized selection/movement rectangle.
+            fun hasSubstantiallySmallerContent(parent: ViewGroup): Boolean {
+                val visibleChildren = (0 until parent.childCount).map { parent.getChildAt(it) }
+                    .filter { it.visibility == View.VISIBLE && it.width > 0 && it.height > 0 }
+                if (visibleChildren.isEmpty()) return false
+                val left = visibleChildren.minOf { it.left }
+                val top = visibleChildren.minOf { it.top }
+                val right = visibleChildren.maxOf { it.right }
+                val bottom = visibleChildren.maxOf { it.bottom }
+                val unionWidth = (right - left).coerceAtLeast(0).toFloat()
+                val unionHeight = (bottom - top).coerceAtLeast(0).toFloat()
+                val parentArea = (parent.width.toFloat() * parent.height.toFloat()).coerceAtLeast(1f)
+                val contentArea = unionWidth * unionHeight
+                // Do not treat a full-width/full-height wrapper as the selectable
+                // item when its visible controls occupy only a smaller part of it.
+                return unionWidth < parent.width * 0.88f ||
+                    unionHeight < parent.height * 0.88f ||
+                    contentArea < parentArea * 0.72f
+            }
+            // Expand oversized clickable/layout wrappers into their real child
+            // controls. This keeps each selection rectangle and movement limit
+            // tied to the control itself rather than a full-width parent panel.
             val keepAsUnit = view !== source && (group == null ||
                 ((view.isClickable || view.isLongClickable || view.isFocusable) &&
-                    !hasInteractiveDescendant(group)))
+                    !hasInteractiveDescendant(group) && !hasSubstantiallySmallerContent(group)))
             if (group != null && !keepAsUnit) {
                 val (backgroundArtwork, foregroundArtwork) = takeDecorations(view)
                 if (backgroundArtwork != null || foregroundArtwork != null) {
