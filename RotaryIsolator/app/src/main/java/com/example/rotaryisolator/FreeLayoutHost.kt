@@ -3,6 +3,7 @@ package com.example.rotaryisolator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
 import android.view.MotionEvent
@@ -78,12 +79,58 @@ internal class FreeLayoutHost(
         isClickable = true
     }
 
+
+/** A component may expose the actual visible bounds inside its Android layout view. */
+internal interface FreeLayoutVisualBoundsProvider {
+    fun freeLayoutVisualBounds(): RectF
+}
+
+/** Keeps a full Android view intact while exposing only its visible content bounds to the editor. */
+private class VisualBoundsFrame(
+    context: Context,
+    private val content: View,
+    private val baseWidth: Int,
+    private val baseHeight: Int,
+    private val visualBounds: RectF
+) : FrameLayout(context) {
+    private var contentScaleX = 1f
+    private var contentScaleY = 1f
+
+    init {
+        clipChildren = false
+        clipToPadding = false
+        addView(content, LayoutParams(baseWidth, baseHeight))
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val targetWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(1)
+        val targetHeight = MeasureSpec.getSize(heightMeasureSpec).coerceAtLeast(1)
+        setMeasuredDimension(targetWidth, targetHeight)
+        content.measure(
+            MeasureSpec.makeMeasureSpec(baseWidth, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(baseHeight, MeasureSpec.EXACTLY)
+        )
+        contentScaleX = targetWidth / visualBounds.width().coerceAtLeast(1f)
+        contentScaleY = targetHeight / visualBounds.height().coerceAtLeast(1f)
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        content.layout(0, 0, baseWidth, baseHeight)
+        content.pivotX = 0f
+        content.pivotY = 0f
+        content.scaleX = contentScaleX
+        content.scaleY = contentScaleY
+        content.translationX = -visualBounds.left * contentScaleX
+        content.translationY = -visualBounds.top * contentScaleY
+    }
+}
+
     /** Extract independent visible controls from the initial legacy layout tree. */
     fun adoptLaidOutTree(source: ViewGroup, referenceScale: Float = 1f) {
         if (width <= 0 || height <= 0) return
         val hostLocation = IntArray(2)
         getLocationOnScreen(hostLocation)
-        data class Candidate(val view: View, val geometry: View, val proposedId: String)
+        data class Candidate(val view: View, val geometry: View, val proposedId: String, val visualBounds: RectF? = null)
         val candidates = ArrayList<Candidate>()
 
         fun takeDecorations(view: View): Pair<android.graphics.drawable.Drawable?, android.graphics.drawable.Drawable?> {
@@ -126,7 +173,8 @@ internal class FreeLayoutHost(
             // Expand oversized clickable/layout wrappers into their real child
             // controls. This keeps each selection rectangle and movement limit
             // tied to the control itself rather than a full-width parent panel.
-            val keepAsUnit = view !== source && (group == null ||
+            val visualProvider = view as? FreeLayoutVisualBoundsProvider
+            val keepAsUnit = view !== source && (visualProvider != null || group == null ||
                 ((view.isClickable || view.isLongClickable || view.isFocusable) &&
                     !hasInteractiveDescendant(group) && !hasSubstantiallySmallerContent(group)))
             if (group != null && !keepAsUnit) {
@@ -148,7 +196,9 @@ internal class FreeLayoutHost(
                     view.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
                     ?: (view as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
                     ?: view.javaClass.simpleName.lowercase()
-                candidates.add(Candidate(view, view, "element_${view.javaClass.simpleName.lowercase()}_${stablePart}"))
+                val visualBounds = visualProvider?.freeLayoutVisualBounds()
+                    ?: (view as? TextView)?.let { text -> textViewVisualBounds(text) }
+                candidates.add(Candidate(view, view, "element_${view.javaClass.simpleName.lowercase()}_${stablePart}", visualBounds))
             }
         }
 
@@ -160,18 +210,31 @@ internal class FreeLayoutHost(
             while (!usedIds.add(elementId)) elementId = "${candidate.proposedId}_${suffix++}"
             val location = IntArray(2)
             candidate.geometry.getLocationOnScreen(location)
-            val left = (location[0] - hostLocation[0]).toFloat()
-            val top = (location[1] - hostLocation[1]).toFloat()
+            val bounds = candidate.visualBounds?.let { sourceBounds ->
+                RectF(
+                    sourceBounds.left.coerceIn(0f, candidate.geometry.width.toFloat()),
+                    sourceBounds.top.coerceIn(0f, candidate.geometry.height.toFloat()),
+                    sourceBounds.right.coerceIn(0f, candidate.geometry.width.toFloat()),
+                    sourceBounds.bottom.coerceIn(0f, candidate.geometry.height.toFloat())
+                ).takeIf { it.width() >= 1f && it.height() >= 1f }
+            }
+            val left = (location[0] - hostLocation[0]).toFloat() + (bounds?.left ?: 0f) * referenceScale
+            val top = (location[1] - hostLocation[1]).toFloat() + (bounds?.top ?: 0f) * referenceScale
+            val visualWidth = (bounds?.width() ?: candidate.geometry.width.toFloat()) * referenceScale
+            val visualHeight = (bounds?.height() ?: candidate.geometry.height.toFloat()) * referenceScale
             val placement = UiElementPlacement(
                 elementId,
                 (left / width).coerceIn(0f, 0.99f),
                 (top / height).coerceIn(0f, 0.99f),
-                (candidate.geometry.width * referenceScale / width).coerceIn(0.01f, 1f),
-                (candidate.geometry.height * referenceScale / height).coerceIn(0.01f, 1f),
+                (visualWidth / width).coerceIn(0.01f, 1f),
+                (visualHeight / height).coerceIn(0.01f, 1f),
                 (candidate.geometry.elevation + candidate.geometry.translationZ).roundToInt()
             ).normalized()
             (candidate.view.parent as? ViewGroup)?.removeView(candidate.view)
-            addElement(elementId, candidate.view, placement)
+            val editorView = if (bounds != null) VisualBoundsFrame(
+                context, candidate.view, candidate.geometry.width, candidate.geometry.height, bounds
+            ) else candidate.view
+            addElement(elementId, editorView, placement)
         }
         requestLayout()
     }
@@ -231,6 +294,33 @@ internal class FreeLayoutHost(
 
     private var exportProjectAction: (() -> Unit)? = null
     private var importProjectAction: (() -> Unit)? = null
+
+
+    private fun textViewVisualBounds(view: TextView): RectF? {
+        if (view.width <= 0 || view.height <= 0 || view.text.isNullOrEmpty()) return null
+        if (view.background != null || view.compoundDrawables.any { it != null }) return null
+        val lines = view.text.toString().split('\n')
+        val textWidth = lines.maxOfOrNull { view.paint.measureText(it) } ?: return null
+        if (textWidth < 1f) return null
+        val metrics = view.paint.fontMetrics
+        val lineHeight = (metrics.descent - metrics.ascent).coerceAtLeast(1f)
+        val textHeight = lineHeight * lines.size
+        val horizontal = view.gravity and Gravity.HORIZONTAL_GRAVITY_MASK
+        val x = when (horizontal) {
+            Gravity.CENTER_HORIZONTAL -> (view.width - textWidth) / 2f
+            Gravity.RIGHT -> view.width - view.paddingRight - textWidth
+            else -> view.paddingLeft.toFloat()
+        }
+        val vertical = view.gravity and Gravity.VERTICAL_GRAVITY_MASK
+        val y = when (vertical) {
+            Gravity.CENTER_VERTICAL -> (view.height - textHeight) / 2f
+            Gravity.BOTTOM -> view.height - view.paddingBottom - textHeight
+            else -> view.paddingTop.toFloat()
+        }
+        return RectF(x.coerceAtLeast(0f), y.coerceAtLeast(0f),
+            (x + textWidth).coerceAtMost(view.width.toFloat()),
+            (y + textHeight).coerceAtMost(view.height.toFloat()))
+    }
 
     private fun isSelectableElement(id: String): Boolean = !id.startsWith("__visual_decoration__")
 
