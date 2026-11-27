@@ -499,6 +499,23 @@ internal class FreeLayoutHost(
 
     private fun isSelectableElement(id: String): Boolean = !id.startsWith("__visual_decoration__")
 
+    private var toolbarTouchCaptured = false
+
+    // The toolbar is drawn by this host rather than being a child View. Route
+    // touches in its rail directly here before any adopted app control can
+    // consume them, even when an imported layout places a control underneath.
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (editMode && (toolbarTouchCaptured || event.x >= width - railWidth)) {
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) toolbarTouchCaptured = true
+            val handled = onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                toolbarTouchCaptured = false
+            }
+            return handled
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean = editMode
 
     /** Tap selects only. Position changes are performed through the precision controls. */
