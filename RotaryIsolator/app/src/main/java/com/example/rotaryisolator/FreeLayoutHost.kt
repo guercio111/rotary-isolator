@@ -226,8 +226,14 @@ internal class FreeLayoutHost(
                 // never on visible text that can change after FLAT/RETURN or a toggle.
                 // Keep the old text/description-derived ID as a one-time import alias.
                 val stablePath = path.replace('/', '_')
+                val semanticId = candidateView.contentDescription?.toString()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.lowercase()
+                    ?.replace(Regex("[^a-z0-9]+"), "_")
+                    ?.trim('_')
+                val stableId = semanticId?.let { "element_desc_${it}" } ?: "element_path_${stablePath}"
                 candidates.add(Candidate(candidateView, candidateView,
-                    "element_path_${stablePath}",
+                    stableId,
                     "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}",
                     visualBounds, screen[0], screen[1], candidateView.width, candidateView.height))
             }
