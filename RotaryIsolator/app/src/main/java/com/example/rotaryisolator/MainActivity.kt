@@ -1189,7 +1189,7 @@ class MainActivity : Activity() {
         if (key == "ISOLATOR") {
             // The imported layout may place FLAT close to LIMITER. Keep FLAT's
             // own touch target on top so it cannot toggle the neighbouring limiter.
-            sectionFlatButton.elevation = dp(8f)
+            sectionFlatButton.elevation = dp(8).toFloat()
             sectionFlatButton.bringToFront()
         }
         header.addView(headerControls,if(compactHeader)LinearLayout.LayoutParams(-1,dp(36)) else if(useVerticalRows)LinearLayout.LayoutParams(-2,dp(44)).apply { gravity=Gravity.CENTER_HORIZONTAL } else LinearLayout.LayoutParams(-1,dp(44)))
