@@ -112,6 +112,8 @@ internal class FreeLayoutHost(
     private val placements = LinkedHashMap<String, UiElementPlacement>()
     // Maps legacy text-derived JSON IDs to the current path-based control IDs.
     private val legacyIdAliases = HashMap<String, String>()
+    private val legacyPartAliases = HashMap<String, String>()
+    private val ambiguousLegacyParts = HashSet<String>()
     private val undoHistory = ArrayDeque<Map<String, UiElementPlacement>>()
     private val redoHistory = ArrayDeque<Map<String, UiElementPlacement>>()
     private var editMode = false
@@ -304,6 +306,16 @@ internal class FreeLayoutHost(
             var legacySuffix = 2
             while (!usedLegacyIds.add(legacyId)) legacyId = "${candidate.legacyId}_${legacySuffix++}"
             legacyIdAliases[legacyId] = elementId
+            // Also support old IDs when a view changed class (for example rotary to
+            // slider). Only use this text/description suffix when it is unambiguous.
+            val legacyPart = legacyId.removePrefix("element_").substringAfter('_', "")
+            if (legacyPart.isNotBlank() && legacyPart !in ambiguousLegacyParts) {
+                val previousTarget = legacyPartAliases.putIfAbsent(legacyPart, elementId)
+                if (previousTarget != null && previousTarget != elementId) {
+                    legacyPartAliases.remove(legacyPart)
+                    ambiguousLegacyParts.add(legacyPart)
+                }
+            }
             // Migrate a pre-path ID the first time this element is adopted.
             // Thereafter its identity is independent of the displayed text.
             if (!placements.containsKey(elementId)) {
@@ -405,7 +417,10 @@ internal class FreeLayoutHost(
         if (imported.isNotEmpty()) {
             val migrated = LinkedHashMap<String, UiElementPlacement>()
             imported.forEach { (importedId, placement) ->
-                val stableId = legacyIdAliases[importedId] ?: importedId
+                val legacyPart = importedId.removePrefix("element_").substringAfter('_', "")
+                val stableId = legacyIdAliases[importedId]
+                    ?: legacyPartAliases[legacyPart]
+                    ?: importedId
                 migrated[stableId] = placement.copy(elementId = stableId)
             }
             placements.clear()
