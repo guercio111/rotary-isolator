@@ -234,7 +234,55 @@ internal class FreeLayoutHost(
             // tied to the control itself rather than a full-width parent panel.
             val visualProvider = view as? FreeLayoutVisualBoundsProvider
             fun addCandidate(candidateView: View) {
-                if (candidateView.width <= 0 || candidateView.height <= 0) return
+                // A zero-sized child can still be a real, wired control (for example
+                // a weighted key in a horizontal LinearLayout). Do not silently omit
+                // it from the Designer: infer its initial native bounds from its
+                // parent layout and keep the original View/listeners.
+                val parent = candidateView.parent as? ViewGroup
+                val params = candidateView.layoutParams
+                fun inferredSize(horizontal: Boolean): Int {
+                    val measured = if (horizontal) candidateView.width else candidateView.height
+                    if (measured > 0) return measured
+                    val requested = if (horizontal) params?.width ?: 0 else params?.height ?: 0
+                    if (requested > 0) return requested
+                    val parentSize = if (horizontal) parent?.width ?: 0 else parent?.height ?: 0
+                    if (requested == ViewGroup.LayoutParams.MATCH_PARENT && parentSize > 0) {
+                        val padding = if (horizontal) {
+                            (parent?.paddingLeft ?: 0) + (parent?.paddingRight ?: 0)
+                        } else {
+                            (parent?.paddingTop ?: 0) + (parent?.paddingBottom ?: 0)
+                        }
+                        return (parentSize - padding).coerceAtLeast(dp(1))
+                    }
+                    val linear = parent as? LinearLayout
+                    val isWeightedAxis = linear != null &&
+                        ((horizontal && linear.orientation == LinearLayout.HORIZONTAL) ||
+                         (!horizontal && linear.orientation == LinearLayout.VERTICAL))
+                    val weight = (params as? LinearLayout.LayoutParams)?.weight ?: 0f
+                    if (isWeightedAxis && weight > 0f && parentSize > 0) {
+                        var fixed = if (horizontal) linear!!.paddingLeft + linear.paddingRight
+                            else linear!!.paddingTop + linear.paddingBottom
+                        var totalWeight = 0f
+                        for (index in 0 until linear.childCount) {
+                            val sibling = linear.getChildAt(index)
+                            val lp = sibling.layoutParams
+                            val axisSize = if (horizontal) lp.width else lp.height
+                            val margins = (lp as? LinearLayout.LayoutParams)?.let {
+                                if (horizontal) it.leftMargin + it.rightMargin else it.topMargin + it.bottomMargin
+                            } ?: 0
+                            val siblingWeight = (lp as? LinearLayout.LayoutParams)?.weight ?: 0f
+                            if (siblingWeight > 0f && axisSize == 0) totalWeight += siblingWeight
+                            else if (axisSize > 0) fixed += axisSize
+                            fixed += margins
+                        }
+                        val available = (parentSize - fixed).coerceAtLeast(dp(1))
+                        if (totalWeight > 0f) return (available * weight / totalWeight).roundToInt().coerceAtLeast(dp(1))
+                    }
+                    return dp(48)
+                }
+                val baseWidth = inferredSize(true)
+                val baseHeight = inferredSize(false)
+                if (baseWidth <= 0 || baseHeight <= 0) return
                 val stablePart = if (candidateView.id != View.NO_ID) "id_${candidateView.id}" else
                     candidateView.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
                     ?: (candidateView as? TextView)?.text?.toString()?.takeIf { it.isNotBlank() }?.lowercase()?.replace(Regex("[^a-z0-9]+"), "_")
@@ -257,7 +305,7 @@ internal class FreeLayoutHost(
                 candidates.add(Candidate(candidateView, candidateView,
                     stableId,
                     "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}",
-                    visualBounds, screen[0], screen[1], candidateView.width, candidateView.height))
+                    visualBounds, screen[0], screen[1], baseWidth, baseHeight))
             }
             fun hasTextDescendant(parent: ViewGroup): Boolean {
                 for (childIndex in 0 until parent.childCount) {
@@ -310,7 +358,7 @@ internal class FreeLayoutHost(
                 } else {
                     for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
                 }
-            } else if (view !== source && view.width > 0 && view.height > 0) {
+            } else if (view !== source) {
                 addCandidate(view)
             }
         }
