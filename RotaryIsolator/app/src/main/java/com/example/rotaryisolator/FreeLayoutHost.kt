@@ -48,7 +48,7 @@ internal class FreeLayoutHost(
     private val gridStep get() = 16f * resources.displayMetrics.density
     private val expandedRailWidth get() = 108f * resources.displayMetrics.density
     private val railWidth get() = if (toolbarCollapsed) 30f * resources.displayMetrics.density else expandedRailWidth
-    private val toolbarLabels = listOf("ELEMENTI", "MULTI", "AREA", "SPOSTA", "DIMENS.", "ELIMINA", "GRIGLIA", "AGGANCIO", "UNDO", "REDO", "CENTRA", "SALVA", "NASCONDI", "RETURN")
+    private val toolbarLabels = listOf("ELEMENTI", "MULTI", "AREA", "SPOSTA", "DIMENS.", "ELIMINA", "GRIGLIA", "AGGANCIO", "UNDO", "REDO", "CENTRA", "SALVA", "ESPORTA", "IMPORTA", "NASCONDI", "RETURN")
     private val railPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEE171B22.toInt(); style = Paint.Style.FILL }
     private val buttonPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF303943.toInt(); style = Paint.Style.FILL }
     private val activePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF9B7417.toInt(); style = Paint.Style.FILL }
@@ -95,7 +95,21 @@ internal class FreeLayoutHost(
 
         fun collect(view: View, path: String) {
             val group = view as? ViewGroup
-            val keepAsUnit = view !== source && (group == null || view.isClickable || view.isLongClickable || view.isFocusable)
+            fun hasInteractiveDescendant(parent: ViewGroup): Boolean {
+                for (childIndex in 0 until parent.childCount) {
+                    val child = parent.getChildAt(childIndex)
+                    if (child.isClickable || child.isLongClickable || child.isFocusable) return true
+                    val nested = child as? ViewGroup
+                    if (nested != null && hasInteractiveDescendant(nested)) return true
+                }
+                return false
+            }
+            // A clickable wrapper often spans an entire section. When it contains
+            // real controls, expose those controls individually instead of giving
+            // the wrapper an oversized selection/movement rectangle.
+            val keepAsUnit = view !== source && (group == null ||
+                ((view.isClickable || view.isLongClickable || view.isFocusable) &&
+                    !hasInteractiveDescendant(group)))
             if (group != null && !keepAsUnit) {
                 val (backgroundArtwork, foregroundArtwork) = takeDecorations(view)
                 if (backgroundArtwork != null || foregroundArtwork != null) {
@@ -181,6 +195,24 @@ internal class FreeLayoutHost(
     fun saveProfile() = store.save(profile, placements.values.toList())
     fun allPlacements(): List<UiElementPlacement> = placements.values.toList()
 
+    fun setProjectActions(onExport: () -> Unit, onImport: () -> Unit) {
+        exportProjectAction = onExport
+        importProjectAction = onImport
+    }
+
+    fun reloadProfile() {
+        placements.clear()
+        placements.putAll(store.load(profile))
+        selectedIds.clear()
+        selectedId = null
+        selectingArea = false
+        requestLayout()
+        invalidate()
+    }
+
+    private var exportProjectAction: (() -> Unit)? = null
+    private var importProjectAction: (() -> Unit)? = null
+
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean = editMode
 
     /** Tap selects only. Position changes are performed through the precision controls. */
@@ -239,22 +271,17 @@ internal class FreeLayoutHost(
                     val top = minOf(selectionStartY, selectionEndY)
                     val bottom = maxOf(selectionStartY, selectionEndY)
                     selectedIds.clear()
-                    val hostW = width.coerceAtLeast(1).toFloat()
-                    val hostH = height.coerceAtLeast(1).toFloat()
-                    // Use the same normalized placement geometry used by the layout engine.
-                    // This keeps area selection aligned with the visible element bounds.
+                    val tolerance = 2f * resources.displayMetrics.density
                     for (i in 0 until childCount) {
                         val child = getChildAt(i)
                         val id = child.tag as? String ?: continue
-                        val placement = placements[id] ?: continue
-                        if (child.visibility != View.VISIBLE || !placement.visible) continue
-                        val childLeft = placement.x * hostW
-                        val childTop = placement.y * hostH
-                        val childRight = childLeft + placement.width * hostW
-                        val childBottom = childTop + placement.height * hostH
-                        val tolerance = resources.displayMetrics.density
-                        if (childLeft >= left - tolerance && childRight <= right + tolerance &&
-                            childTop >= top - tolerance && childBottom <= bottom + tolerance) {
+                        if (child.visibility != View.VISIBLE) continue
+                        // Use the exact bounds used by the selection outline and
+                        // movement controls; the center must fall inside the marquee.
+                        val centerX = (child.left + child.right) * 0.5f
+                        val centerY = (child.top + child.bottom) * 0.5f
+                        if (centerX >= left - tolerance && centerX <= right + tolerance &&
+                            centerY >= top - tolerance && centerY <= bottom + tolerance) {
                             selectedIds.add(id)
                         }
                     }
@@ -377,6 +404,8 @@ internal class FreeLayoutHost(
             "REDO" -> redo()
             "CENTRA" -> centerSelected()
             "SALVA" -> { saveProfile(); Toast.makeText(context, "Layout salvato", Toast.LENGTH_SHORT).show() }
+            "ESPORTA" -> { saveProfile(); exportProjectAction?.invoke() }
+            "IMPORTA" -> importProjectAction?.invoke()
             "NASCONDI" -> toolbarCollapsed = true
             "RETURN" -> setEditMode(false)
         }
@@ -398,10 +427,10 @@ internal class FreeLayoutHost(
         dialog.setOnShowListener {
             dialog.window?.let { window ->
                 window.setDimAmount(0f)
-                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-                window.setBackgroundDrawable(ColorDrawable(0xE6171B22.toInt()))
-                // A slight window alpha lets the layout remain visible behind controls.
-                window.decorView.alpha = 0.94f
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                window.setBackgroundDrawable(ColorDrawable(0xB8171B22.toInt()))
+                // Keep the controls legible while making the underlying layout visible.
+                window.decorView.alpha = 0.86f
             }
         }
         dialog.show()
