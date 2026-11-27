@@ -778,12 +778,42 @@ internal class FreeLayoutHost(
         Toast.makeText(context, "${targets.size} elemento/i rimosso/i dal layout. Ripristino da ELEMENTI.", Toast.LENGTH_LONG).show()
     }
 
+    /**
+     * Resolve the selected control's geometry. Imported/legacy controls can be
+     * visibly selectable even when their stable ID has no placement entry yet.
+     * In that case adopt the real laid-out child bounds instead of silently
+     * aborting SPOSTA/DIMENS.
+     */
+    private fun placementForElement(id: String): UiElementPlacement? {
+        placements[id]?.let { return it }
+        val view = findElement(id) ?: return null
+        val hostW = width.coerceAtLeast(1).toFloat()
+        val hostH = height.coerceAtLeast(1).toFloat()
+        val recovered = UiElementPlacement(
+            elementId = id,
+            x = (view.left / hostW).coerceIn(0f, 0.99f),
+            y = (view.top / hostH).coerceIn(0f, 0.99f),
+            width = (view.width.coerceAtLeast(1) / hostW).coerceIn(0.0001f, 1f),
+            height = (view.height.coerceAtLeast(1) / hostH).coerceIn(0.0001f, 1f),
+            visible = view.visibility == View.VISIBLE
+        ).normalized()
+        placements[id] = recovered
+        android.util.Log.w("FREQUALIZER_LAYOUT", "Recovered missing placement for selected element: $id")
+        return recovered
+    }
+
     private fun requireSelection(): Pair<String, UiElementPlacement>? {
-        val id = selectedIds.firstOrNull() ?: selectedId ?: run {
+        val id = selectedIds.firstOrNull { isSelectableElement(it) }
+            ?: selectedId?.takeIf { isSelectableElement(it) }
+        if (id == null) {
             Toast.makeText(context, "Prima seleziona uno o più elementi", Toast.LENGTH_SHORT).show()
             return null
         }
-        val placement = placements[id] ?: return null
+        val placement = placementForElement(id)
+        if (placement == null) {
+            Toast.makeText(context, "Impossibile recuperare la posizione dell'elemento selezionato", Toast.LENGTH_LONG).show()
+            return null
+        }
         return id to placement
     }
 
@@ -793,7 +823,7 @@ internal class FreeLayoutHost(
         val hostW = width.coerceAtLeast(1).toFloat()
         val hostH = height.coerceAtLeast(1).toFloat()
         return ids.mapNotNull { id ->
-            val stored = placements[id] ?: return@mapNotNull null
+            val stored = placementForElement(id) ?: return@mapNotNull null
             val view = findElement(id) ?: return@mapNotNull stored
             if (view.visibility != View.VISIBLE || view.width <= 0 || view.height <= 0) return@mapNotNull stored
             // Reconcile geometry against the actual laid-out view so movement limits
