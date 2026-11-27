@@ -119,4 +119,86 @@ internal class UiLayoutProfileStore(context: Context) {
     fun clear(profile: UiLayoutProfile) {
         preferences.edit().remove(profile.storageKey).apply()
     }
+
+    /** Export every device/orientation profile as one versioned, portable project. */
+    fun exportProject(): String {
+        val profiles = JSONObject()
+        UiLayoutProfile.values().forEach { profile ->
+            val placements = JSONObject()
+            load(profile).values.forEach { placement ->
+                val item = placement.normalized()
+                placements.put(item.elementId, JSONObject()
+                    .put("x", item.x.toDouble())
+                    .put("y", item.y.toDouble())
+                    .put("width", item.width.toDouble())
+                    .put("height", item.height.toDouble())
+                    .put("zOrder", item.zOrder)
+                    .put("sizePreset", item.sizePreset)
+                    .put("visible", item.visible))
+            }
+            profiles.put(profile.storageKey, placements)
+        }
+        return JSONObject()
+            .put("format", "FREQUALIZER_LAYOUT_PROJECT")
+            .put("schemaVersion", 1)
+            .put("profiles", profiles)
+            .toString(2)
+    }
+
+    /**
+     * Validate the entire project before writing anything. The preferences update
+     * is committed atomically and touches only this layout store, never audio prefs.
+     */
+    fun importProject(json: String): Int {
+        require(json.length <= 5_000_000) { "File progetto troppo grande" }
+        val root = JSONObject(json)
+        require(root.optString("format") == "FREQUALIZER_LAYOUT_PROJECT") { "Formato progetto non riconosciuto" }
+        require(root.optInt("schemaVersion", -1) == 1) { "Versione progetto non supportata" }
+        val profiles = root.optJSONObject("profiles")
+            ?: throw IllegalArgumentException("Profili layout mancanti")
+        val parsed = LinkedHashMap<UiLayoutProfile, String>()
+        var total = 0
+        UiLayoutProfile.values().forEach { profile ->
+            val source = profiles.optJSONObject(profile.storageKey)
+                ?: throw IllegalArgumentException("Profilo mancante: ${profile.storageKey}")
+            val clean = JSONObject()
+            val keys = source.keys()
+            while (keys.hasNext()) {
+                val id = keys.next()
+                require(id.isNotBlank() && id.length <= 240) { "ID elemento non valido" }
+                val item = source.optJSONObject(id)
+                    ?: throw IllegalArgumentException("Dati elemento non validi: $id")
+                val placement = UiElementPlacement(
+                    elementId = id,
+                    x = item.getDouble("x").toFloat(),
+                    y = item.getDouble("y").toFloat(),
+                    width = item.getDouble("width").toFloat(),
+                    height = item.getDouble("height").toFloat(),
+                    zOrder = item.optInt("zOrder", 0),
+                    sizePreset = item.optInt("sizePreset", 2),
+                    visible = item.optBoolean("visible", true)
+                )
+                require(placement.x.isFinite() && placement.y.isFinite() &&
+                    placement.width.isFinite() && placement.height.isFinite()) {
+                    "Coordinate non valide per $id"
+                }
+                val safe = placement.normalized()
+                clean.put(id, JSONObject()
+                    .put("x", safe.x.toDouble())
+                    .put("y", safe.y.toDouble())
+                    .put("width", safe.width.toDouble())
+                    .put("height", safe.height.toDouble())
+                    .put("zOrder", safe.zOrder)
+                    .put("sizePreset", safe.sizePreset)
+                    .put("visible", safe.visible))
+                total++
+                require(total <= 5000) { "Troppi elementi nel progetto" }
+            }
+            parsed[profile] = clean.toString()
+        }
+        val editor = preferences.edit()
+        parsed.forEach { (profile, value) -> editor.putString(profile.storageKey, value) }
+        check(editor.commit()) { "Impossibile salvare il progetto importato" }
+        return total
+    }
 }
