@@ -864,14 +864,60 @@ internal class FreeLayoutHost(
         val bottom = targets.maxOf { it.y + it.height }
         val groupWidth = (right - left).coerceAtLeast(0.02f)
         val groupHeight = (bottom - top).coerceAtLeast(0.02f)
-        val widthChange = if (dw != 0f) dw / groupWidth else 0f
-        val heightChange = if (dh != 0f) dh / groupHeight else 0f
-        val factor = when {
-            dw != 0f && dh == 0f -> 1f + widthChange
-            dh != 0f && dw == 0f -> 1f + heightChange
-            else -> 1f + (widthChange + heightChange) / 2f
+        // Horizontal and vertical resizing are independent. In particular,
+        // increasing the height of a multi-selected keyboard must not silently
+        // turn into a uniform resize or change only its width.
+        val scaleX = if (dw != 0f) 1f + dw / groupWidth else 1f
+        val scaleY = if (dh != 0f) 1f + dh / groupHeight else 1f
+        resizeSelectedByAxes(scaleX, scaleY)
+    }
+
+    /** Resize a selection independently on each axis around its group centre. */
+    private fun resizeSelectedByAxes(requestedScaleX: Float, requestedScaleY: Float) {
+        val targets = selectedPlacements()
+        if (targets.isEmpty()) { requireSelection(); return }
+        val hostW = width.coerceAtLeast(1).toFloat()
+        val hostH = height.coerceAtLeast(1).toFloat()
+        val rects = targets.map { item ->
+            floatArrayOf(item.x * hostW, item.y * hostH,
+                (item.x + item.width) * hostW, (item.y + item.height) * hostH)
         }
-        resizeSelectedByFactor(factor)
+        val left = rects.minOf { it[0] }
+        val top = rects.minOf { it[1] }
+        val right = rects.maxOf { it[2] }
+        val bottom = rects.maxOf { it[3] }
+        val centerX = (left + right) * 0.5f
+        val centerY = (top + bottom) * 0.5f
+        val halfW = (right - left) * 0.5f
+        val halfH = (bottom - top) * 0.5f
+        val minScaleX = rects.indices.maxOf { index ->
+            0.5f / (rects[index][2] - rects[index][0]).coerceAtLeast(0.5f)
+        }
+        val minScaleY = rects.indices.maxOf { index ->
+            0.5f / (rects[index][3] - rects[index][1]).coerceAtLeast(0.5f)
+        }
+        val maxScaleX = if (halfW > 0f) minOf(centerX / halfW, (hostW - centerX) / halfW) else 1f
+        val maxScaleY = if (halfH > 0f) minOf(centerY / halfH, (hostH - centerY) / halfH) else 1f
+        val scaleX = requestedScaleX.coerceIn(minScaleX, maxScaleX.coerceAtLeast(1f))
+        val scaleY = requestedScaleY.coerceIn(minScaleY, maxScaleY.coerceAtLeast(1f))
+
+        rememberUndo()
+        targets.forEachIndexed { index, old ->
+            val rect = rects[index]
+            val newWidthPx = (rect[2] - rect[0]) * scaleX
+            val newHeightPx = (rect[3] - rect[1]) * scaleY
+            val newLeftPx = centerX + (rect[0] - centerX) * scaleX
+            val newTopPx = centerY + (rect[1] - centerY) * scaleY
+            placements[old.elementId] = old.copy(
+                x = (newLeftPx / hostW).coerceIn(0f, 1f),
+                y = (newTopPx / hostH).coerceIn(0f, 1f),
+                width = (newWidthPx / hostW).coerceIn(0.0001f, 1f),
+                height = (newHeightPx / hostH).coerceIn(0.0001f, 1f)
+            ).normalized()
+        }
+        requestLayout()
+        invalidate()
+        saveProfile()
     }
 
     /** Scale selected items uniformly in physical pixels around the group centre. */
