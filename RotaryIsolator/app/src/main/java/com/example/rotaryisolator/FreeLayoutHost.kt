@@ -227,7 +227,7 @@ internal class FreeLayoutHost(
                 // Keep the old text/description-derived ID as a one-time import alias.
                 val stablePath = path.replace('/', '_')
                 candidates.add(Candidate(candidateView, candidateView,
-                    "element_${candidateView.javaClass.simpleName.lowercase()}_path_${stablePath}",
+                    "element_path_${stablePath}",
                     "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}",
                     visualBounds, screen[0], screen[1], candidateView.width, candidateView.height))
             }
