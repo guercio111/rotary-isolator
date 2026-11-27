@@ -1286,7 +1286,13 @@ class MainActivity : Activity() {
         return col
     }
 
-    private fun refreshUi(){ buildUi() }
+    private fun refreshUi(){
+        // FLAT/RETURN and other state buttons rebuild the native control tree.
+        // Persist the current free-layout placements first so the replacement
+        // host reloads the user's exact geometry instead of reverting to defaults.
+        freeLayoutHost?.saveProfile()
+        buildUi()
+    }
 
     private fun resetAllControls(){
         for(i in 0..3){eq[i]=0f;previousEq[i]=0f;sectionPreviousEq[i]=0f}
