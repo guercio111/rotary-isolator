@@ -229,9 +229,18 @@ internal class FreeLayoutHost(
                 (candidate.geometry.elevation + candidate.geometry.translationZ).roundToInt()
             ).normalized()
             (candidate.view.parent as? ViewGroup)?.removeView(candidate.view)
-            val editorView = if (bounds != null) VisualBoundsFrame(
-                context, candidate.view, candidate.geometry.width, candidate.geometry.height, bounds
-            ) else candidate.view
+            // Every selectable item gets an independent, non-scaling frame.
+            // DIMENS changes only this editor frame; the original Android view
+            // keeps its measured size, canvas, text metrics and touch geometry.
+            val frameBounds = bounds ?: RectF(
+                0f, 0f,
+                candidate.geometry.width.toFloat(),
+                candidate.geometry.height.toFloat()
+            )
+            val editorView = VisualBoundsFrame(
+                context, candidate.view, candidate.geometry.width,
+                candidate.geometry.height, frameBounds
+            )
             addElement(elementId, editorView, placement)
         }
         requestLayout()
