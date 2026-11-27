@@ -2663,9 +2663,15 @@ class MainActivity : Activity() {
             try {
                 val json = contentResolver.openInputStream(data.data!!)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
                     ?: throw IllegalStateException("Impossibile leggere il file")
-                val count = uiLayoutProfileStore.importProject(json)
+                val configuration = resources.configuration
+                val currentProfile = UiLayoutProfile.detect(
+                    configuration.smallestScreenWidthDp,
+                    configuration.screenWidthDp,
+                    configuration.screenHeightDp
+                )
+                val count = uiLayoutProfileStore.importProject(json, currentProfile)
                 freeLayoutHost?.reloadProfile()
-                Toast.makeText(this, "Progetto importato: $count elementi ripristinati nei quattro layout", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Progetto importato: $count elementi ripristinati", Toast.LENGTH_LONG).show()
             } catch (error: Exception) {
                 Toast.makeText(this, "Importazione annullata: ${error.message}", Toast.LENGTH_LONG).show()
             }
