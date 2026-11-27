@@ -165,7 +165,7 @@ internal class FreeLayoutHost(
         if (width <= 0 || height <= 0) return
         val hostLocation = IntArray(2)
         getLocationOnScreen(hostLocation)
-        data class Candidate(val view: View, val geometry: View, val proposedId: String, val visualBounds: RectF? = null)
+        data class Candidate(val view: View, val geometry: View, val proposedId: String, val visualBounds: RectF? = null, val screenX: Int, val screenY: Int, val width: Int, val height: Int)
         val candidates = ArrayList<Candidate>()
 
         fun takeDecorations(view: View): Pair<android.graphics.drawable.Drawable?, android.graphics.drawable.Drawable?> {
@@ -218,8 +218,11 @@ internal class FreeLayoutHost(
                 val boundsProvider = candidateView as? FreeLayoutVisualBoundsProvider
                 val visualBounds = boundsProvider?.freeLayoutVisualBounds()
                     ?: (candidateView as? TextView)?.let { text -> textViewVisualBounds(text) }
+                val screen = IntArray(2)
+                candidateView.getLocationOnScreen(screen)
                 candidates.add(Candidate(candidateView, candidateView,
-                    "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}", visualBounds))
+                    "element_${candidateView.javaClass.simpleName.lowercase()}_${stablePart}", visualBounds,
+                    screen[0], screen[1], candidateView.width, candidateView.height))
             }
             fun hasTextDescendant(parent: ViewGroup): Boolean {
                 for (childIndex in 0 until parent.childCount) {
@@ -247,13 +250,17 @@ internal class FreeLayoutHost(
                             translationZ = view.translationZ
                             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                         }
-                        candidates.add(Candidate(decoration, view, "__visual_decoration__${path}"))
+                        val screen = IntArray(2)
+                        view.getLocationOnScreen(screen)
+                        candidates.add(Candidate(decoration, view, "__visual_decoration__${path}", null,
+                            screen[0], screen[1], view.width, view.height))
                     }
                 }
-                // Detach descendants before moving their parent into the host;
-                // this preserves their original screen coordinates during adoption.
-                for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
+                // Register the rotary/control before its labels so it remains a
+                // first-class selectable item. Candidate geometry is snapshotted
+                // immediately, before any ancestor is detached or reparented.
                 if (keepAsUnit) addCandidate(view)
+                for (index in 0 until group.childCount) collect(group.getChildAt(index), "$path/$index")
             } else if (view !== source && view.width > 0 && view.height > 0) {
                 addCandidate(view)
             }
@@ -265,20 +272,18 @@ internal class FreeLayoutHost(
             var elementId = candidate.proposedId
             var suffix = 2
             while (!usedIds.add(elementId)) elementId = "${candidate.proposedId}_${suffix++}"
-            val location = IntArray(2)
-            candidate.geometry.getLocationOnScreen(location)
             val bounds = candidate.visualBounds?.let { sourceBounds ->
                 RectF(
-                    sourceBounds.left.coerceIn(0f, candidate.geometry.width.toFloat()),
-                    sourceBounds.top.coerceIn(0f, candidate.geometry.height.toFloat()),
-                    sourceBounds.right.coerceIn(0f, candidate.geometry.width.toFloat()),
-                    sourceBounds.bottom.coerceIn(0f, candidate.geometry.height.toFloat())
+                    sourceBounds.left.coerceIn(0f, candidate.width.toFloat()),
+                    sourceBounds.top.coerceIn(0f, candidate.height.toFloat()),
+                    sourceBounds.right.coerceIn(0f, candidate.width.toFloat()),
+                    sourceBounds.bottom.coerceIn(0f, candidate.height.toFloat())
                 ).takeIf { it.width() >= 1f && it.height() >= 1f }
             }
-            val left = (location[0] - hostLocation[0]).toFloat() + (bounds?.left ?: 0f) * referenceScale
-            val top = (location[1] - hostLocation[1]).toFloat() + (bounds?.top ?: 0f) * referenceScale
-            val visualWidth = (bounds?.width() ?: candidate.geometry.width.toFloat()) * referenceScale
-            val visualHeight = (bounds?.height() ?: candidate.geometry.height.toFloat()) * referenceScale
+            val left = (candidate.screenX - hostLocation[0]).toFloat() + (bounds?.left ?: 0f) * referenceScale
+            val top = (candidate.screenY - hostLocation[1]).toFloat() + (bounds?.top ?: 0f) * referenceScale
+            val visualWidth = (bounds?.width() ?: candidate.width.toFloat()) * referenceScale
+            val visualHeight = (bounds?.height() ?: candidate.height.toFloat()) * referenceScale
             val placement = UiElementPlacement(
                 elementId,
                 (left / width).coerceIn(0f, 0.99f),
@@ -297,8 +302,8 @@ internal class FreeLayoutHost(
                 candidate.geometry.height.toFloat()
             )
             val editorView = VisualBoundsFrame(
-                context, candidate.view, candidate.geometry.width,
-                candidate.geometry.height, frameBounds
+                context, candidate.view, candidate.width,
+                candidate.height, frameBounds
             )
             addElement(elementId, editorView, placement)
         }
