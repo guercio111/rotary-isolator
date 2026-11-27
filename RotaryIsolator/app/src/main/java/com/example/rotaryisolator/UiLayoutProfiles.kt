@@ -102,7 +102,8 @@ internal class UiLayoutProfileStore(context: Context) {
         }
     }
 
-    fun save(profile: UiLayoutProfile, placements: Collection<UiElementPlacement>) {
+    fun save(profile: UiLayoutProfile, placements: Collection<UiElementPlacement>): Boolean {
+        if (placements.isEmpty()) return false
         val root = JSONObject()
         placements.forEach { placement ->
             if (placement.elementId.isBlank()) return@forEach
@@ -116,7 +117,10 @@ internal class UiLayoutProfileStore(context: Context) {
                 .put("sizePreset", item.sizePreset)
                 .put("visible", item.visible))
         }
-        preferences.edit().putString(profile.storageKey, root.toString()).apply()
+        if (root.length() == 0) return false
+        val serialized = root.toString()
+        val committed = preferences.edit().putString(profile.storageKey, serialized).commit()
+        return committed && preferences.getString(profile.storageKey, null) == serialized
     }
 
     fun clear(profile: UiLayoutProfile) {
@@ -141,10 +145,16 @@ internal class UiLayoutProfileStore(context: Context) {
             }
             profiles.put(profile.storageKey, placements)
         }
+        val counts = JSONObject()
+        UiLayoutProfile.values().forEach { profile ->
+            counts.put(profile.storageKey, profiles.optJSONObject(profile.storageKey)?.length() ?: 0)
+        }
         return JSONObject()
             .put("format", "FREQUALIZER_LAYOUT_PROJECT")
             .put("schemaVersion", 1)
             .put("profiles", profiles)
+            .put("elementCounts", counts)
+            .put("exportedAtUtc", java.time.Instant.now().toString())
             .toString(2)
     }
 
@@ -199,9 +209,46 @@ internal class UiLayoutProfileStore(context: Context) {
             }
             parsed[profile] = clean.toString()
         }
-        val editor = preferences.edit()
-        parsed.forEach { (profile, value) -> editor.putString(profile.storageKey, value) }
-        check(editor.commit()) { "Impossibile salvare il progetto importato" }
+        require(total > 0) { "Il progetto non contiene alcun elemento: nessun layout è stato modificato" }
+
+        // Preserve the complete pre-import state before touching any profile.
+        // Empty profiles are common when only one orientation has been edited;
+        // they must never erase an existing layout on this device.
+        val backup = JSONObject()
+        UiLayoutProfile.values().forEach { profile ->
+            val previous = preferences.getString(profile.storageKey, null)
+            if (previous != null) backup.put(profile.storageKey, previous)
+        }
+        val editor = preferences.edit().putString("last_import_backup_v1", backup.toString())
+        parsed.forEach { (profile, value) ->
+            if (JSONObject(value).length() > 0) editor.putString(profile.storageKey, value)
+        }
+        check(editor.commit()) { "Impossibile salvare il progetto importato; i layout precedenti sono rimasti invariati" }
+
+        // Verify every non-empty imported profile after the atomic commit.
+        parsed.forEach { (profile, value) ->
+            if (JSONObject(value).length() > 0) {
+                val stored = preferences.getString(profile.storageKey, null)
+                check(stored != null && JSONObject(stored).length() == JSONObject(value).length()) {
+                    "Verifica del profilo ${profile.storageKey} non riuscita"
+                }
+            }
+        }
         return total
+    }
+
+    /** Restore the full snapshot captured immediately before the last import. */
+    fun restoreLastImportBackup(): Boolean {
+        val raw = preferences.getString("last_import_backup_v1", null) ?: return false
+        val backup = JSONObject(raw)
+        val editor = preferences.edit()
+        UiLayoutProfile.values().forEach { profile ->
+            if (backup.has(profile.storageKey)) {
+                editor.putString(profile.storageKey, backup.getString(profile.storageKey))
+            } else {
+                editor.remove(profile.storageKey)
+            }
+        }
+        return editor.commit()
     }
 }
