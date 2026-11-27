@@ -154,7 +154,7 @@ internal class UiLayoutProfileStore(context: Context) {
             .put("schemaVersion", 1)
             .put("profiles", profiles)
             .put("elementCounts", counts)
-            .put("exportedAtUtc", java.time.Instant.now().toString())
+            .put("exportedAtEpochMs", System.currentTimeMillis())
             .toString(2)
     }
 
