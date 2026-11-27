@@ -110,6 +110,8 @@ internal class FreeLayoutHost(
 ) : FrameLayout(context) {
 
     private val placements = LinkedHashMap<String, UiElementPlacement>()
+    // Maps legacy text-derived JSON IDs to the current path-based control IDs.
+    private val legacyIdAliases = HashMap<String, String>()
     private val undoHistory = ArrayDeque<Map<String, UiElementPlacement>>()
     private val redoHistory = ArrayDeque<Map<String, UiElementPlacement>>()
     private var editMode = false
@@ -295,6 +297,7 @@ internal class FreeLayoutHost(
             var legacyId = candidate.legacyId
             var legacySuffix = 2
             while (!usedLegacyIds.add(legacyId)) legacyId = "${candidate.legacyId}_${legacySuffix++}"
+            legacyIdAliases[legacyId] = elementId
             // Migrate a pre-path ID the first time this element is adopted.
             // Thereafter its identity is independent of the displayed text.
             if (!placements.containsKey(elementId)) {
@@ -394,8 +397,13 @@ internal class FreeLayoutHost(
         // An empty profile means this orientation was not included in the
         // project yet. Never clear a working in-memory layout in that case.
         if (imported.isNotEmpty()) {
+            val migrated = LinkedHashMap<String, UiElementPlacement>()
+            imported.forEach { (importedId, placement) ->
+                val stableId = legacyIdAliases[importedId] ?: importedId
+                migrated[stableId] = placement.copy(elementId = stableId)
+            }
             placements.clear()
-            placements.putAll(imported)
+            placements.putAll(migrated)
         }
         // Keep imported geometry byte-for-byte (after normal validation).
         // In particular, do not shrink TextView placements to their current
