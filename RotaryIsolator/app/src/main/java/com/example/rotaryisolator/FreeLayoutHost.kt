@@ -614,10 +614,18 @@ internal class FreeLayoutHost(
                 val semanticPart = legacyPart
                     .replace(Regex("_\\d+(?:_\\d+)?"), "")
                     .replace(Regex("_(db|bpm|hz|percent)$"), "")
-                val stableId = legacyIdAliases[importedId]
-                    ?: legacyPartAliases[legacyPart]
-                    ?: legacySemanticAliases[semanticPart]
-                    ?: importedId
+                // Exact current IDs always win. Alias migration is only a fallback
+                // for older projects whose element IDs no longer exist in this layout.
+                // This prevents a legacy semantic alias from redirecting a BEAT key
+                // (especially division "2") onto a different control during import.
+                val stableId = if (placements.containsKey(importedId)) {
+                    importedId
+                } else {
+                    legacyIdAliases[importedId]
+                        ?: legacyPartAliases[legacyPart]
+                        ?: legacySemanticAliases[semanticPart]
+                        ?: importedId
+                }
                 migrated[stableId] = placement.copy(elementId = stableId)
             }
             // Imported coordinates win; controls absent from the JSON keep their
@@ -1136,6 +1144,28 @@ internal class FreeLayoutHost(
     private fun resizeSelectedByAxes(requestedScaleX: Float, requestedScaleY: Float) {
         val targets = selectedPlacements()
         if (targets.isEmpty()) { requireSelection(); return }
+
+        // A single control grows from its top-left anchor. This makes vertical
+        // enlargement reliable in portrait layouts, including controls near an
+        // edge: the previous centre-based clamp could leave the height unchanged.
+        // Width and height remain independent, and text itself is kept proportional
+        // by VisualBoundsFrame so button captions/digits are never stretched.
+        if (targets.size == 1) {
+            val old = targets.single()
+            val newWidth = (old.width * requestedScaleX)
+                .coerceIn(0.0001f, (1f - old.x).coerceAtLeast(0.0001f))
+            val newHeight = (old.height * requestedScaleY)
+                .coerceIn(0.0001f, (1f - old.y).coerceAtLeast(0.0001f))
+            if (kotlin.math.abs(newWidth - old.width) < 0.000001f &&
+                kotlin.math.abs(newHeight - old.height) < 0.000001f) return
+            rememberUndo()
+            placements[old.elementId] = old.copy(width = newWidth, height = newHeight).normalized()
+            requestLayout()
+            invalidate()
+            saveProfile()
+            return
+        }
+
         val hostW = width.coerceAtLeast(1).toFloat()
         val hostH = height.coerceAtLeast(1).toFloat()
         val rects = targets.map { item ->
