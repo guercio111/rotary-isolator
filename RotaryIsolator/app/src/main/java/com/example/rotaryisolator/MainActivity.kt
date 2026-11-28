@@ -942,6 +942,9 @@ class MainActivity : Activity() {
             configuration.screenWidthDp,
             configuration.screenHeightDp
         )
+        // Precarica i due layout tablet del progetto definitivo solo nei profili ancora vuoti.
+        // I layout già salvati dall'utente non vengono mai sovrascritti.
+        seedDefaultTabletLayoutsIfNeeded()
         val freeHost = FreeLayoutHost(this, layoutProfile, uiLayoutProfileStore)
         freeLayoutHost = freeHost
         freeHost.setProjectActions(
@@ -2666,6 +2669,45 @@ class MainActivity : Activity() {
             startActivityForResult(intent, layoutExportRequestCode)
         } catch (error: Exception) {
             Toast.makeText(this, "Impossibile aprire il salvataggio file: ${error.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * First-launch bootstrap for the definitive tablet project bundled with DESIGNER FREQUALIZER.
+     * Existing user profiles are preserved; only missing tablet orientations are initialized.
+     * This touches the dedicated layout store only, never audio/DSP preferences.
+     */
+    private fun seedDefaultTabletLayoutsIfNeeded() {
+        val bootstrap = getSharedPreferences("frequalizer_designer_default_layout_seed_v1", MODE_PRIVATE)
+        if (bootstrap.getBoolean("seeded", false)) return
+        try {
+            val json = assets.open("frequalizer-default-tablet-layout.json")
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val project = org.json.JSONObject(json)
+            val profiles = project.optJSONObject("profiles")
+                ?: throw IllegalStateException("Profili del layout predefinito mancanti")
+            val tabletProfiles = setOf(
+                UiLayoutProfile.TABLET_LANDSCAPE,
+                UiLayoutProfile.TABLET_PORTRAIT
+            )
+            var needsImport = false
+            UiLayoutProfile.values().forEach { profile ->
+                if (uiLayoutProfileStore.load(profile).isNotEmpty()) {
+                    // Keep the user's existing layout exactly as saved.
+                    profiles.put(profile.storageKey, org.json.JSONObject())
+                } else if (profile in tabletProfiles &&
+                    (profiles.optJSONObject(profile.storageKey)?.length() ?: 0) > 0) {
+                    needsImport = true
+                }
+            }
+            if (needsImport) {
+                val count = uiLayoutProfileStore.importProject(project.toString())
+                captureDiag("DESIGNER default tablet layouts loaded: $count elements")
+            }
+            bootstrap.edit().putBoolean("seeded", true).apply()
+        } catch (error: Exception) {
+            // Leave the marker unset so a later launch can retry if the bundled file is unavailable.
+            captureDiag("DESIGNER default tablet layout bootstrap failed: ${error.message}")
         }
     }
 

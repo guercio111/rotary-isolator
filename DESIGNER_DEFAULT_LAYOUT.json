@@ -1,0 +1,2438 @@
+{
+  "format": "FREQUALIZER_LAYOUT_PROJECT",
+  "schemaVersion": 2,
+  "profiles": {
+    "tablet_landscape": {
+      "element_desc_interruttore_generale_audio": {
+        "x": 0.014583333395421505,
+        "y": 0.034583333879709244,
+        "width": 0.06406249850988388,
+        "height": 0.04500000178813934,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_0_1_0": {
+        "x": 0.08437500149011612,
+        "y": 0.034583333879709244,
+        "width": 0.0703125,
+        "height": 0.04500000178813934,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_0_1_1": {
+        "x": 0.44713541865348816,
+        "y": 0.06499999761581421,
+        "width": 0.06093750149011612,
+        "height": 0.03166666626930237,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_impostazioni": {
+        "x": 0.9223958253860474,
+        "y": 0.03125,
+        "width": 0.04218750074505806,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_0_0_0": {
+        "x": 0.1924869865179062,
+        "y": 0.08912500739097595,
+        "width": 0.021770816296339035,
+        "height": 0.03245832771062851,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_on_off": {
+        "x": 0.22291666269302368,
+        "y": 0.08041665703058243,
+        "width": 0.05520833283662796,
+        "height": 0.050833333283662796,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_flat_all": {
+        "x": 0.2835807204246521,
+        "y": 0.07097917050123215,
+        "width": 0.04304687678813934,
+        "height": 0.06887499988079071,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_rotary_control": {
+        "x": 0.01523437537252903,
+        "y": 0.16729167103767395,
+        "width": 0.11015625298023224,
+        "height": 0.17624999582767487,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_label": {
+        "x": 0.05937499925494194,
+        "y": 0.3254166543483734,
+        "width": 0.02239583246409893,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_value": {
+        "x": 0.05781250074505806,
+        "y": 0.3454166650772095,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_high_return": {
+        "x": 0.02864583395421505,
+        "y": 0.3866666555404663,
+        "width": 0.03281249850988388,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_high_flat": {
+        "x": 0.0677083358168602,
+        "y": 0.3774999976158142,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_high_rotary_control": {
+        "x": 0.13710936903953552,
+        "y": 0.16729167103767395,
+        "width": 0.11015625298023224,
+        "height": 0.17624999582767487,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_high_label": {
+        "x": 0.17135415971279144,
+        "y": 0.3254166543483734,
+        "width": 0.0416666679084301,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_high_value": {
+        "x": 0.1796875,
+        "y": 0.3454166650772095,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_high_return": {
+        "x": 0.15052083134651184,
+        "y": 0.3866666555404663,
+        "width": 0.03281249850988388,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_high_flat": {
+        "x": 0.18958333134651184,
+        "y": 0.3774999976158142,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_low_rotary_control": {
+        "x": 0.25898438692092896,
+        "y": 0.16729167103767395,
+        "width": 0.11015625298023224,
+        "height": 0.17624999582767487,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_low_label": {
+        "x": 0.29479166865348816,
+        "y": 0.3254166543483734,
+        "width": 0.0390625,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_low_value": {
+        "x": 0.30156248807907104,
+        "y": 0.3454166650772095,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_low_return": {
+        "x": 0.2723958194255829,
+        "y": 0.3866666555404663,
+        "width": 0.03281249850988388,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_low_flat": {
+        "x": 0.3114583194255829,
+        "y": 0.3774999976158142,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_rotary_control": {
+        "x": 0.380859375,
+        "y": 0.16729167103767395,
+        "width": 0.11015625298023224,
+        "height": 0.17624999582767487,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_label": {
+        "x": 0.4260416626930237,
+        "y": 0.3254166543483734,
+        "width": 0.01979166641831398,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_value": {
+        "x": 0.4234375059604645,
+        "y": 0.3454166650772095,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_low_return": {
+        "x": 0.3942708373069763,
+        "y": 0.3866666555404663,
+        "width": 0.03281249850988388,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_low_flat": {
+        "x": 0.4333333373069763,
+        "y": 0.3774999976158142,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_0_1_0": {
+        "x": 0.594531238079071,
+        "y": 0.08666666597127914,
+        "width": 0.08906249701976776,
+        "height": 0.032499998807907104,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_on_off": {
+        "x": 0.698437511920929,
+        "y": 0.07791666686534882,
+        "width": 0.05572916567325592,
+        "height": 0.050833333283662796,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_limiter_on_off": {
+        "x": 0.7604166865348816,
+        "y": 0.07791666686534882,
+        "width": 0.09427083283662796,
+        "height": 0.050833333283662796,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_flat_all": {
+        "x": 0.860156238079071,
+        "y": 0.06916666775941849,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_rotary_control_2": {
+        "x": 0.5450521111488342,
+        "y": 0.16750000417232513,
+        "width": 0.11041666567325592,
+        "height": 0.17666666209697723,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_label_2": {
+        "x": 0.5901041626930237,
+        "y": 0.3254166543483734,
+        "width": 0.02239583246409893,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_value_2": {
+        "x": 0.5885416865348816,
+        "y": 0.3454166650772095,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_high_return": {
+        "x": 0.5591145753860474,
+        "y": 0.3866666555404663,
+        "width": 0.03281249850988388,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_high_flat": {
+        "x": 0.5981770753860474,
+        "y": 0.3774999976158142,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_rotary_control": {
+        "x": 0.6917968988418579,
+        "y": 0.16729167103767395,
+        "width": 0.11015625298023224,
+        "height": 0.17624999582767487,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_label": {
+        "x": 0.7385416626930237,
+        "y": 0.3254166543483734,
+        "width": 0.01718750037252903,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_value": {
+        "x": 0.734375,
+        "y": 0.3454166650772095,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_mid_return": {
+        "x": 0.7052083611488342,
+        "y": 0.3866666555404663,
+        "width": 0.03281249850988388,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_mid_flat": {
+        "x": 0.7442708611488342,
+        "y": 0.3774999976158142,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_rotary_control_2": {
+        "x": 0.8356770873069763,
+        "y": 0.16750000417232513,
+        "width": 0.11041666567325592,
+        "height": 0.17666666209697723,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_label_2": {
+        "x": 0.8812500238418579,
+        "y": 0.3254166543483734,
+        "width": 0.01979166641831398,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_value_2": {
+        "x": 0.8786458373069763,
+        "y": 0.3454166650772095,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_low_return": {
+        "x": 0.8492187261581421,
+        "y": 0.3866666555404663,
+        "width": 0.03281249850988388,
+        "height": 0.05249999836087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_low_flat": {
+        "x": 0.8919270634651184,
+        "y": 0.3774999976158142,
+        "width": 0.04374999925494194,
+        "height": 0.07000000029802322,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_0_0_0": {
+        "x": 0.06744791567325592,
+        "y": 0.4833333194255829,
+        "width": 0.04479166492819786,
+        "height": 0.024166665971279144,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_0_0_1_0_0": {
+        "x": 0.07968749850988388,
+        "y": 0.5400000214576721,
+        "width": 0.01822916604578495,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": false
+      },
+      "element_desc_hpf_rotary_control": {
+        "x": 0.03229166567325592,
+        "y": 0.5212499499320984,
+        "width": 0.10989583283662796,
+        "height": 0.1758333295583725,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_hpf_label": {
+        "x": 0.07968749850988388,
+        "y": 0.6837499737739563,
+        "width": 0.01770833320915699,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_hpf_value": {
+        "x": 0.08281250298023224,
+        "y": 0.7037500143051147,
+        "width": 0.01145833358168602,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_0_0_1_1_0": {
+        "x": 0.0598958320915699,
+        "y": 0.7566666603088379,
+        "width": 0.0572916679084301,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": false
+      },
+      "element_desc_resonance_rotary_control": {
+        "x": 0.04322916641831398,
+        "y": 0.7420833110809326,
+        "width": 0.09062500298023224,
+        "height": 0.14499999582767487,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_resonance_label": {
+        "x": 0.06145833432674408,
+        "y": 0.8787500262260437,
+        "width": 0.0546875,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_resonance_value": {
+        "x": 0.08281250298023224,
+        "y": 0.9012500047683716,
+        "width": 0.01145833358168602,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "__visual_decoration__1\/1\/1": {
+        "x": 0.17083333432674408,
+        "y": 0.48750001192092896,
+        "width": 0.8229166865348816,
+        "height": 0.48500001430511475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "__visual_decoration__1\/1\/1\/0": {
+        "x": 0.17083333432674408,
+        "y": 0.48750001192092896,
+        "width": 0.8229166865348816,
+        "height": 0.48500001430511475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_0_0_0": {
+        "x": 0.20598958432674408,
+        "y": 0.4833333194255829,
+        "width": 0.05312500149011612,
+        "height": 0.024166665971279144,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_0_0_1": {
+        "x": 0.2658854126930237,
+        "y": 0.4816666543483734,
+        "width": 0.0364583320915699,
+        "height": 0.027499999850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_send_rotary_control": {
+        "x": 0.16067709028720856,
+        "y": 0.5433333516120911,
+        "width": 0.09166666865348816,
+        "height": 0.14666666090488434,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_send_label": {
+        "x": 0.19453124701976776,
+        "y": 0.6825000047683716,
+        "width": 0.02395833283662796,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_send_value": {
+        "x": 0.20078125596046448,
+        "y": 0.7024999856948853,
+        "width": 0.01145833358168602,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_rotary_control": {
+        "x": 0.2580729126930237,
+        "y": 0.5433333516120911,
+        "width": 0.09218750149011612,
+        "height": 0.14749999344348907,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_label": {
+        "x": 0.2919270694255829,
+        "y": 0.6825000047683716,
+        "width": 0.02395833283662796,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_value": {
+        "x": 0.2955729067325592,
+        "y": 0.7024999856948853,
+        "width": 0.01666666753590107,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_0_1_1_0": {
+        "x": 0.1575520783662796,
+        "y": 0.7333333492279053,
+        "width": 0.04843749850988388,
+        "height": 0.2016666680574417,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_rotary_control": {
+        "x": 0.20911458134651184,
+        "y": 0.7441666722297668,
+        "width": 0.09218750149011612,
+        "height": 0.14749999344348907,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_label": {
+        "x": 0.23203125596046448,
+        "y": 0.878333330154419,
+        "width": 0.04583333432674408,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_value": {
+        "x": 0.24661459028720856,
+        "y": 0.9008333086967468,
+        "width": 0.01666666753590107,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_0_1_1_2": {
+        "x": 0.30390626192092896,
+        "y": 0.7333333492279053,
+        "width": 0.04895833507180214,
+        "height": 0.2016666680574417,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_0_1_2_0": {
+        "x": 0.1575520783662796,
+        "y": 0.9366666674613953,
+        "width": 0.06302083283662796,
+        "height": 0.03166666626930237,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_0_1_2_1": {
+        "x": 0.22317709028720856,
+        "y": 0.9366666674613953,
+        "width": 0.06354166567325592,
+        "height": 0.03166666626930237,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_0_1_2_2": {
+        "x": 0.2893229126930237,
+        "y": 0.9366666674613953,
+        "width": 0.06354166567325592,
+        "height": 0.03166666626930237,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_1": {
+        "x": 0.3596354126930237,
+        "y": 0.48750001192092896,
+        "width": 0.00989583320915699,
+        "height": 0.48500001430511475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_2_0_0": {
+        "x": 0.40234375,
+        "y": 0.4833333194255829,
+        "width": 0.09739582985639572,
+        "height": 0.024166665971279144,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_2_0_1": {
+        "x": 0.5023437142372131,
+        "y": 0.4816666543483734,
+        "width": 0.0364583320915699,
+        "height": 0.027499999850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_delay_level_rotary_control": {
+        "x": 0.3700520694255829,
+        "y": 0.5433333516120911,
+        "width": 0.09375,
+        "height": 0.15000000596046448,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_delay_level_label": {
+        "x": 0.3882812559604645,
+        "y": 0.6833333373069763,
+        "width": 0.0572916679084301,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_delay_level_value": {
+        "x": 0.4111979305744171,
+        "y": 0.7024999856948853,
+        "width": 0.01145833358168602,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_rotary_control_2": {
+        "x": 0.46953123807907104,
+        "y": 0.5433333516120911,
+        "width": 0.09375,
+        "height": 0.15000000596046448,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_label_2": {
+        "x": 0.4919270873069763,
+        "y": 0.6833333373069763,
+        "width": 0.04583333432674408,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_value_2": {
+        "x": 0.5065103769302368,
+        "y": 0.7024999856948853,
+        "width": 0.01666666753590107,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_rotary_control_2": {
+        "x": 0.3700520694255829,
+        "y": 0.7433333396911621,
+        "width": 0.09375,
+        "height": 0.15000000596046448,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_label_2": {
+        "x": 0.4049479067325592,
+        "y": 0.8824999928474426,
+        "width": 0.02395833283662796,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_value_2": {
+        "x": 0.4085937440395355,
+        "y": 0.903333306312561,
+        "width": 0.01666666753590107,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_time_rotary_control": {
+        "x": 0.46953123807907104,
+        "y": 0.7433333396911621,
+        "width": 0.09375,
+        "height": 0.15000000596046448,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_time_label": {
+        "x": 0.5054687261581421,
+        "y": 0.8824999928474426,
+        "width": 0.02187499962747097,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_time_value": {
+        "x": 0.49921876192092896,
+        "y": 0.903333306312561,
+        "width": 0.03020833246409893,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_0_0": {
+        "x": 0.5846354365348816,
+        "y": 0.476666659116745,
+        "width": 0.04374999925494194,
+        "height": 0.06666667014360428,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_allinea_automaticamente_la_fase_fx_al_centro_del_riferimento_master": {
+        "x": 0.6299479007720947,
+        "y": 0.4816666543483734,
+        "width": 0.04374999925494194,
+        "height": 0.057500001043081284,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_0_2": {
+        "x": 0.686718761920929,
+        "y": 0.4841666519641876,
+        "width": 0.015625,
+        "height": 0.05166666582226753,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_fx_beat_indicator_one_flash_per_full_master_beat": {
+        "x": 0.725781261920929,
+        "y": 0.4841666519641876,
+        "width": 0.015625,
+        "height": 0.05166666582226753,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_0_4": {
+        "x": 0.7638021111488342,
+        "y": 0.49916666746139526,
+        "width": 0.04583333432674408,
+        "height": 0.030833333730697632,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_1_0": {
+        "x": 0.5809895992279053,
+        "y": 0.5508333444595337,
+        "width": 0.04374999925494194,
+        "height": 0.05000000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_1_1": {
+        "x": 0.6273437738418579,
+        "y": 0.5508333444595337,
+        "width": 0.04374999925494194,
+        "height": 0.05000000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_1_2": {
+        "x": 0.6736978888511658,
+        "y": 0.5508333444595337,
+        "width": 0.04374999925494194,
+        "height": 0.05000000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_1_3": {
+        "x": 0.7200520634651184,
+        "y": 0.5508333444595337,
+        "width": 0.04374999925494194,
+        "height": 0.05000000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_1_4": {
+        "x": 0.766406238079071,
+        "y": 0.5508333444595337,
+        "width": 0.04374999925494194,
+        "height": 0.05000000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_1_5": {
+        "x": 0.813281238079071,
+        "y": 0.5508333444595337,
+        "width": 0.0442708320915699,
+        "height": 0.05000000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_2": {
+        "x": 0.5809895992279053,
+        "y": 0.6133333444595337,
+        "width": 0.10104166716337204,
+        "height": 0.015833333134651184,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_3": {
+        "x": 0.581250011920929,
+        "y": 0.606249988079071,
+        "width": 0.2760416567325592,
+        "height": 0.05166666582226753,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_4": {
+        "x": 0.5835937261581421,
+        "y": 0.6958333253860474,
+        "width": 0.1588541716337204,
+        "height": 0.014999999664723873,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_allineamento_fase_riferimento_master_verde_e_riferimento_fx_giallo": {
+        "x": 0.581250011920929,
+        "y": 0.6620832681655884,
+        "width": 0.2760416567325592,
+        "height": 0.036666665226221085,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_6_0": {
+        "x": 0.581250011920929,
+        "y": 0.7475000023841858,
+        "width": 0.08958332985639572,
+        "height": 0.06612636893987656,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_6_1": {
+        "x": 0.6739583611488342,
+        "y": 0.7475000023841858,
+        "width": 0.08958332985639572,
+        "height": 0.06612636893987656,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_6_2": {
+        "x": 0.7666666507720947,
+        "y": 0.7475000023841858,
+        "width": 0.09062500298023224,
+        "height": 0.06612636893987656,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_0": {
+        "x": 0.581250011920929,
+        "y": 0.8168132305145264,
+        "width": 0.02447916753590107,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_1": {
+        "x": 0.6088541746139526,
+        "y": 0.8168132305145264,
+        "width": 0.02447916753590107,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_2": {
+        "x": 0.6364583373069763,
+        "y": 0.8168132305145264,
+        "width": 0.02447916753590107,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_3": {
+        "x": 0.6640625,
+        "y": 0.8168132305145264,
+        "width": 0.02447916753590107,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_4": {
+        "x": 0.6927083134651184,
+        "y": 0.8168132305145264,
+        "width": 0.024479102343320847,
+        "height": 0.07170329242944717,        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_5": {
+        "x": 0.7197916507720947,
+        "y": 0.8168132305145264,
+        "width": 0.02447916753590107,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_6": {
+        "x": 0.7477864623069763,
+        "y": 0.8168132305145264,
+        "width": 0.02447916753590107,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_7": {
+        "x": 0.7755208611488342,
+        "y": 0.8168132305145264,
+        "width": 0.02500000037252903,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_8": {
+        "x": 0.8036458492279053,
+        "y": 0.8168132305145264,
+        "width": 0.02500000037252903,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_7_9": {
+        "x": 0.8317708373069763,
+        "y": 0.8168132305145264,
+        "width": 0.02500000037252903,
+        "height": 0.07170329242944717,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_8_0": {
+        "x": 0.581250011920929,
+        "y": 0.8924999833106995,
+        "width": 0.08906249701976776,
+        "height": 0.07249999791383743,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_8_1": {
+        "x": 0.6739583611488342,
+        "y": 0.8924999833106995,
+        "width": 0.08958332985639572,
+        "height": 0.07249999791383743,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_3_8_2": {
+        "x": 0.7671874761581421,
+        "y": 0.8924999833106995,
+        "width": 0.08958332985639572,
+        "height": 0.07249999791383743,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_4": {
+        "x": 0.874218761920929,
+        "y": 0.49166667461395264,
+        "width": 0.00989583320915699,
+        "height": 0.476666659116745,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0_0_5_0": {
+        "x": 0.8934895992279053,
+        "y": 0.4833333194255829,
+        "width": 0.05624999850988388,
+        "height": 0.024166665971279144,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_gain_rotary_control": {
+        "x": 0.8861979246139526,
+        "y": 0.5325000286102295,
+        "width": 0.07239583134651184,
+        "height": 0.11500000208616257,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_gain_label": {
+        "x": 0.9119791388511658,
+        "y": 0.6395833492279053,
+        "width": 0.02187499962747097,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_gain_value": {
+        "x": 0.9104166626930237,
+        "y": 0.6537500023841858,
+        "width": 0.02500000037252903,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_comp_rotary_control": {
+        "x": 0.8861979246139526,
+        "y": 0.6783333420753479,
+        "width": 0.07239583134651184,
+        "height": 0.11500000208616257,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_comp_label": {
+        "x": 0.9098958373069763,
+        "y": 0.7854166030883789,
+        "width": 0.02656250074505806,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_comp_value": {
+        "x": 0.917187511920929,
+        "y": 0.8004166483879089,
+        "width": 0.01145833358168602,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_compressor_off": {
+        "x": 0.9515625238418579,
+        "y": 0.7829167246818542,
+        "width": 0.010937499813735485,
+        "height": 0.017500000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_loudness_rotary_control": {
+        "x": 0.8861979246139526,
+        "y": 0.8241666555404663,
+        "width": 0.07239583134651184,
+        "height": 0.11500000208616257,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_loudness_label": {
+        "x": 0.8994791507720947,
+        "y": 0.9312499761581421,
+        "width": 0.04739583283662796,
+        "height": 0.018333332613110542,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_loudness_value": {
+        "x": 0.917187511920929,
+        "y": 0.9462500214576721,
+        "width": 0.01145833358168602,
+        "height": 0.01666666753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_compressor_off_2": {
+        "x": 0.9515625238418579,
+        "y": 0.9295833110809326,
+        "width": 0.010937499813735485,
+        "height": 0.017500000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_pitch_correzione_velocit_da_meno_10_percento_a_pi_10_percento": {
+        "x": 0.5838541388511658,
+        "y": 0.643750011920929,
+        "width": 0.08749999850988388,
+        "height": 0.013333333656191826,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_2": {
+        "x": 0.4320312440395355,
+        "y": 0.9761694073677063,
+        "width": 0.13593749701976776,
+        "height": 0.01516113243997097,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      }
+    },
+    "tablet_portrait": {
+      "element_desc_interruttore_generale_audio": {
+        "x": 0.009999999776482582,
+        "y": 0.0052083334885537624,
+        "width": 0.10249999910593033,
+        "height": 0.02812499925494194,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_0_1_0": {
+        "x": 0.12166666984558105,
+        "y": 0.0052083334885537624,
+        "width": 0.11249999701976776,
+        "height": 0.02812499925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_0_1_1": {
+        "x": 0.4325000047683716,
+        "y": 0.01692708395421505,
+        "width": 0.08500000089406967,
+        "height": 0.01614583283662796,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_impostazioni": {
+        "x": 0.8754166960716248,
+        "y": 0.0031250000465661287,
+        "width": 0.06750000268220901,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_0_0_0": {
+        "x": 0.057500001043081284,
+        "y": 0.05911458283662796,
+        "width": 0.042500000447034836,
+        "height": 0.02447916753590107,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_on_off": {
+        "x": 0.12583333253860474,
+        "y": 0.06015624850988388,
+        "width": 0.05999999865889549,
+        "height": 0.02187499962747097,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_flat_all": {
+        "x": 0.19166666269302368,
+        "y": 0.05546874925494194,
+        "width": 0.04749999940395355,
+        "height": 0.02968749962747097,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_rotary_control": {
+        "x": 0.06083333492279053,
+        "y": 0.1028645858168602,
+        "width": 0.10333333164453506,
+        "height": 0.06197916716337204,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_label": {
+        "x": 0.09166666865348816,
+        "y": 0.15859374403953552,
+        "width": 0.042500000447034836,
+        "height": 0.013020833022892475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_value": {
+        "x": 0.09083333611488342,
+        "y": 0.16953125596046448,
+        "width": 0.04833333194255829,
+        "height": 0.012500000186264515,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_high_return": {
+        "x": 0.18791666626930237,
+        "y": 0.11666666716337204,
+        "width": 0.05249999836087227,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_high_flat": {
+        "x": 0.25041666626930237,
+        "y": 0.11145833134651184,
+        "width": 0.07000000029802322,
+        "height": 0.04374999925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_high_rotary_control": {
+        "x": 0.06083333492279053,
+        "y": 0.19244791567325592,
+        "width": 0.10333333164453506,
+        "height": 0.06197916716337204,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_high_label": {
+        "x": 0.0741666629910469,
+        "y": 0.24973958730697632,
+        "width": 0.07999999821186066,
+        "height": 0.01354166679084301,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_high_value": {
+        "x": 0.09083333611488342,
+        "y": 0.2601562440395355,
+        "width": 0.04833333194255829,
+        "height": 0.012500000186264515,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_high_return": {
+        "x": 0.18791666626930237,
+        "y": 0.2057291716337204,
+        "width": 0.05249999836087227,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_high_flat": {
+        "x": 0.25041666626930237,
+        "y": 0.2005208283662796,
+        "width": 0.07000000029802322,
+        "height": 0.04374999925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_low_rotary_control": {
+        "x": 0.05999999865889549,
+        "y": 0.2809895873069763,
+        "width": 0.1041666641831398,
+        "height": 0.06354166567325592,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_low_label": {
+        "x": 0.07535416632890701,
+        "y": 0.3376692831516266,
+        "width": 0.07520833611488342,
+        "height": 0.012864583171904087,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_low_value": {
+        "x": 0.0911874994635582,
+        "y": 0.34904947876930237,
+        "width": 0.048291660845279694,
+        "height": 0.012369821779429913,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_low_return": {
+        "x": 0.18791666626930237,
+        "y": 0.2932291626930237,
+        "width": 0.05249999836087227,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_mid_low_flat": {
+        "x": 0.25041666626930237,
+        "y": 0.28697916865348816,
+        "width": 0.07000000029802322,
+        "height": 0.04374999925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_rotary_control": {
+        "x": 0.05999999865889549,
+        "y": 0.3700520694255829,
+        "width": 0.1041666641831398,
+        "height": 0.06354166567325592,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_label": {
+        "x": 0.09166666865348816,
+        "y": 0.4273437559604645,
+        "width": 0.038333334028720856,
+        "height": 0.013020833022892475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_value": {
+        "x": 0.09083333611488342,
+        "y": 0.43828123807907104,
+        "width": 0.04833333194255829,
+        "height": 0.012500000186264515,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_low_return": {
+        "x": 0.18791666626930237,
+        "y": 0.38333332538604736,
+        "width": 0.05249999836087227,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_eq_low_flat": {
+        "x": 0.2512499988079071,
+        "y": 0.3776041567325592,
+        "width": 0.07000000029802322,
+        "height": 0.04374999925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_0_1_0": {
+        "x": 0.6529167294502258,
+        "y": 0.03854166716337204,
+        "width": 0.1574999988079071,
+        "height": 0.02239583246409893,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_on_off": {
+        "x": 0.6445833444595337,
+        "y": 0.06041666492819786,
+        "width": 0.05999999865889549,
+        "height": 0.02187499962747097,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_limiter_on_off": {
+        "x": 0.7120832800865173,
+        "y": 0.06041666492819786,
+        "width": 0.10249999910593033,
+        "height": 0.02187499962747097,
+        "zOrder": 3,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_flat_all": {
+        "x": 0.8212500214576721,
+        "y": 0.05572916567325592,
+        "width": 0.04749999940395355,
+        "height": 0.02968749962747097,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_rotary_control_2": {
+        "x": 0.6637500524520874,
+        "y": 0.09427083283662796,
+        "width": 0.12333333492279053,
+        "height": 0.07604166865348816,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_label_2": {
+        "x": 0.7041666507720947,
+        "y": 0.16067709028720856,
+        "width": 0.040833331644535065,
+        "height": 0.013020833022892475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_high_value_2": {
+        "x": 0.70333331823349,
+        "y": 0.17161458730697632,
+        "width": 0.04583333432674408,
+        "height": 0.01197916641831398,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_high_return": {
+        "x": 0.8104166388511658,
+        "y": 0.11666666716337204,
+        "width": 0.05249999836087227,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_high_flat": {
+        "x": 0.8820833563804626,
+        "y": 0.11093749850988388,
+        "width": 0.07000000029802322,
+        "height": 0.04374999925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_rotary_control": {
+        "x": 0.6637500524520874,
+        "y": 0.1927083283662796,
+        "width": 0.12333333492279053,
+        "height": 0.07604166865348816,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_label": {
+        "x": 0.7091666460037231,
+        "y": 0.25859373807907104,
+        "width": 0.032499998807907104,
+        "height": 0.013020833022892475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_mid_value": {
+        "x": 0.70333331823349,
+        "y": 0.26953125,
+        "width": 0.04583333432674408,
+        "height": 0.01197916641831398,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_mid_return": {
+        "x": 0.8112499713897705,
+        "y": 0.2109375,
+        "width": 0.05249999836087227,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_mid_flat": {
+        "x": 0.8820833563804626,
+        "y": 0.20677083730697632,
+        "width": 0.07000000029802322,
+        "height": 0.04374999925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_rotary_control_2": {
+        "x": 0.6620832681655884,
+        "y": 0.2906250059604645,
+        "width": 0.12416666746139526,
+        "height": 0.07656250149011612,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_label_2": {
+        "x": 0.7066666483879089,
+        "y": 0.35755208134651184,
+        "width": 0.036666665226221085,
+        "height": 0.013020833022892475,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_low_value_2": {
+        "x": 0.70333331823349,
+        "y": 0.3684895932674408,
+        "width": 0.04583333432674408,
+        "height": 0.01197916641831398,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_low_return": {
+        "x": 0.8104166388511658,
+        "y": 0.3046875,
+        "width": 0.05249999836087227,
+        "height": 0.03281249850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_isolator_low_flat": {
+        "x": 0.8820833563804626,
+        "y": 0.3005208373069763,
+        "width": 0.07000000029802322,
+        "height": 0.04374999925494194,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_0_0": {
+        "x": 0.0845833346247673,
+        "y": 0.47187501192092896,
+        "width": 0.06416666507720947,
+        "height": 0.01406249962747097,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_0_1_0_0": {
+        "x": 0.2408333271741867,
+        "y": 0.390625,
+        "width": 0.02916666679084301,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": false
+      },
+      "element_desc_hpf_rotary_control": {
+        "x": 0.04237500578165054,
+        "y": 0.4957682192325592,
+        "width": 0.14524999260902405,
+        "height": 0.09023436903953552,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_hpf_label": {
+        "x": 0.10068749636411667,
+        "y": 0.574999988079071,
+        "width": 0.026125000789761543,
+        "height": 0.010885416530072689,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_hpf_value": {
+        "x": 0.10458333045244217,
+        "y": 0.5838541388511658,
+        "width": 0.017500000074505806,
+        "height": 0.00989583320915699,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_0_1_1_0": {
+        "x": 0.20916666090488434,
+        "y": 0.5447916388511658,
+        "width": 0.09166666865348816,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": false
+      },
+      "element_desc_resonance_rotary_control": {
+        "x": 0.06291666626930237,
+        "y": 0.6005208492279053,
+        "width": 0.09749999642372131,
+        "height": 0.06093750149011612,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_resonance_label": {
+        "x": 0.07583333551883698,
+        "y": 0.6611979007720947,
+        "width": 0.07500000298023224,
+        "height": 0.00989583320915699,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_resonance_value": {
+        "x": 0.10249999910593033,
+        "y": 0.6742187738418579,
+        "width": 0.015833333134651184,
+        "height": 0.008854166604578495,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_0": {
+        "x": 0.43547916412353516,
+        "y": 0.06149739399552345,
+        "width": 0.1198749914765358,
+        "height": 0.020234374329447746,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_gain_rotary_control": {
+        "x": 0.4399999976158142,
+        "y": 0.10000000149011612,
+        "width": 0.1066666692495346,
+        "height": 0.06666667014360428,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_gain_label": {
+        "x": 0.47749999165534973,
+        "y": 0.16484375298023224,
+        "width": 0.03500000014901161,
+        "height": 0.01145833358168602,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_gain_value": {
+        "x": 0.4749999940395355,
+        "y": 0.17369791865348816,
+        "width": 0.03999999910593033,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_comp_rotary_control": {
+        "x": 0.4399999976158142,
+        "y": 0.19609375298023224,
+        "width": 0.10166666656732559,
+        "height": 0.06354166567325592,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_comp_label": {
+        "x": 0.47083333134651184,
+        "y": 0.2601562440395355,
+        "width": 0.042500000447034836,
+        "height": 0.01145833358168602,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_comp_value": {
+        "x": 0.48249998688697815,
+        "y": 0.26953125,
+        "width": 0.018333332613110542,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_1_1_1_0": {
+        "x": 0.5491666793823242,
+        "y": 0.22838541865348816,
+        "width": 0.032499998807907104,
+        "height": 0.01875000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_1_1_1_1": {
+        "x": 0.4241666793823242,
+        "y": 0.3333333432674408,
+        "width": 0.009999999776482582,
+        "height": 0.00989583320915699,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_loudness_rotary_control": {
+        "x": 0.44083333015441895,
+        "y": 0.29635417461395264,
+        "width": 0.10166666656732559,
+        "height": 0.06354166567325592,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_loudness_label": {
+        "x": 0.4541666805744171,
+        "y": 0.36015623807907104,
+        "width": 0.07583333551883698,
+        "height": 0.01145833358168602,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_loudness_value": {
+        "x": 0.4833333194255829,
+        "y": 0.3695312440395355,
+        "width": 0.018333332613110542,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_1_2_1_0": {
+        "x": 0.5508333444595337,
+        "y": 0.32864582538604736,
+        "width": 0.032499998807907104,
+        "height": 0.01875000074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_1_1_1_2_1_1": {
+        "x": 0.5899999737739563,
+        "y": 0.3333333432674408,
+        "width": 0.009999999776482582,
+        "height": 0.00989583320915699,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "__visual_decoration__1\/2\/0": {
+        "x": 0.009999999776482582,
+        "y": 0.698437511920929,
+        "width": 0.9800000190734863,
+        "height": 0.28437501192092896,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "__visual_decoration__1\/2\/0\/0": {
+        "x": 0.009999999776482582,
+        "y": 0.698437511920929,
+        "width": 0.9800000190734863,
+        "height": 0.28437501192092896,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_0_0": {
+        "x": 0.11124999821186066,
+        "y": 0.6942708492279053,
+        "width": 0.07583333551883698,
+        "height": 0.01406249962747097,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_0_1": {
+        "x": 0.1979166716337204,
+        "y": 0.6932291388511658,
+        "width": 0.05249999836087227,
+        "height": 0.015625,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_send_rotary_control": {
+        "x": 0.020516669377684593,
+        "y": 0.7188125252723694,
+        "width": 0.15980000793933868,
+        "height": 0.09987500309944153,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_send_label": {
+        "x": 0.08166666328907013,
+        "y": 0.8106771111488342,
+        "width": 0.038333334028720856,
+        "height": 0.01145833358168602,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_send_value": {
+        "x": 0.09166666865348816,
+        "y": 0.8200520873069763,
+        "width": 0.018333332613110542,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_rotary_control": {
+        "x": 0.19634999334812164,
+        "y": 0.7188125252723694,
+        "width": 0.15980000793933868,
+        "height": 0.09987500309944153,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_label": {
+        "x": 0.2574999928474426,
+        "y": 0.8106771111488342,
+        "width": 0.038333334028720856,
+        "height": 0.01145833358168602,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_value": {
+        "x": 0.2633333206176758,
+        "y": 0.8200520873069763,
+        "width": 0.02666666731238365,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_0_0_1_0": {
+        "x": 0.012500000186264515,
+        "y": 0.839062511920929,
+        "width": 0.08749999850988388,
+        "height": 0.12031249701976776,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_rotary_control": {
+        "x": 0.10801666229963303,
+        "y": 0.8391249775886536,
+        "width": 0.15980000793933868,
+        "height": 0.09987500309944153,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_label": {
+        "x": 0.15166667103767395,
+        "y": 0.9309895634651184,
+        "width": 0.07333333045244217,
+        "height": 0.01145833358168602,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_value": {
+        "x": 0.17499999701976776,
+        "y": 0.9403645992279053,
+        "width": 0.02666666731238365,
+        "height": 0.010416666977107525,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_0_0_1_2": {
+        "x": 0.2758333384990692,
+        "y": 0.839062511920929,
+        "width": 0.08833333104848862,
+        "height": 0.12031249701976776,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_0_0_2_0": {
+        "x": 0.012500000186264515,
+        "y": 0.9604166746139526,
+        "width": 0.11416666954755783,
+        "height": 0.01979166641831398,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_0_0_2_1": {
+        "x": 0.13083332777023315,
+        "y": 0.9604166746139526,
+        "width": 0.11416666954755783,
+        "height": 0.01979166641831398,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_0_0_2_2": {
+        "x": 0.24916666746139526,
+        "y": 0.9604166746139526,
+        "width": 0.11500000208616257,
+        "height": 0.01979166641831398,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_1": {
+        "x": 0.3733333349227905,
+        "y": 0.7171875238418579,
+        "width": 0.009999999776482582,        "height": 0.265625,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": false
+      },
+      "element_path_1_2_0_0_1_2_0_0": {
+        "x": 0.3137499988079071,
+        "y": 0.4713541567325592,
+        "width": 0.1391666680574417,
+        "height": 0.01406249962747097,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_0_1": {
+        "x": 0.46541666984558105,
+        "y": 0.4703125059604645,
+        "width": 0.05249999836087227,
+        "height": 0.015625,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_delay_level_rotary_control": {
+        "x": 0.29374998807907104,
+        "y": 0.4963541626930237,
+        "width": 0.1483333259820938,
+        "height": 0.09166666865348816,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_delay_level_label": {
+        "x": 0.30541667342185974,
+        "y": 0.5854166746139526,
+        "width": 0.12166666984558105,
+        "height": 0.014583333395421505,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_delay_level_value": {
+        "x": 0.3529166579246521,
+        "y": 0.5979166626930237,
+        "width": 0.023333333432674408,
+        "height": 0.01354166679084301,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_rotary_control_2": {
+        "x": 0.4737499952316284,
+        "y": 0.4963541626930237,
+        "width": 0.1483333259820938,
+        "height": 0.09166666865348816,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_label_2": {
+        "x": 0.49958333373069763,
+        "y": 0.5854166746139526,
+        "width": 0.09833333641290665,
+        "height": 0.014583333395421505,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_feedback_value_2": {
+        "x": 0.5295832753181458,
+        "y": 0.5979166626930237,
+        "width": 0.036666665226221085,
+        "height": 0.01354166679084301,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_rotary_control_2": {
+        "x": 0.6520833373069763,
+        "y": 0.4963541626930237,
+        "width": 0.1483333259820938,
+        "height": 0.09166666865348816,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_label_2": {
+        "x": 0.7012500166893005,
+        "y": 0.5854166746139526,
+        "width": 0.05166666582226753,
+        "height": 0.014583333395421505,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_tone_value_2": {
+        "x": 0.7079166769981384,
+        "y": 0.5979166626930237,
+        "width": 0.036666665226221085,
+        "height": 0.01354166679084301,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_time_rotary_control": {
+        "x": 0.8262500166893005,
+        "y": 0.4963541626930237,
+        "width": 0.1483333259820938,
+        "height": 0.09166666865348816,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_time_label": {
+        "x": 0.8770833611488342,
+        "y": 0.5854166746139526,
+        "width": 0.046666666865348816,
+        "height": 0.014583333395421505,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_time_value": {
+        "x": 0.8687499761581421,
+        "y": 0.5979166626930237,
+        "width": 0.06499999761581421,
+        "height": 0.01354166679084301,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_0_0": {
+        "x": 0.3812499940395355,
+        "y": 0.6213541626930237,
+        "width": 0.06666667014360428,
+        "height": 0.03958333283662796,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_allinea_automaticamente_la_fase_fx_al_centro_del_riferimento_master": {
+        "x": 0.4504166543483734,
+        "y": 0.625,
+        "width": 0.06666667014360428,
+        "height": 0.03437500074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_0_2": {
+        "x": 0.5335625410079956,
+        "y": 0.6225129961967468,
+        "width": 0.030625000596046448,
+        "height": 0.03882812336087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_fx_beat_indicator_one_flash_per_full_master_beat": {
+        "x": 0.5983125567436218,
+        "y": 0.6225129961967468,
+        "width": 0.03062494657933712,
+        "height": 0.03882812336087227,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_0_4": {
+        "x": 0.6600000262260437,
+        "y": 0.6395833492279053,
+        "width": 0.054999999701976776,
+        "height": 0.014583333395421505,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_1_0": {
+        "x": 0.3779166638851166,
+        "y": 0.6723958253860474,
+        "width": 0.09583333134651184,
+        "height": 0.02656250074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_1_1": {
+        "x": 0.4804166555404663,
+        "y": 0.6723958253860474,
+        "width": 0.09666666388511658,
+        "height": 0.02656250074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_1_2": {
+        "x": 0.5795833468437195,
+        "y": 0.6723958253860474,
+        "width": 0.09666666388511658,
+        "height": 0.02656250074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_1_3": {
+        "x": 0.6762499809265137,
+        "y": 0.6723958253860474,
+        "width": 0.09666666388511658,
+        "height": 0.02656250074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_1_4": {
+        "x": 0.7770833373069763,
+        "y": 0.6723958253860474,
+        "width": 0.09666666388511658,
+        "height": 0.02656250074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_1_5": {
+        "x": 0.8787500262260437,
+        "y": 0.6723958253860474,
+        "width": 0.09666666388511658,
+        "height": 0.02656250074505806,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_2": {
+        "x": 0.3824999928474426,
+        "y": 0.7106770873069763,
+        "width": 0.15416666865348816,
+        "height": 0.010937499813735485,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_3": {
+        "x": 0.38208332657814026,
+        "y": 0.7130208611488342,
+        "width": 0.6000000238418579,
+        "height": 0.012500000186264515,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_4": {
+        "x": 0.3816666603088379,
+        "y": 0.7658854126930237,
+        "width": 0.23416666686534882,
+        "height": 0.00989583320915699,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_allineamento_fase_riferimento_master_verde_e_riferimento_fx_giallo": {
+        "x": 0.38208332657814026,
+        "y": 0.7427083253860474,
+        "width": 0.6000000238418579,
+        "height": 0.01979166641831398,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_6_0": {
+        "x": 0.3725000023841858,
+        "y": 0.7979166507720947,
+        "width": 0.2058333307504654,
+        "height": 0.03333333507180214,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_6_1": {
+        "x": 0.5816666483879089,
+        "y": 0.7979166507720947,
+        "width": 0.20666661858558655,
+        "height": 0.03333333507180214,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_6_2": {
+        "x": 0.7933333516120911,
+        "y": 0.7979166507720947,
+        "width": 0.20666664838790894,
+        "height": 0.03333333507180214,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_0": {
+        "x": 0.37166666984558105,
+        "y": 0.8466145992279053,
+        "width": 0.059166666120290756,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_1": {
+        "x": 0.43416666984558105,
+        "y": 0.8466145992279053,
+        "width": 0.061666667461395264,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_2": {
+        "x": 0.49916666746139526,
+        "y": 0.8466145992279053,
+        "width": 0.061666667461395264,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_3": {
+        "x": 0.5641666650772095,
+        "y": 0.8466145992279053,
+        "width": 0.059166666120290756,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_4": {
+        "x": 0.6258333325386047,
+        "y": 0.8466145992279053,
+        "width": 0.061666667461395264,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_5": {
+        "x": 0.6883333325386047,
+        "y": 0.8466145992279053,
+        "width": 0.061666667461395264,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_6": {
+        "x": 0.7524999976158142,
+        "y": 0.8466145992279053,
+        "width": 0.059166666120290756,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_7": {
+        "x": 0.815833330154419,
+        "y": 0.8466145992279053,
+        "width": 0.061666667461395264,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_8": {
+        "x": 0.8799999952316284,
+        "y": 0.8466145992279053,
+        "width": 0.059166666120290756,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_7_9": {
+        "x": 0.940833330154419,
+        "y": 0.8466145992279053,
+        "width": 0.059166666120290756,
+        "height": 0.0546875,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_8_0": {
+        "x": 0.3733333349227905,
+        "y": 0.9164062738418579,
+        "width": 0.20499999821186066,
+        "height": 0.04062499850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_8_1": {
+        "x": 0.5824999809265137,
+        "y": 0.9164062738418579,
+        "width": 0.20499999821186066,
+        "height": 0.04062499850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_1_2_0_0_1_2_2_8_2": {
+        "x": 0.7941666841506958,
+        "y": 0.9164062738418579,
+        "width": 0.20499999821186066,
+        "height": 0.04062499850988388,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_path_2": {
+        "x": 0.4154166579246521,
+        "y": 0.9851058721542358,
+        "width": 0.1691666692495346,
+        "height": 0.009999999776482582,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      },
+      "element_desc_pitch_correzione_velocit_da_meno_10_percento_a_pi_10_percento": {
+        "x": 0.3816666603088379,
+        "y": 0.7289062738418579,
+        "width": 0.14000000059604645,
+        "height": 0.00989583320915699,
+        "zOrder": 0,
+        "sizePreset": 2,
+        "visible": true
+      }
+    },
+    "phone_landscape": {},
+    "phone_portrait": {}
+  },
+  "elementCounts": {
+    "tablet_landscape": 134,
+    "tablet_portrait": 135,
+    "phone_landscape": 0,
+    "phone_portrait": 0
+  },
+  "exportedAtEpochMs": 1795877375690
+}
