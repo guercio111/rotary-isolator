@@ -988,6 +988,11 @@ class MainActivity : Activity() {
                 freeHost.post {
                     if (::container.isInitialized && root.parent === container && freeHost.parent === container) {
                         freeHost.adoptLaidOutTree(root, root.scaleX.coerceAtLeast(0.01f))
+                        // Apply the same stable-ID migration used by manual JSON import,
+                        // but only after every live control (including all Beat keyboard
+                        // keys) has been adopted into the host. This makes first-launch
+                        // preload identical to re-importing the exact same project.
+                        freeHost.reloadProfile()
                         container.removeView(root)
                         freeHost.bringToFront()
                     }
