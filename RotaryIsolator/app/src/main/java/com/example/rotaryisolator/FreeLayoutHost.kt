@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.util.TypedValue
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -36,6 +37,12 @@ private class VisualBoundsFrame(
     private val baseHeight: Int,
     private val visualBounds: RectF
 ) : FrameLayout(context) {
+    // Keep button captions/numbers proportional when the editor stretches the
+    // button body independently on the horizontal and vertical axes.
+    private val baseTextSizePx = (content as? TextView)?.textSize ?: 0f
+    private val preserveTextAspectRatio =
+        content is TextView && (content is Button || content.isClickable || content.hasOnClickListeners())
+
     init {
         clipChildren = false
         clipToPadding = false
@@ -67,13 +74,36 @@ private class VisualBoundsFrame(
         // The wrapper represents only the visible selection bounds. Keep the
         // original control at its unmodified dimensions: never scale its canvas,
         // rotary dial, labels, touch target or child hierarchy to fit the wrapper.
+        val contentWidth = if (preserveTextAspectRatio) targetWidth else baseWidth
+        val contentHeight = if (preserveTextAspectRatio) targetHeight else baseHeight
         content.measure(
-            MeasureSpec.makeMeasureSpec(baseWidth, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(baseHeight, MeasureSpec.EXACTLY)
+            MeasureSpec.makeMeasureSpec(contentWidth, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(contentHeight, MeasureSpec.EXACTLY)
         )
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        if (preserveTextAspectRatio) {
+            // Let the actual TextView/Button background and hit target fill the
+            // resized frame. Scale its caption with one uniform factor only:
+            // different X/Y factors would stretch or squash the glyphs.
+            content.layout(0, 0, width, height)
+            val uniformTextScale = minOf(
+                width.toFloat() / baseWidth.coerceAtLeast(1),
+                height.toFloat() / baseHeight.coerceAtLeast(1)
+            ).coerceIn(0.1f, 4f)
+            (content as TextView).setTextSize(
+                TypedValue.COMPLEX_UNIT_PX,
+                (baseTextSizePx * uniformTextScale).coerceAtLeast(1f)
+            )
+            content.pivotX = 0f
+            content.pivotY = 0f
+            content.scaleX = 1f
+            content.scaleY = 1f
+            content.translationX = 0f
+            content.translationY = 0f
+            return
+        }
         content.layout(0, 0, baseWidth, baseHeight)
         // Rectangular clickable controls (buttons and BEAT division keys) must
         // fill the editor frame on both axes. The previous uniform min-scale left
@@ -309,9 +339,14 @@ internal class FreeLayoutHost(
                 // Beat division keys are complete clickable cells, not just text glyphs.
                 // Their editor bounds must cover one key cell so the selection frame
                 // cannot stretch across the entire keyboard row or clip the key.
+                val isClickableTextButton = candidateView is TextView &&
+                    (candidateView is Button || candidateView.isClickable || candidateView.hasOnClickListeners())
                 val visualBounds = boundsProvider?.freeLayoutVisualBounds()
-                    ?: if (isBeatDivisionKey) RectF(0f, 0f, baseWidth.toFloat(), baseHeight.toFloat())
-                    else (candidateView as? TextView)?.let { text -> textViewVisualBounds(text) }
+                    ?: if (isBeatDivisionKey || isClickableTextButton) {
+                        // A button is selected/resized as a complete control, not
+                        // as the smaller glyph rectangle inside it.
+                        RectF(0f, 0f, baseWidth.toFloat(), baseHeight.toFloat())
+                    } else (candidateView as? TextView)?.let { text -> textViewVisualBounds(text) }
                 val screen = IntArray(2)
                 candidateView.getLocationOnScreen(screen)
                 // New IDs are based on the stable position in the source view tree,
