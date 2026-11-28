@@ -2125,8 +2125,15 @@ class MainActivity : Activity() {
         delayControls.addView(clockControlRow, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(2) })
         val bpmFineCaption = label("PITCH  −10%  |  0  |  +10%", 8f, colorDelay).apply {
             gravity = Gravity.CENTER_VERTICAL
+            // Keep the complete PITCH scale readable in portrait as well as landscape.
+            maxLines = 1
+            isSingleLine = true
+            includeFontPadding = false
+            minHeight = dp(16)
+            setPadding(dp(2), 0, dp(2), 0)
+            contentDescription = "PITCH: correzione velocità da meno 10 percento a più 10 percento"
         }
-        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, 0, 0.55f).apply { topMargin = dp(2) })
+        delayControls.addView(bpmFineCaption, LinearLayout.LayoutParams(-1, dp(16)).apply { topMargin = dp(2) })
         val fineSeek = SeekBar(this).apply {
             max = 200
             progress = (100 + (delayBpmCorrection * 10f).roundToInt()).coerceIn(0,200)
