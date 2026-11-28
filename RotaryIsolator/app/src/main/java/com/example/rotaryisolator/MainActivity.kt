@@ -2684,35 +2684,33 @@ class MainActivity : Activity() {
      */
     private fun seedDefaultTabletLayoutsIfNeeded() {
         val bootstrap = getSharedPreferences("frequalizer_designer_default_layout_seed_v1", MODE_PRIVATE)
-        if (bootstrap.getBoolean("seeded", false)) return
+        // One-time migration: Build 1301 could keep an older non-empty tablet profile
+        // and therefore skip the definitive project bundled with the app. Apply the
+        // user's definitive tablet JSON once, then never overwrite later edits.
+        if (bootstrap.getBoolean("definitive_tablet_layout_v2_applied", false)) return
         try {
             val json = assets.open("frequalizer-default-tablet-layout.json")
                 .bufferedReader(Charsets.UTF_8).use { it.readText() }
             val project = org.json.JSONObject(json)
             val profiles = project.optJSONObject("profiles")
-                ?: throw IllegalStateException("Profili del layout predefinito mancanti")
-            val tabletProfiles = setOf(
-                UiLayoutProfile.TABLET_LANDSCAPE,
-                UiLayoutProfile.TABLET_PORTRAIT
-            )
-            var needsImport = false
-            UiLayoutProfile.values().forEach { profile ->
-                if (uiLayoutProfileStore.load(profile).isNotEmpty()) {
-                    // Keep the user's existing layout exactly as saved.
-                    profiles.put(profile.storageKey, org.json.JSONObject())
-                } else if (profile in tabletProfiles &&
-                    (profiles.optJSONObject(profile.storageKey)?.length() ?: 0) > 0) {
-                    needsImport = true
-                }
+                ?: throw IllegalStateException("Profili del layout definitivo mancanti")
+            require((profiles.optJSONObject(UiLayoutProfile.TABLET_LANDSCAPE.storageKey)?.length() ?: 0) > 0) {
+                "Layout tablet orizzontale mancante"
             }
-            if (needsImport) {
-                val count = uiLayoutProfileStore.importProject(project.toString())
-                captureDiag("DESIGNER default tablet layouts loaded: $count elements")
+            require((profiles.optJSONObject(UiLayoutProfile.TABLET_PORTRAIT.storageKey)?.length() ?: 0) > 0) {
+                "Layout tablet verticale mancante"
             }
-            bootstrap.edit().putBoolean("seeded", true).apply()
+            // importProject validates the complete JSON and atomically updates only
+            // non-empty profiles. Empty phone profiles do not erase existing data.
+            val count = uiLayoutProfileStore.importProject(project.toString())
+            check(count == 269) { "Numero elementi del progetto definitivo inatteso: $count" }
+            check(bootstrap.edit().putBoolean("definitive_tablet_layout_v2_applied", true).commit()) {
+                "Impossibile registrare la migrazione del layout definitivo"
+            }
+            captureDiag("DESIGNER definitive tablet layouts applied once: $count elements")
         } catch (error: Exception) {
-            // Leave the marker unset so a later launch can retry if the bundled file is unavailable.
-            captureDiag("DESIGNER default tablet layout bootstrap failed: ${error.message}")
+            // Leave the marker unset so a later launch can retry safely.
+            captureDiag("DESIGNER definitive tablet layout migration failed: ${error.message}")
         }
     }
 
@@ -3283,7 +3281,7 @@ class MainActivity : Activity() {
         if(Build.VERSION.SDK_INT<28){status.text="Dynamics Processing richiede Android 9 o superiore";return}
         try{
             val cfg=DynamicsProcessing.Config.Builder(DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,2,true,4,true,1,true,3,limiterOn).build()
-            dpEffect=DynamicsProcessing(0,0,cfg).also{it.enabled=false}
+            dpEffect=DynamicsProcessing(10,0,cfg).also{it.enabled=false}
             audioReady=true;status.text="Audio engine disponibile • verifica uscita globale sul dispositivo";applyDsp()
         }catch(t:Throwable){
             audioReady=false
@@ -3298,6 +3296,16 @@ class MainActivity : Activity() {
         val fx=dpEffect?:return
         if(Build.VERSION.SDK_INT<28)return
         try{
+            // The stable app and Designer are installed side by side and both use
+            // the global output-mix DynamicsProcessing session (session 0). Give
+            // Designer a higher control priority than the stable app's priority 0.
+            if (!fx.hasControl()) {
+                android.util.Log.e("FREQUALIZER_DSP", "Designer DynamicsProcessing has no control of global output mix (priority 10)")
+                runOnUiThread {
+                    if (::status.isInitialized) status.text = "DSP CONTROL NON DISPONIBILE • chiudi l'altra istanza audio"
+                }
+                return
+            }
             val eqFreqs = if(eqDoubleMid) floatArrayOf(100f,250f,2500f,10000f) else floatArrayOf(250f,4000f,20000f)
             val eqCount = if(eqDoubleMid) 4 else 3
             for(ch in 0..1){
