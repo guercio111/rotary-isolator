@@ -75,19 +75,33 @@ private class VisualBoundsFrame(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         content.layout(0, 0, baseWidth, baseHeight)
-        // Resize the visible control uniformly. Layout placements are scaled
-        // proportionally, so one scale factor keeps circles circular and text
-        // and rectangular controls at their original aspect ratio.
-        val scale = minOf(
-            width.toFloat() / visualBounds.width().coerceAtLeast(1f),
-            height.toFloat() / visualBounds.height().coerceAtLeast(1f)
-        )
+        // Rectangular clickable controls (buttons and BEAT division keys) must
+        // fill the editor frame on both axes. The previous uniform min-scale left
+        // unused vertical space in portrait layouts, so the selection frame grew
+        // while the actual button stayed short. Keep aspect ratio for rotary/custom
+        // visual controls to prevent dials and circular controls from becoming oval.
+        val canStretchIndependently =
+            content !is FreeLayoutVisualBoundsProvider &&
+                (content is Button || content.isClickable || content.hasOnClickListeners())
+        val scaleX: Float
+        val scaleY: Float
+        if (canStretchIndependently) {
+            scaleX = width.toFloat() / visualBounds.width().coerceAtLeast(1f)
+            scaleY = height.toFloat() / visualBounds.height().coerceAtLeast(1f)
+        } else {
+            val uniformScale = minOf(
+                width.toFloat() / visualBounds.width().coerceAtLeast(1f),
+                height.toFloat() / visualBounds.height().coerceAtLeast(1f)
+            )
+            scaleX = uniformScale
+            scaleY = uniformScale
+        }
         content.pivotX = 0f
         content.pivotY = 0f
-        content.scaleX = scale
-        content.scaleY = scale
-        content.translationX = -visualBounds.left * scale
-        content.translationY = -visualBounds.top * scale
+        content.scaleX = scaleX
+        content.scaleY = scaleY
+        content.translationX = -visualBounds.left * scaleX
+        content.translationY = -visualBounds.top * scaleY
     }
 
     /**
