@@ -1189,29 +1189,13 @@ internal class FreeLayoutHost(
         val maxScaleX = if (halfW > 0f) minOf(centerX / halfW, (hostW - centerX) / halfW) else 1f
         val maxScaleY = if (halfH > 0f) minOf(centerY / halfH, (hostH - centerY) / halfH) else 1f
 
-        // A multi-selection is one layout group: resize every button and its
-        // companion labels with the same factor on BOTH axes. This preserves
-        // relative gaps and prevents portrait layouts from colliding/overlapping.
-        // A single selected control may still be widened or made taller alone.
-        val scaleX: Float
-        val scaleY: Float
-        if (targets.size > 1) {
-            val requestedUniform = when {
-                kotlin.math.abs(requestedScaleX - 1f) > 0.0001f &&
-                    kotlin.math.abs(requestedScaleY - 1f) <= 0.0001f -> requestedScaleX
-                kotlin.math.abs(requestedScaleY - 1f) > 0.0001f &&
-                    kotlin.math.abs(requestedScaleX - 1f) <= 0.0001f -> requestedScaleY
-                else -> minOf(requestedScaleX, requestedScaleY)
-            }
-            val minUniform = maxOf(minScaleX, minScaleY)
-            val maxUniform = minOf(maxScaleX, maxScaleY).coerceAtLeast(1f)
-            val uniform = requestedUniform.coerceIn(minUniform, maxUniform)
-            scaleX = uniform
-            scaleY = uniform
-        } else {
-            scaleX = requestedScaleX.coerceIn(minScaleX, maxScaleX.coerceAtLeast(1f))
-            scaleY = requestedScaleY.coerceIn(minScaleY, maxScaleY.coerceAtLeast(1f))
-        }
+        // A multi-selection keeps its relative arrangement, but the two axes
+        // are independently resizable. This is essential for a row of numeric
+        // beat keys in portrait: ALTEZZA must make the keys taller without
+        // changing their width or horizontal spacing. Each axis is clamped
+        // separately so the complete group remains inside the editor canvas.
+        val scaleX = requestedScaleX.coerceIn(minScaleX, maxScaleX.coerceAtLeast(1f))
+        val scaleY = requestedScaleY.coerceIn(minScaleY, maxScaleY.coerceAtLeast(1f))
 
         rememberUndo()
         targets.forEachIndexed { index, old ->
